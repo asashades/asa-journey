@@ -1,0 +1,40 @@
+{
+  "name": "ASA Journey",
+  "short_name": "ASA Journey",
+  "description": "Micro-journaling app with Gen-Z vibes. Capture your daily thoughts, dreams, and ideas.",
+  "start_url": "/write",
+  "display": "standalone",
+  "background_color": "#13111A",
+  "theme_color": "#C049FF",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "lifestyle"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Write Today's Entry",
+      "short_name": "Write",
+      "url": "/write",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Journal Timeline",
+      "short_name": "Journal",
+      "url": "/journal",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
