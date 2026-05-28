@@ -8,7 +8,7 @@ import {
   MoonIcon,
   BookOpenIcon,
   SparklesIcon,
-  BookIcon,
+  BookmarkIcon,
   LightBulbIcon,
   StarIcon,
   ChevronLeftIcon,
@@ -150,7 +150,7 @@ export default function JournalPage() {
                 <div className="flex gap-1 mt-2">
                   {data.hasDream && <MoonIcon className="w-3 h-3 text-[#F59E0B]" />}
                   {data.hasWisdom && <SparklesIcon className="w-3 h-3 text-[#3B82F6]" />}
-                  {data.hasNote && <BookIcon className="w-3 h-3 text-[#22C55E]" />}
+                  {data.hasNote && <BookmarkIcon className="w-3 h-3 text-[#22C55E]" />}
                   {data.hasIdea && <LightBulbIcon className="w-3 h-3 text-[#F97316]" />}
                 </div>
               </div>
@@ -170,7 +170,7 @@ export default function JournalPage() {
           <span className="text-[#8B8AA0]">wisdom</span>
         </div>
         <div className="flex items-center gap-1">
-          <BookIcon className="w-4 h-4 text-[#22C55E]" />
+          <BookmarkIcon className="w-4 h-4 text-[#22C55E]" />
           <span className="text-[#8B8AA0]">note</span>
         </div>
         <div className="flex items-center gap-1">

@@ -19,9 +19,9 @@ import {
   TrashIcon,
   PencilSquareIcon,
   BoltIcon,
-  QuoteIcon,
+  ChatBubbleBottomCenterTextIcon,
   InformationCircleIcon,
-  BookIcon,
+  BookmarkIcon,
   AcademicCapIcon,
   PhotoIcon,
 } from '@heroicons/react/24/outline';
@@ -41,9 +41,9 @@ const BulletIcon = ({ style }: { style: string }) => {
 
 const wisdomCategories = [
   { type: 'thought' as const, icon: BoltIcon, label: 'thought', color: '#C049FF' },
-  { type: 'quote' as const, icon: QuoteIcon, label: 'quote', color: '#3B82F6' },
+  { type: 'quote' as const, icon: ChatBubbleBottomCenterTextIcon, label: 'quote', color: '#3B82F6' },
   { type: 'fact' as const, icon: InformationCircleIcon, label: 'fact', color: '#22C55E' },
-  { type: 'excerpt' as const, icon: BookIcon, label: 'excerpt', color: '#F97316' },
+  { type: 'excerpt' as const, icon: BookmarkIcon, label: 'excerpt', color: '#F97316' },
   { type: 'lesson' as const, icon: AcademicCapIcon, label: 'lesson', color: '#8B5CF6' },
 ];
 

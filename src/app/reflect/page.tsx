@@ -12,17 +12,17 @@ import {
   CalendarIcon,
   ChevronRightIcon,
   BoltIcon,
-  QuoteIcon,
+  ChatBubbleBottomCenterTextIcon,
   InformationCircleIcon,
-  BookIcon,
+  BookmarkIcon,
   AcademicCapIcon,
 } from '@heroicons/react/24/outline';
 
 const wisdomIcons: Record<string, React.ElementType> = {
   thought: BoltIcon,
-  quote: QuoteIcon,
+  quote: ChatBubbleBottomCenterTextIcon,
   fact: InformationCircleIcon,
-  excerpt: BookIcon,
+  excerpt: BookmarkIcon,
   lesson: AcademicCapIcon,
 };
 

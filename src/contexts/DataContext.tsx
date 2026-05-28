@@ -281,15 +281,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const entriesRef = collection(db, 'users', user.uid, 'entries');
     const q = query(entriesRef);
     const snapshot = await getDocs(q);
-    return snapshot.docs
-      .map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-        updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-      }))
+    const allEntries = snapshot.docs
+      .map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          date: data.date as string,
+          dream: data.dream || '',
+          bullets: data.bullets || [],
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+        } as Entry;
+      });
+    return allEntries
       .filter(e => e.date >= startDate && e.date <= endDate)
-      .sort((a, b) => a.date.localeCompare(b.date)) as Entry[];
+      .sort((a, b) => a.date.localeCompare(b.date));
   };
 
   const addBullet = async (text: string, style: Bullet['style'] = 'bullet'): Promise<Bullet> => {

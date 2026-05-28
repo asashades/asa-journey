@@ -40,13 +40,12 @@ export default function OtherPage() {
     ideas,
     deleteNote,
     deleteIdea,
-    updateUserSettings,
+    addGoal,
   } = useData();
 
   const [activeTab, setActiveTab] = useState<ModuleTab>('dreams');
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [goalInput, setGoalInput] = useState('');
-  const { addGoal } = useData();
 
   const handleAddGoal = async () => {
     if (!goalInput.trim()) return;

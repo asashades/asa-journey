@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateUserSettings = async (settings: Partial<UserSettings>) => {
     if (!user) return;
     const userRef = doc(db, 'users', user.uid);
-    await setDoc(userRef, { settings: { ...user?.displayName, ...settings }, updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(userRef, { settings }, { merge: true });
     setUserProfile(prev => prev ? { ...prev, settings: { ...prev.settings, ...settings } } : null);
   };
 
