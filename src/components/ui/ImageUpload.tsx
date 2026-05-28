@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { PhotoIcon, XMarkIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
+import { PhotoIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/contexts/AuthContext';
+import { storage } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { v4 as uuidv4 } from 'uuid';
 
 interface MediaItem {
   id: string;
@@ -58,41 +61,26 @@ export default function ImageUpload({
       try {
         setProgress(((i + 0.5) / filesToUpload.length) * 100);
 
-        const response = await fetch('/api/r2/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileName: file.name,
-            fileType: file.type,
-            fileType: file.type.startsWith('image/') ? 'image' : 'audio',
-            userId: user.uid,
-          }),
-        });
+        // Generate unique filename
+        const extension = file.name.split('.').pop() || 'jpg';
+        const fileName = `${uuidv4()}.${extension}`;
+        const mediaType = file.type.startsWith('image/') ? 'image' : 'audio';
+        const filePath = `media/${user.uid}/${mediaType}/${fileName}`;
 
-        if (!response.ok) {
-          throw new Error('failed to get upload url');
-        }
+        // Create storage reference
+        const storageRef = ref(storage, filePath);
 
-        const { uploadUrl, publicUrl, fileKey } = await response.json();
+        // Upload file to Firebase Storage
+        const snapshot = await uploadBytes(storageRef, file);
 
-        // Upload file to R2
-        const uploadResponse = await fetch(uploadUrl, {
-          method: 'PUT',
-          body: file,
-          headers: {
-            'Content-Type': file.type,
-          },
-        });
-
-        if (!uploadResponse.ok) {
-          throw new Error('upload failed');
-        }
+        // Get download URL
+        const publicUrl = await getDownloadURL(snapshot.ref);
 
         const mediaItem: MediaItem = {
-          id: crypto.randomUUID(),
-          fileKey,
+          id: uuidv4(),
+          fileKey: filePath,
           publicUrl,
-          type: file.type.startsWith('image/') ? 'image' : 'audio',
+          type: mediaType,
         };
 
         setUploads((prev) => [...prev, mediaItem]);
