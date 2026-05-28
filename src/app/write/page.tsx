@@ -23,7 +23,10 @@ import {
   InformationCircleIcon,
   BookIcon,
   AcademicCapIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline';
+import ImageUpload from '@/components/ui/ImageUpload';
+import { MediaItem } from '@/types';
 
 const BulletIcon = ({ style }: { style: string }) => {
   switch (style) {
@@ -77,6 +80,8 @@ export default function WritePage() {
   const [editingBulletId, setEditingBulletId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const [showDreamInput, setShowDreamInput] = useState(false);
+  const [showImageUpload, setShowImageUpload] = useState(false);
+  const [currentMedia, setCurrentMedia] = useState<MediaItem[]>([]);
 
   const bulletInputRef = useRef<HTMLTextAreaElement>(null);
   const dreamInputRef = useRef<HTMLInputElement>(null);
@@ -90,6 +95,7 @@ export default function WritePage() {
     if (!bulletInput.trim()) return;
     await addBullet(bulletInput, bulletStyle);
     setBulletInput('');
+    setCurrentMedia([]);
     bulletInputRef.current?.focus();
   };
 
@@ -334,9 +340,51 @@ export default function WritePage() {
               rows={2}
               className="w-full bg-transparent border-b border-[#4A4560] py-2 text-white placeholder-[#8B8AA0] focus:outline-none focus:border-[#C049FF] transition-colors resize-none"
             />
-            <span className="absolute right-0 bottom-2 text-xs text-[#8B8AA0]/50">Enter to save, Tab to change style</span>
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-xs text-[#8B8AA0]/50">Enter to save, Tab to change style</span>
+              <button
+                onClick={() => setShowImageUpload(!showImageUpload)}
+                className={`p-2 rounded-lg transition-colors ${showImageUpload ? 'bg-[#C049FF] text-white' : 'text-[#8B8AA0] hover:text-white'}`}
+                title="Attach images"
+              >
+                <PhotoIcon className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Image Upload Section */}
+        {showImageUpload && (
+          <div className="mt-4">
+            <ImageUpload
+              onUploadComplete={(media) => {
+                setCurrentMedia((prev) => [...prev, media]);
+              }}
+              maxFiles={3}
+            />
+          </div>
+        )}
+
+        {/* Uploaded Media Preview */}
+        {currentMedia.length > 0 && (
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {currentMedia.map((media) => (
+              <div key={media.id} className="relative group">
+                <img
+                  src={media.publicUrl}
+                  alt="uploaded"
+                  className="w-full h-24 object-cover rounded-lg border border-[#4A4560]"
+                />
+                <button
+                  onClick={() => setCurrentMedia((prev) => prev.filter((m) => m.id !== media.id))}
+                  className="absolute top-1 right-1 w-6 h-6 bg-[#EF4444] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <XMarkIcon className="w-4 h-4 text-white" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* FAB Speed Dial */}

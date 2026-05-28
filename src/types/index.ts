@@ -2,6 +2,14 @@
 
 export type BulletStyle = 'bullet' | 'star' | 'checklist';
 
+export interface MediaItem {
+  id: string;
+  fileKey: string;
+  publicUrl: string;
+  type: 'image' | 'audio';
+  caption?: string;
+}
+
 export interface Bullet {
   id: string;
   text: string;
@@ -9,6 +17,7 @@ export interface Bullet {
   isHighlight: boolean;
   tags: string[];
   mentions: string[];
+  media?: MediaItem[];
   createdAt: Date;
   updatedAt: Date;
 }
