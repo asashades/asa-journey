@@ -41,7 +41,12 @@ const defaultSettings: UserSettings = {
     ideas: true,
     focus: false,
   },
+  autoTagging: true,
+  autoMentioning: true,
   language: 'en',
+  dailyWordGoal: 50,
+  showStreakWidget: true,
+  showWordGoalWidget: true,
   createdAt: new Date(),
   updatedAt: new Date(),
 };

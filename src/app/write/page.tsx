@@ -1,101 +1,721 @@
 'use client';
 
-import { useState, useRef, KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, KeyboardEvent } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  MoonIcon,
-  SparklesIcon,
-  PlusCircleIcon,
-  LightBulbIcon,
-  BookOpenIcon,
-  StarIcon,
-  CheckIcon,
-  FireIcon,
-  XMarkIcon,
-  StarIcon as OutlineStarIcon,
-  CheckCircleIcon,
-  TrashIcon,
-  PencilSquareIcon,
-  BoltIcon,
-  ChatBubbleBottomCenterTextIcon,
-  InformationCircleIcon,
-  BookmarkIcon,
-  AcademicCapIcon,
-  PhotoIcon,
-} from '@heroicons/react/24/outline';
+  faMoon,
+  faFire,
+  faPlus,
+  faStar,
+  faSquare,
+  faTrash,
+  faLightbulb,
+  faBook,
+  faWandMagicSparkles,
+  faBolt,
+  faCircleInfo,
+  faQuoteLeft,
+  faBookmark,
+  faBookOpen,
+  faCheck,
+  faImage,
+  faLocationDot,
+  faSpinner,
+  faXmark,
+  faCheckCircle,
+  faArrowLeft,
+  faArrowRight,
+  faVolumeHigh,
+  faChevronLeft,
+  faChevronRight,
+  faPen,
+  faListCheck,
+  faCalendar,
+  faClock,
+} from '@fortawesome/free-solid-svg-icons';
+import { playGoalJingle } from '@/lib/audio';
 import ImageUpload from '@/components/ui/ImageUpload';
-import { MediaItem } from '@/types';
+import { HighlightedText } from '@/components/ui/HighlightedText';
+import { MentionTextarea } from '@/components/ui/MentionTextarea';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { getEntryNumberForDate } from '@/lib/entryUtils';
+import { Bullet, Entry, LocationItem, MediaItem } from '@/types';
 
-const BulletIcon = ({ style }: { style: string }) => {
+type FormatDateInput = Date | string | { toDate: () => Date } | undefined;
+
+const safeFormat = (date: FormatDateInput, fmt: string): string => {
+  if (!date) return '';
+  const d = typeof date === 'string'
+    ? new Date(date)
+    : 'toDate' in date
+      ? date.toDate()
+      : date;
+  return isValid(d) ? format(d, fmt) : '';
+};
+
+// Helper to parse and render formatted wisdom content beautifully
+const renderParsedWisdom = (text: string, isQuote: boolean = false, tagMetaMap?: Record<string, 'more' | 'less' | null>) => {
+  const lines = text.split('\n');
+  return (
+    <span className="block whitespace-pre-line select-text">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (trimmed.toLowerCase().startsWith('source :') || trimmed.toLowerCase().startsWith('source:')) {
+          const colonIdx = line.indexOf(':');
+          const value = line.substring(colonIdx + 1).trim();
+          return (
+            <span key={idx} className="block mt-1 text-[10px] text-[#A3A7A8] font-sans italic leading-normal select-text">
+              source: <span className="text-[#8B9390]">{value}</span>
+            </span>
+          );
+        }
+        if (trimmed.toLowerCase().startsWith('context :') || trimmed.toLowerCase().startsWith('context:')) {
+          const colonIdx = line.indexOf(':');
+          const value = line.substring(colonIdx + 1).trim();
+          return (
+            <span key={idx} className="block mt-1 text-[10px] text-[#A3A7A8] font-sans italic leading-normal select-text">
+              context: <span className="text-[#8B9390]">{value}</span>
+            </span>
+          );
+        }
+        if (trimmed.startsWith('--')) {
+          return (
+            <span key={idx} className="block mt-1 text-xs text-[#6F7476] font-normal leading-normal select-text">
+              {line}
+            </span>
+          );
+        }
+        // Normal line
+        return (
+          <span key={idx} className={`block leading-relaxed ${isQuote ? 'italic text-[#4D5652]' : ''}`}>
+            <HighlightedText text={line} interactive tagMeta={tagMetaMap} />
+          </span>
+        );
+      })}
+    </span>
+  );
+};
+
+// Bullet style toggle component
+const BulletStyleToggle = ({
+  style,
+  onToggle,
+  disabled = false
+}: {
+  style: 'bullet' | 'star' | 'checklist';
+  onToggle: () => void;
+  disabled?: boolean;
+}) => {
+  const baseClass = "w-5 h-5 flex-shrink-0 cursor-pointer transition-colors";
   switch (style) {
     case 'star':
-      return <StarIcon className="w-5 h-5 text-[#F59E0B]" />;
+      return <FontAwesomeIcon icon={faStar} className={`${baseClass} text-[#F59E0B]`} onClick={disabled ? undefined : onToggle} />;
     case 'checklist':
-      return <CheckCircleIcon className="w-5 h-5 text-[#22C55E]" />;
+      return <FontAwesomeIcon icon={faSquare} className={`${baseClass} text-[#22C55E]`} onClick={disabled ? undefined : onToggle} />;
     default:
-      return <span className="w-2 h-2 rounded-full bg-[#8B8AA0]" />;
+      return <span className={`${baseClass} flex items-center justify-center`} onClick={disabled ? undefined : onToggle}>
+        <span className="w-1.5 h-1.5 rounded-full bg-[#A3A7A8]" />
+      </span>;
   }
 };
 
+// Bullet item with swipe-to-delete, hover confirm-delete, and in-edit style toggle
+const BulletItem = ({
+  bullet,
+  onToggleComplete,
+  onDelete,
+  onUpdateText,
+  onUpdateStyle,
+}: {
+  bullet: Bullet;
+  onToggleComplete: () => void;
+  onDelete: () => void;
+  onUpdateText: (id: string, text: string) => void;
+  onUpdateStyle: (id: string, style: 'bullet' | 'star' | 'checklist') => void;
+}) => {
+  const { tags } = useData();
+  const isCompleted = bullet.isCompleted;
+  const sourceMeta = bullet.source === 'wisdom'
+    ? { label: bullet.sourceType || 'wisdom', text: 'text-[#8B00D4]', badge: 'bg-[#F0D6FF] text-[#8B00D4]', shell: 'border-[#C494FF]/30 bg-[#F8F0FF]' }
+    : bullet.source === 'note'
+      ? { label: 'note', text: 'text-[#00875A]', badge: 'bg-[#C8F7E4] text-[#00875A]', shell: 'border-[#00DC7D]/25 bg-[#F2FFF8]' }
+      : bullet.source === 'idea'
+        ? { label: 'idea', text: 'text-[#B45309]', badge: 'bg-[#FFE4B5] text-[#B45309]', shell: 'border-[#FF9933]/30 bg-[#FFF8ED]' }
+        : null;
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [text, setText] = useState(bullet.text);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const tagMetaMap = useMemo(() => {
+    const map: Record<string, 'more' | 'less' | null> = {};
+    (bullet.tags || []).forEach(tag => {
+      const meta = tags?.find(t => t.name.toLowerCase() === tag.toLowerCase());
+      map[tag.toLowerCase()] = meta?.doMoreLess ?? null;
+    });
+    return map;
+  }, [bullet.tags, tags]);
+
+  // Click outside to close kebab menu
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [menuOpen]);
+
+  // Sync text state with bullet prop (for updates like NLP stripping)
+  useEffect(() => {
+    setText(bullet.text);
+  }, [bullet.text]);
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    if (text !== bullet.text) {
+      onUpdateText(bullet.id, text);
+    }
+  };
+
+  const cycleStyle = () => {
+    const next = bullet.style === 'bullet' ? 'star' : bullet.style === 'star' ? 'checklist' : 'bullet';
+    onUpdateStyle(bullet.id, next);
+  };
+
+  const timeStr = safeFormat(bullet.createdAt, 'h:mm a');
+
+  return (
+    <div className={`relative ${sourceMeta ? `-mx-3 rounded-lg border ${sourceMeta.shell}` : ''}`}>
+      {/* Main bullet row */}
+      <div className="group flex items-start gap-3 py-2 bg-transparent">
+        {/* Left icon: checklist toggle OR style cycle icon */}
+        {bullet.style === 'checklist' && !isEditing ? (
+          <button onClick={() => onToggleComplete?.()} className="shrink-0 mt-0.5">
+            {bullet.isCompleted ? (
+              <FontAwesomeIcon icon={faCheck} className="w-5 h-5 text-[#22C55E]" />
+            ) : (
+              <FontAwesomeIcon icon={faSquare} className="w-5 h-5 text-[#CCD0CF] hover:text-[#A3A7A8]" />
+            )}
+          </button>
+        ) : (
+          /* When editing, icon becomes a style-cycle button; when not editing, it's static */
+          <button
+            onClick={isEditing ? (e => { e.stopPropagation(); cycleStyle(); }) : undefined}
+            className={`shrink-0 mt-0.5 flex items-center justify-center w-5 h-5 ${isEditing ? 'cursor-pointer active:scale-90 transition-transform' : 'cursor-default'}`}
+            title={isEditing ? 'Tap to change style' : undefined}
+          >
+            {bullet.style === 'star' ? (
+              <FontAwesomeIcon icon={faStar} className="w-5 h-5 text-[#F59E0B]" />
+            ) : (
+              <span className="flex items-center justify-center w-5 h-5">
+                <span className={`w-1.5 h-1.5 rounded-full ${isEditing ? 'bg-[#00DC7D] ring-2 ring-[#00DC7D]/30' : 'bg-[#A3A7A8]'}`} />
+              </span>
+            )}
+          </button>
+        )}
+
+        <div className="flex-1 min-w-0" onClick={() => !isEditing && setIsEditing(true)}>
+          {isEditing ? (
+            <MentionTextarea
+              value={text}
+              onChange={(v) => setText(v)}
+              onBlur={handleBlur}
+              onEnter={handleBlur}
+              className="w-full bg-transparent text-[#2F3331] focus:outline-none resize-none overflow-hidden"
+              autoFocus
+              style={{ minHeight: '24px', height: 'auto' }}
+            />
+          ) : (
+            <div className={`cursor-pointer leading-relaxed ${sourceMeta ? sourceMeta.text : 'text-[#2F3331]'} ${isCompleted ? 'line-through text-[#A3A7A8]' : ''} ${bullet.isHighlight ? 'font-semibold' : ''}`}>
+              {bullet.source === 'wisdom' ? (
+                renderParsedWisdom(bullet.text, bullet.sourceType === 'quote', tagMetaMap)
+              ) : (
+                <HighlightedText text={bullet.text} interactive tagMeta={tagMetaMap} />
+              )}
+              {timeStr && (
+                <span
+                  className="ml-2 align-baseline"
+                  style={{
+                    fontSize: '10px',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    fontStyle: 'italic',
+                    color: '#B0B8B4',
+                    letterSpacing: '0.03em',
+                    fontWeight: 400,
+                    userSelect: 'none',
+                  }}
+                >
+                  {timeStr}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Kebab action menu — always visible/interactive on hover, very premium */}
+        {!isEditing && (
+          <div className="relative shrink-0 self-center" ref={menuRef}>
+            <button
+              onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-[#A3A7A8] hover:bg-[#F2F2F3] hover:text-[#2F3331] transition-colors"
+              title="Actions"
+            >
+              <span className="text-base leading-none tracking-[-3px]" style={{ letterSpacing: '-2px' }}>&#8943;</span>
+            </button>
+            {menuOpen && (
+              <div
+                className="absolute right-0 top-9 z-30 min-w-[140px] rounded-2xl bg-white py-1.5 shadow-xl ring-1 ring-[#EEF0EF] overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Style Quick Picker */}
+                <div className="px-3 py-1.5 border-b border-[#EEF0EF] flex items-center justify-between gap-2">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-[#A3A7A8]">Style</span>
+                  <div className="flex items-center gap-1 bg-[#F2F2F3] p-0.5 rounded-lg">
+                    <button
+                      onClick={() => { onUpdateStyle(bullet.id, 'bullet'); setMenuOpen(false); }}
+                      className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${bullet.style === 'bullet' ? 'bg-white text-[#2F3331] shadow-sm' : 'text-[#A3A7A8] hover:text-[#2F3331]'}`}
+                      title="Bullet"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                    </button>
+                    <button
+                      onClick={() => { onUpdateStyle(bullet.id, 'star'); setMenuOpen(false); }}
+                      className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${bullet.style === 'star' ? 'bg-white text-[#F59E0B] shadow-sm' : 'text-[#A3A7A8] hover:text-[#F59E0B]'}`}
+                      title="Star"
+                    >
+                      <FontAwesomeIcon icon={faStar} className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => { onUpdateStyle(bullet.id, 'checklist'); setMenuOpen(false); }}
+                      className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${bullet.style === 'checklist' ? 'bg-white text-[#22C55E] shadow-sm' : 'text-[#A3A7A8] hover:text-[#22C55E]'}`}
+                      title="Task"
+                    >
+                      <FontAwesomeIcon icon={faSquare} className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Edit Text Action */}
+                <button
+                  onClick={() => { setMenuOpen(false); setIsEditing(true); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-[#2F3331] hover:bg-[#F7F8F7] transition-colors"
+                >
+                  <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5 text-[#6F7476]" />
+                  Edit text
+                </button>
+
+                {/* Delete Action */}
+                <button
+                  onClick={() => { setMenuOpen(false); onDelete(); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-[#FF453A] hover:bg-[#FF453A]/5 transition-colors"
+                >
+                  <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const wisdomCategories = [
-  { type: 'thought' as const, icon: BoltIcon, label: 'thought', color: '#C049FF' },
-  { type: 'quote' as const, icon: ChatBubbleBottomCenterTextIcon, label: 'quote', color: '#3B82F6' },
-  { type: 'fact' as const, icon: InformationCircleIcon, label: 'fact', color: '#22C55E' },
-  { type: 'excerpt' as const, icon: BookmarkIcon, label: 'excerpt', color: '#F97316' },
-  { type: 'lesson' as const, icon: AcademicCapIcon, label: 'lesson', color: '#8B5CF6' },
+  { type: 'thought' as const, icon: faBolt, label: 'thought', bg: '#F0D6FF', color: '#8B00D4' },
+  { type: 'quote' as const, icon: faQuoteLeft, label: 'quote', bg: '#D6E4FF', color: '#1A56C4' },
+  { type: 'fact' as const, icon: faCircleInfo, label: 'fact', bg: '#C8F7E4', color: '#00875A' },
+  { type: 'excerpt' as const, icon: faBookmark, label: 'excerpt', bg: '#FFE4B5', color: '#B45309' },
+  { type: 'lesson' as const, icon: faBookOpen, label: 'lesson', bg: '#EDD6FF', color: '#6B21A8' },
 ];
 
+type InlinePanel = 'wisdom' | 'note' | 'idea' | 'image' | null;
+
+type ReverseGeocodeResponse = {
+  display_name?: string;
+  address?: Partial<Record<
+    'city_district' | 'district' | 'suburb' | 'neighbourhood' | 'quarter' | 'village' | 'town' | 'city' | 'county' | 'state',
+    string
+  >>;
+};
+
+const toLocalDate = (date: string) => new Date(`${date}T00:00:00`);
+
+const getMapUrl = (latitude: number, longitude: number) =>
+  `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+
+const reverseGeocodeDistrict = async (latitude: number, longitude: number): Promise<string> => {
+  const fallback = `GPS ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${latitude}&lon=${longitude}`,
+      { headers: { Accept: 'application/json' } }
+    );
+
+    if (!response.ok) return fallback;
+
+    const data = (await response.json()) as ReverseGeocodeResponse;
+    const address = data.address || {};
+    return (
+      address.city_district ||
+      address.district ||
+      address.suburb ||
+      address.neighbourhood ||
+      address.quarter ||
+      address.village ||
+      address.town ||
+      address.city ||
+      address.county ||
+      address.state ||
+      data.display_name?.split(',')[0]?.trim() ||
+      fallback
+    );
+  } catch {
+    return fallback;
+  }
+};
+
+const getLocationErrorMessage = (error: unknown) => {
+  const maybeGeoError = error as Partial<GeolocationPositionError>;
+  if (maybeGeoError.code === 1) return 'location permission was denied';
+  if (maybeGeoError.code === 2) return 'location unavailable - check gps is enabled';
+  if (maybeGeoError.code === 3) return 'gps request timed out';
+  return 'could not capture current location';
+};
+
 export default function WritePage() {
-  const { user } = useAuth();
   const {
     currentEntry,
     currentDate,
+    entries,
     setCurrentDate,
     addBullet,
     updateBullet,
     deleteBullet,
-    toggleHighlight,
+    toggleBulletComplete,
     updateDream,
+    saveEntry,
     addWisdom,
     addNote,
     addIdea,
     isOnline,
+    currentStreak,
+    longestStreak,
+    wisdoms,
+    notes,
+    ideas,
+    tags,
   } = useData();
 
+  const { userProfile } = useAuth();
+  const settings = userProfile?.settings || {
+    showStreakWidget: true,
+    showWordGoalWidget: true,
+    dailyWordGoal: 50,
+  };
+  const dailyGoal = settings.dailyWordGoal || 50;
+
   const [dreamInput, setDreamInput] = useState('');
+  const [isEditingDream, setIsEditingDream] = useState(false);
   const [bulletInput, setBulletInput] = useState('');
   const [bulletStyle, setBulletStyle] = useState<'bullet' | 'star' | 'checklist'>('bullet');
-  const [showFABMenu, setShowFABMenu] = useState(false);
-  const [showWisdomSubmenu, setShowWisdomSubmenu] = useState(false);
-  const [showWisdomForm, setShowWisdomForm] = useState(false);
-  const [showNoteForm, setShowNoteForm] = useState(false);
-  const [showIdeaForm, setShowIdeaForm] = useState(false);
+  const [showFabActions, setShowFabActions] = useState(false);
+  const [activeInlinePanel, setActiveInlinePanel] = useState<InlinePanel>(null);
   const [selectedWisdomType, setSelectedWisdomType] = useState<'thought' | 'quote' | 'fact' | 'excerpt' | 'lesson'>('thought');
   const [wisdomContent, setWisdomContent] = useState('');
+  const [wisdomAuthor, setWisdomAuthor] = useState('');
+  const [wisdomSource, setWisdomSource] = useState('');
+  const [wisdomContext, setWisdomContext] = useState('');
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
   const [ideaContent, setIdeaContent] = useState('');
-  const [editingBulletId, setEditingBulletId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState('');
-  const [showDreamInput, setShowDreamInput] = useState(false);
-  const [showImageUpload, setShowImageUpload] = useState(false);
-  const [currentMedia, setCurrentMedia] = useState<MediaItem[]>([]);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  const [dreamInputDate, setDreamInputDate] = useState('');
+  const [showSavedToast, setShowSavedToast] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [isImageGalleryOpen, setIsImageGalleryOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [deleteImageId, setDeleteImageId] = useState<string | null>(null);
+  const [showStreakModal, setShowStreakModal] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [goalMetCelebrated, setGoalMetCelebrated] = useState(false);
+  const isUserTypingRef = useRef(false);
+
+  useEffect(() => {
+    isUserTypingRef.current = false;
+  }, [currentDate]);
+  const [widgetsCollapsed, setWidgetsCollapsed] = useState(false);
+  const [showTodoDrawer, setShowTodoDrawer] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Aggregate unresolved checklist bullets across all logs for floating to-do inbox
+  const pendingTasks = useMemo(() => {
+    const list: { id: string; text: string; date: string; createdAt: Date; scheduledAt?: Date; isCompleted?: boolean }[] = [];
+    entries.forEach(entry => {
+      (entry.bullets || []).forEach(b => {
+        if (b.style === 'checklist' && !b.isCompleted) {
+          list.push({
+            id: b.id,
+            text: b.text,
+            date: entry.date,
+            createdAt: new Date(b.createdAt),
+            scheduledAt: b.scheduledAt ? new Date(b.scheduledAt) : undefined,
+            isCompleted: b.isCompleted
+          });
+        }
+      });
+    });
+    return list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }, [entries]);
+
+  // --- Real-time Word Counter (counts saved text + active inputs) ---
+  const currentWordCount = useMemo(() => {
+    const bulletText = currentEntry?.bullets.map((b) => b.text).join(' ') || '';
+    const dreamText = isEditingDream ? '' : (currentEntry?.dream || '');
+    const activeBulletText = bulletInput.trim();
+    const activeDreamText = isEditingDream ? (dreamInputDate === currentDate ? dreamInput.trim() : '') : '';
+    
+    const fullText = `${bulletText} ${dreamText} ${activeBulletText} ${activeDreamText}`.trim();
+    return fullText ? fullText.split(/\s+/).filter(Boolean).length : 0;
+  }, [currentEntry, bulletInput, dreamInput, dreamInputDate, currentDate, isEditingDream]);
+
+  // --- Automatic Celebration Trigger ---
+  useEffect(() => {
+    if (currentWordCount >= dailyGoal) {
+      if (!goalMetCelebrated) {
+        setGoalMetCelebrated(true);
+        if (isUserTypingRef.current) {
+          setShowConfetti(true);
+          playGoalJingle();
+        }
+      }
+    } else {
+      setGoalMetCelebrated(false);
+    }
+  }, [currentWordCount, dailyGoal, goalMetCelebrated]);
+
+  // --- Confetti particle structures interface ---
+  interface ConfettiParticle {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    color: string;
+    size: number;
+    rotation: number;
+    rotationSpeed: number;
+  }
+
+  // --- HTML5 Canvas Confetti Cannon animation loop ---
+  useEffect(() => {
+    if (!showConfetti || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationFrameId: number;
+    
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const colors = ['#00DC7D', '#00B866', '#FF9933', '#FFCC33', '#8B00D4', '#5D8AFF', '#FF453A'];
+    const particles: ConfettiParticle[] = [];
+    
+    // Shoots 120 particles upwards from bottom corners
+    for (let i = 0; i < 120; i++) {
+      const isLeft = i % 2 === 0;
+      particles.push({
+        x: isLeft ? 0 : canvas.width,
+        y: canvas.height,
+        vx: (isLeft ? 1 : -1) * (Math.random() * 8 + 4),
+        vy: -(Math.random() * 15 + 12),
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: Math.random() * 8 + 6,
+        rotation: Math.random() * 360,
+        rotationSpeed: (Math.random() - 0.5) * 10,
+      });
+    }
+
+    const gravity = 0.45;
+    const drag = 0.98;
+
+    const render = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      let activeParticles = 0;
+
+      particles.forEach((p) => {
+        p.vy += gravity;
+        p.vx *= drag;
+        p.vy *= drag;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rotation += p.rotationSpeed;
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate((p.rotation * Math.PI) / 180);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size / 2);
+        ctx.restore();
+
+        if (p.y < canvas.height + 20) {
+          activeParticles++;
+        }
+      });
+
+      if (activeParticles > 0) {
+        animationFrameId = requestAnimationFrame(render);
+      } else {
+        setShowConfetti(false);
+      }
+    };
+
+    render();
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [showConfetti]);
+
+  // --- XP & Level gamification calculations for quick popup ---
+  const gamificationData = useMemo(() => {
+    const entryXP = entries.length * 100;
+    const bulletXP = entries.reduce((sum, e) => sum + e.bullets.length, 0) * 10;
+    const dreamXP = entries.filter((e) => e.dream?.trim()).length * 50;
+    const collectionXP = ((wisdoms?.length || 0) + (notes?.length || 0) + (ideas?.length || 0)) * 50;
+    const photoXP = entries.reduce((sum, e) => sum + (e.media?.filter((m) => m.type === 'image').length || 0), 0) * 30;
+    const streakBonus = currentStreak * 25;
+
+    const totalXP = entryXP + bulletXP + dreamXP + collectionXP + photoXP + streakBonus;
+
+    let level = 1;
+    let xpForNextLevel = 300;
+    let prevXPThreshold = 0;
+    while (totalXP >= xpForNextLevel) {
+      level++;
+      prevXPThreshold = xpForNextLevel;
+      xpForNextLevel += level * 200;
+    }
+    const progressXP = totalXP - prevXPThreshold;
+    const levelCapacity = xpForNextLevel - prevXPThreshold;
+    const progressPercent = Math.min(100, Math.max(0, (progressXP / levelCapacity) * 100));
+
+    let levelTitle = '🌱 Sprout Scribe';
+    if (level >= 3 && level < 5) levelTitle = '✍️ Mind Mapper';
+    else if (level >= 5 && level < 7) levelTitle = '🧠 Thought Weaver';
+    else if (level >= 7 && level < 10) levelTitle = '🌌 Wisdom Alchemist';
+    else if (level >= 10) levelTitle = '👑 Master Chronicler';
+
+    return {
+      totalXP,
+      level,
+      progressXP,
+      levelCapacity,
+      progressPercent,
+      levelTitle,
+    };
+  }, [entries, wisdoms, notes, ideas, currentStreak]);
 
   const bulletInputRef = useRef<HTMLTextAreaElement>(null);
   const dreamInputRef = useRef<HTMLInputElement>(null);
+  const isSavingDreamRef = useRef(false);
+  const savedToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const today = new Date();
-  const dateStr = format(today, 'MMM d');
-  const dayStr = format(today, 'EEEE');
-  const contextStr = `#${format(today, 'd')} / Today`;
+  useEffect(() => {
+    return () => {
+      if (savedToastTimerRef.current) clearTimeout(savedToastTimerRef.current);
+    };
+  }, []);
 
+  useEffect(() => {
+    const dateParam = new URLSearchParams(window.location.search).get('date');
+    if (!dateParam || dateParam === currentDate) return;
+    const parsedDate = toLocalDate(dateParam);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateParam) && isValid(parsedDate)) {
+      setCurrentDate(dateParam);
+    }
+  }, [currentDate, setCurrentDate]);
+
+  const selectedDate = useMemo(() => {
+    const parsedDate = toLocalDate(currentDate);
+    return isValid(parsedDate) ? parsedDate : new Date();
+  }, [currentDate]);
+
+  const todayDate = format(new Date(), 'yyyy-MM-dd');
+  const dateStr = format(selectedDate, 'MMMM d');
+  const dayStr = format(selectedDate, 'EEEE');
+  const yearStr = format(selectedDate, 'yyyy');
+  const isToday = currentDate === todayDate;
+  const entryNumber = useMemo(() => getEntryNumberForDate(entries, currentDate), [entries, currentDate]);
+
+  const handlePrevDay = () => {
+    try {
+      const parts = currentDate.split('-');
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      d.setDate(d.getDate() - 1);
+      setCurrentDate(format(d, 'yyyy-MM-dd'));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleNextDay = () => {
+    try {
+      const parts = currentDate.split('-');
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      d.setDate(d.getDate() + 1);
+      setCurrentDate(format(d, 'yyyy-MM-dd'));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+  const entryMedia = currentEntry?.media || [];
+  const dreamDraft = dreamInputDate === currentDate ? dreamInput : '';
+  const setDreamDraft = (value: string) => {
+    setDreamInputDate(currentDate);
+    setDreamInput(value);
+  };
+  const showSaved = () => {
+    if (savedToastTimerRef.current) clearTimeout(savedToastTimerRef.current);
+    setShowSavedToast(true);
+    savedToastTimerRef.current = setTimeout(() => {
+      setShowSavedToast(false);
+      savedToastTimerRef.current = null;
+    }, 1400);
+  };
+
+  /**
+   * FUTURE NLP SCHEDULER ROADMAP SPECIFICATION:
+   * 
+   * [1] Stabilo/Highlighter Effect:
+   *     - As the user types in the journal textarea (`bulletInput`), we will run a regex/match engine
+   *       to look for date/time patterns (e.g. "at 3pm", "7pm", "tomorrow", "7 days from now").
+   *     - Trigger phrases will be wrapped dynamically inside a glowing, translucent green/yellow
+   *       stabilo marker background layer (e.g., bg-[#E9FFF4] shadow-[0_0_8px_#00DC7D] or inline spans).
+   * 
+   * [2] Submit & Stripping Behavior:
+   *     - Upon pressing Enter (triggering `handleAddBullet`):
+   *       - The NLP engine parses the highlighted phrase (e.g., "7pm") into a full Date object (e.g., Today at 7:00 PM).
+   *       - The trigger phrase (e.g., "7pm" or "tomorrow at 3pm") is stripped and deleted from the final bullet text.
+   *       - The bullet is successfully saved (e.g. text "workout") and the parsed Date is registered in metadata
+   *         to be rendered as the clean, styled timestamp.
+   */
   const handleAddBullet = async () => {
     if (!bulletInput.trim()) return;
-    await addBullet(bulletInput, bulletStyle);
+    const text = bulletInput.trim();
+
     setBulletInput('');
-    setCurrentMedia([]);
+    showSaved();
+    await addBullet(text, bulletStyle);
     bulletInputRef.current?.focus();
   };
 
@@ -106,7 +726,6 @@ export default function WritePage() {
     }
     if (e.key === 'Tab') {
       e.preventDefault();
-      // Cycle through styles
       setBulletStyle(current => {
         if (current === 'bullet') return 'star';
         if (current === 'star') return 'checklist';
@@ -115,452 +734,1096 @@ export default function WritePage() {
     }
   };
 
-  const handleAddDream = async () => {
-    if (!dreamInput.trim()) return;
-    await updateDream(dreamInput);
-    setDreamInput('');
-    setShowDreamInput(false);
+  const handleAddDream = async (shouldShowToast = false) => {
+    if (isSavingDreamRef.current) return;
+    const nextDream = dreamDraft.trim();
+    const existingDream = currentEntry?.dream?.trim() || '';
+
+    if (!currentEntry && !nextDream) {
+      setIsEditingDream(false);
+      return;
+    }
+
+    if (existingDream === nextDream) {
+      setIsEditingDream(false);
+      return;
+    }
+
+    isSavingDreamRef.current = true;
+    if (shouldShowToast) showSaved();
+    try {
+      await updateDream(nextDream);
+      setDreamDraft(nextDream);
+      setIsEditingDream(false);
+    } finally {
+      isSavingDreamRef.current = false;
+    }
   };
 
   const handleDreamKeyDown = async (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      await handleAddDream();
+      await handleAddDream(true);
     }
+    if (e.key === 'Escape') {
+      setIsEditingDream(false);
+      setDreamDraft(currentEntry?.dream || '');
+    }
+  };
+
+  const openInlinePanel = (panel: InlinePanel) => {
+    setActiveInlinePanel((current) => current === panel ? null : panel);
+    setShowFabActions(false);
   };
 
   const handleAddWisdom = async () => {
-    if (!wisdomContent.trim()) return;
-    await addWisdom(selectedWisdomType, wisdomContent);
+    let content = '';
+    
+    if (selectedWisdomType === 'thought') {
+      content = wisdomContent.trim();
+    } else if (selectedWisdomType === 'quote') {
+      const text = wisdomContent.trim();
+      const author = wisdomAuthor.trim();
+      if (!text) return;
+      content = text + (author ? `\n\n-- ${author}` : '');
+    } else if (selectedWisdomType === 'fact') {
+      const text = wisdomContent.trim();
+      const source = wisdomSource.trim();
+      if (!text) return;
+      content = text + (source ? `\n\nsource : ${source}` : '');
+    } else if (selectedWisdomType === 'excerpt') {
+      const text = wisdomContent.trim();
+      const author = wisdomAuthor.trim();
+      const source = wisdomSource.trim();
+      if (!text) return;
+      
+      const metaParts = [];
+      if (author) metaParts.push(`-- ${author}`);
+      if (source) metaParts.push(`source : ${source}`);
+      content = text + (metaParts.length > 0 ? `\n\n${metaParts.join('\n')}` : '');
+    } else if (selectedWisdomType === 'lesson') {
+      const text = wisdomContent.trim();
+      const context = wisdomContext.trim();
+      if (!text) return;
+      content = text + (context ? `\n\ncontext : ${context}` : '');
+    }
+    
+    if (!content) return;
+    
+    const wisdom = await addWisdom(selectedWisdomType, content, currentDate);
+    if (!wisdom) return;
+    await addBullet(content, 'star', {
+      isHighlight: true,
+      source: 'wisdom',
+      sourceType: selectedWisdomType,
+      sourceId: wisdom.id,
+    });
+    
+    // Clear all states
     setWisdomContent('');
-    setShowWisdomForm(false);
-    setShowWisdomSubmenu(false);
-    setShowFABMenu(false);
+    setWisdomAuthor('');
+    setWisdomSource('');
+    setWisdomContext('');
+    setActiveInlinePanel(null);
   };
 
   const handleAddNote = async () => {
-    if (!noteTitle.trim() && !noteContent.trim()) return;
-    await addNote(noteTitle || 'Untitled', noteContent);
+    const title = noteTitle.trim();
+    const content = noteContent.trim();
+    if (!title && !content) return;
+    const note = await addNote(title || 'Untitled', content, [], currentDate);
+    if (!note) return;
+    const noteBulletText = content ? (title ? `${title}: ${content}` : content) : title;
+    await addBullet(noteBulletText, 'bullet', {
+      source: 'note',
+      sourceId: note.id,
+    });
     setNoteTitle('');
     setNoteContent('');
-    setShowNoteForm(false);
-    setShowFABMenu(false);
+    setActiveInlinePanel(null);
   };
 
   const handleAddIdea = async () => {
-    if (!ideaContent.trim()) return;
-    await addIdea(ideaContent);
+    const content = ideaContent.trim();
+    if (!content) return;
+    const idea = await addIdea(content, currentDate);
+    if (!idea) return;
+    await addBullet(content, 'star', {
+      isHighlight: true,
+      source: 'idea',
+      sourceId: idea.id,
+    });
     setIdeaContent('');
-    setShowIdeaForm(false);
-    setShowFABMenu(false);
+    setActiveInlinePanel(null);
   };
 
-  const handleEditBullet = async (bulletId: string) => {
-    if (!editingText.trim()) {
-      setEditingBulletId(null);
+  const getEntryDraft = (): Entry => {
+    if (!currentEntry) {
+      return {
+        id: currentDate,
+        date: currentDate,
+        dream: '',
+        bullets: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    }
+
+    const { media, location, ...entryRest } = currentEntry;
+    return {
+      ...entryRest,
+      bullets: [...currentEntry.bullets],
+      ...(media && media.length > 0 ? { media: [...media] } : {}),
+      ...(location ? { location } : {}),
+    };
+  };
+
+  const handleEntryMediaUpload = async (media: MediaItem) => {
+    const entry = getEntryDraft();
+    const updatedEntry: Entry = {
+      ...entry,
+      media: [...(entry.media || []), media],
+      updatedAt: new Date(),
+    };
+    await saveEntry(updatedEntry);
+  };
+
+  const handleRemoveEntryMedia = async (mediaId: string) => {
+    if (!currentEntry) return;
+    const { media: currentMedia = [], location, ...entryRest } = currentEntry;
+    const remainingMedia = currentMedia.filter((media) => media.id !== mediaId);
+    const updatedEntry: Entry = {
+      ...entryRest,
+      ...(remainingMedia.length > 0 ? { media: remainingMedia } : {}),
+      ...(location ? { location } : {}),
+      updatedAt: new Date(),
+    };
+    await saveEntry(updatedEntry);
+  };
+
+  const handleRemoveLocation = async () => {
+    if (!currentEntry) return;
+    const { media, location, ...entryRest } = currentEntry;
+    const updatedEntry: Entry = {
+      ...entryRest,
+      ...(media && media.length > 0 ? { media } : {}),
+      updatedAt: new Date(),
+    };
+    await saveEntry(updatedEntry);
+  };
+
+  const handleAddLocation = async () => {
+    setLocationError('');
+
+    if (!navigator.geolocation) {
+      setLocationError('gps is not supported in this browser');
       return;
     }
-    await updateBullet(bulletId, { text: editingText });
-    setEditingBulletId(null);
-    setEditingText('');
-  };
 
-  const startEditing = (bulletId: string, text: string) => {
-    setEditingBulletId(bulletId);
-    setEditingText(text);
+    setIsLocating(true);
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 300000,
+        });
+      });
+
+      const { latitude, longitude, accuracy } = position.coords;
+      const district = await reverseGeocodeDistrict(latitude, longitude);
+      const location: LocationItem = {
+        latitude,
+        longitude,
+        district,
+        mapUrl: getMapUrl(latitude, longitude),
+        ...(Number.isFinite(accuracy) ? { accuracy } : {}),
+        capturedAt: new Date(),
+      };
+
+      const entry = getEntryDraft();
+      await saveEntry({
+        ...entry,
+        location,
+        updatedAt: new Date(),
+      });
+    } catch (error) {
+      setLocationError(getLocationErrorMessage(error));
+    } finally {
+      setIsLocating(false);
+    }
   };
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-6 min-h-screen">
-      {/* Offline indicator */}
+    <div className="min-h-screen bg-white">
       {!isOnline && (
-        <div className="mb-4 px-4 py-2 bg-[#F59E0B]/20 border border-[#F59E0B] rounded-lg text-sm text-[#F59E0B] text-center">
-          you're offline, data will sync when back online
+        <div className="text-center py-2 bg-[#FFCC33]/20 text-[#2F3331] text-sm">
+          you are offline, data will sync when back online
         </div>
       )}
 
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h1 className="text-2xl font-bold">{dateStr}</h1>
-            <p className="text-[#8B8AA0]">{dayStr}</p>
+      {showSavedToast && (
+        <div className="fixed left-1/2 top-6 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#2F3331] px-4 py-2 text-sm font-semibold text-white shadow-lg">
+          <FontAwesomeIcon icon={faCheckCircle} className="h-4 w-4 text-[#00DC7D]" />
+          saved!
+        </div>
+      )}
+
+      {/* Collapsible Top Right Widgets & Switcher Tray */}
+      {widgetsCollapsed ? (
+        <button
+          onClick={() => setWidgetsCollapsed(false)}
+          className="fixed right-0 top-24 z-40 flex h-14 w-6 items-center justify-center rounded-l-xl bg-white border-y border-l border-[#CCD0CF]/60 shadow-[0_2px_12px_rgba(0,0,0,0.05)] cursor-pointer hover:bg-gray-50 text-[#A3A7A8] hover:text-black transition-all hover:scale-105 active:scale-95 duration-200"
+          title="Show Widgets & Switcher"
+        >
+          <FontAwesomeIcon icon={faChevronLeft} className="w-2.5 h-2.5 animate-pulse" />
+        </button>
+      ) : (
+        <div className="fixed right-6 top-24 z-40 flex flex-col gap-2 items-end">
+          {/* Collapse Trigger Chevron */}
+          <button
+            onClick={() => setWidgetsCollapsed(true)}
+            className="flex h-5 w-5 items-center justify-center rounded-full bg-white border border-[#CCD0CF]/60 shadow-sm cursor-pointer hover:bg-[#FAFAFA] text-[#A3A7A8] hover:text-black transition-all mb-1 mr-0.5 hover:scale-105 active:scale-90"
+            title="Minimize Tray"
+          >
+            <FontAwesomeIcon icon={faChevronRight} className="w-2.5 h-2.5" />
+          </button>
+
+          {/* Unified Physical Ticket Container */}
+          <div className="pointer-events-auto flex flex-col items-center bg-white border border-[#E4E7E6] shadow-[0_4px_16px_rgba(0,0,0,0.06)] rounded-2xl p-2 w-[82px] z-50">
+            {/* Top Widgets Section */}
+            <div className="flex flex-col items-center w-full gap-3.5 pb-1">
+              {/* Streak Widget */}
+              {settings.showStreakWidget !== false && currentStreak > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowStreakModal(true);
+                  }}
+                  className="pointer-events-auto flex flex-col items-center justify-center w-full py-1 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
+                  title="View Stats & Gamification"
+                >
+                  <FontAwesomeIcon icon={faFire} className="w-4 h-4 text-[#FF9933] animate-pulse pointer-events-none" />
+                  <span className="text-[10px] font-black text-[#2F3331] mt-0.5 leading-none pointer-events-none">{currentStreak}d</span>
+                </button>
+              )}
+
+              {/* Daily Word Goal (Battery Progress) */}
+              {settings.showWordGoalWidget !== false && (
+                <div 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (currentWordCount >= dailyGoal) {
+                      setShowConfetti(true);
+                      playGoalJingle();
+                    }
+                  }}
+                  className={`pointer-events-auto flex flex-col items-center w-full p-1 rounded-xl transition-all duration-300 select-none cursor-pointer ${
+                    currentWordCount >= dailyGoal 
+                      ? 'bg-[#E9FFF4] border border-[#00DC7D]' 
+                      : 'hover:bg-gray-50'
+                  }`}
+                  title={currentWordCount >= dailyGoal ? "Daily Goal Met! Tap to replay jingle 🎉" : `Daily Word Goal: ${currentWordCount}/${dailyGoal} words`}
+                >
+                  {/* Battery Cap */}
+                  <div className={`w-2 h-0.5 rounded-none transition-colors duration-300 pointer-events-none ${
+                    currentWordCount >= dailyGoal ? 'bg-[#00B866]' : 'bg-[#CCD0CF]'
+                  }`} />
+                  
+                  {/* Battery Body */}
+                  <div className={`w-6 h-9 border border-2 rounded-sm p-[1px] flex flex-col justify-end overflow-hidden transition-colors duration-300 relative pointer-events-none ${
+                    currentWordCount >= dailyGoal ? 'border-[#00B866] bg-[#E9FFF4]/40' : 'border-[#CCD0CF] bg-gray-50/50'
+                  }`}>
+                    {/* Fill */}
+                    <div 
+                      className={`w-full rounded-none transition-all duration-500 origin-bottom ${
+                        currentWordCount >= dailyGoal 
+                          ? 'bg-gradient-to-t from-[#00DC7D] to-[#00B866] animate-pulse' 
+                          : 'bg-[#00DC7D]'
+                      }`}
+                      style={{ height: `${Math.min(100, (currentWordCount / dailyGoal) * 100)}%` }}
+                    />
+                    
+                    {/* Percentage inside Battery */}
+                    <span className="absolute inset-0 flex items-center justify-center text-[7px] font-black tracking-tighter text-[#2F3331] z-10 pointer-events-none mix-blend-difference">
+                      {Math.round(Math.min(100, (currentWordCount / dailyGoal) * 100))}%
+                    </span>
+                  </div>
+
+                  {/* Word count text below */}
+                  <span className="mt-1 text-[9px] font-extrabold text-[#2F3331] leading-none text-center pointer-events-none">
+                    {currentWordCount}w
+                  </span>
+                  <span className="text-[7px] text-[#A3A7A8] font-bold uppercase tracking-wider leading-none mt-0.5 pointer-events-none">
+                    /{dailyGoal}
+                  </span>
+                </div>
+              )}
+
+              {/* To-Do List button with count badge */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowTodoDrawer(!showTodoDrawer);
+                }}
+                className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95 relative ${
+                  showTodoDrawer
+                    ? 'bg-[#E9FFF4] border border-[#00DC7D] text-[#00DC7D]'
+                    : 'bg-gray-50 hover:bg-[#FAFAFA] border border-gray-150 text-[#A3A7A8] hover:text-[#2F3331]'
+                }`}
+                title="Active To-Do Inbox"
+              >
+                <FontAwesomeIcon icon={faListCheck} className="w-4 h-4 pointer-events-none" />
+                {pendingTasks.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-[#FF453A] text-[8px] font-black text-white shadow-sm shadow-[#FF453A]/20 animate-pulse pointer-events-none">
+                    {pendingTasks.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Perforated dashed tear separator */}
+            <div className="border-t border-dashed border-[#CCD0CF]/70 my-2.5 w-full pointer-events-none" />
+
+            {/* Navigation Block (Simple Date Switcher) */}
+            <div className="pointer-events-auto flex items-center justify-between gap-1 w-full select-none">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePrevDay();
+                }}
+                className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full text-[#6F7476] hover:bg-[#F2F2F3] hover:text-black transition-colors cursor-pointer active:scale-90"
+                title="Previous Day"
+              >
+                <FontAwesomeIcon icon={faArrowLeft} className="w-2.5 h-2.5 pointer-events-none" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentDate(todayDate);
+                }}
+                className="pointer-events-auto flex h-5 w-5 items-center justify-center cursor-pointer"
+                title="Go to Today"
+              >
+                <div className={`w-1.5 h-1.5 rounded-full transition-colors duration-250 pointer-events-none ${isToday ? 'bg-[#00DC7D]' : 'bg-[#6F7476]/55 animate-pulse'}`} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNextDay();
+                }}
+                className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full text-[#6F7476] hover:bg-[#F2F2F3] hover:text-black transition-colors cursor-pointer active:scale-90"
+                title="Next Day"
+              >
+                <FontAwesomeIcon icon={faArrowRight} className="w-2.5 h-2.5 pointer-events-none" />
+              </button>
+            </div>
           </div>
-          <div className="text-right">
-            <span className="text-sm font-semibold text-[#C049FF]">{contextStr}</span>
+
+          {/* Floating To-Do Inbox Drawer (slides out next to the tray) */}
+          {showTodoDrawer && (
+            <div className="absolute right-[86px] top-0 z-50 w-[260px] max-h-[360px] rounded-2xl bg-white/95 border border-[#E4E7E6] shadow-xl p-4 flex flex-col overflow-hidden backdrop-blur-md animate-in fade-in slide-in-from-right-5 duration-200">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-[#EEF0EF] pb-2 mb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-extrabold text-[#2F3331] uppercase tracking-wider">To-Do Inbox</span>
+                  {pendingTasks.length > 0 && (
+                    <span className="inline-flex h-4 min-w-4 px-1 rounded-full bg-[#FF453A]/10 text-[#FF453A] text-[9px] font-black items-center justify-center">
+                      {pendingTasks.length}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowTodoDrawer(false)}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-[#A3A7A8] hover:bg-[#F2F2F3] hover:text-[#2F3331] transition-colors"
+                  title="Close"
+                >
+                  <FontAwesomeIcon icon={faXmark} className="w-3 h-3" />
+                </button>
+              </div>
+
+              {/* Tasks List */}
+              <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5 select-none scrollbar-none">
+                {pendingTasks.map((task) => (
+                  <div key={task.id} className="flex items-start gap-2.5 py-0.5 text-left">
+                    <button
+                      onClick={() => toggleBulletComplete(task.id)}
+                      className="shrink-0 mt-0.5 cursor-pointer animate-none"
+                    >
+                      <FontAwesomeIcon icon={faSquare} className="w-4 h-4 text-[#CCD0CF] hover:text-[#00DC7D] transition-colors" />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-[#2F3331] leading-relaxed break-words line-clamp-2">
+                        {task.text}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setCurrentDate(task.date);
+                          setShowTodoDrawer(false);
+                        }}
+                        className={`mt-1 inline-flex items-center gap-1 rounded px-1 py-0.5 transition-colors cursor-pointer text-[8px] font-bold ${
+                          task.scheduledAt
+                            ? 'bg-[#E9FFF4] hover:bg-[#D6FADB] text-[#00A963]'
+                            : 'bg-[#F2F2F3] hover:bg-[#E8E9EA] text-[#6F7476] hover:text-[#2F3331]'
+                        }`}
+                        title={`Go to ${task.date}`}
+                      >
+                        <FontAwesomeIcon icon={faCalendar} className={`w-2 h-2 ${task.scheduledAt ? 'text-[#00DC7D]' : 'text-[#A3A7A8]'}`} />
+                        {task.scheduledAt 
+                          ? format(new Date(task.scheduledAt), 'MMM d')
+                          : format(new Date(task.date), 'MMM d')}
+                      </button>
+                      
+                      {task.scheduledAt && (
+                        <span className="mt-1 ml-1 inline-flex items-center gap-1 rounded bg-[#FFF3C4] text-[8px] font-bold text-[#8C6B00] px-1 py-0.5 select-none shadow-sm border border-[#FFE082]/20">
+                          <FontAwesomeIcon icon={faClock} className="w-2 h-2 text-[#B58900]" />
+                          {format(new Date(task.scheduledAt), 'h:mm a')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {pendingTasks.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <FontAwesomeIcon icon={faListCheck} className="w-8 h-8 text-[#CCD0CF] mb-2" />
+                    <p className="text-xs font-bold text-[#6F7476]">all caught up!</p>
+                    <p className="text-[10px] text-[#A3A7A8]">your journal inbox is empty</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="max-w-[600px] mx-auto px-6 py-8">
+        <div className="min-h-[34vh] flex flex-col justify-center">
+          <div className="font-sans tracking-normal">
+            <h1 className="text-2xl font-bold font-sans text-[#2F3331] tracking-normal">
+              {dateStr}
+            </h1>
+            <span className="mt-1 inline-flex rounded-md bg-[#F2F2F3] px-2 py-1 align-middle text-xs font-bold text-[#6F7476]">
+              {yearStr}
+            </span>
+          </div>
+
+          <div className="my-1 flex items-center gap-4 font-sans tracking-normal">
+            <h2 className="text-5xl font-bold font-sans text-[#2F3331] tracking-normal">
+              {dayStr}
+            </h2>
+          </div>
+
+          <p className="mt-1 font-sans text-base text-[#6F7476] tracking-normal">
+            <span className="font-bold text-[#2F3331]">#{entryNumber}</span> / <span className="text-[#FF9933] font-semibold">{isToday ? 'Today' : currentDate}</span>
+          </p>
+
+          <div className="mt-5 space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setShowFabActions(current => !current)}
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#00DC7D] text-white shadow-sm transition-all hover:bg-[#00B866] ${showFabActions ? 'rotate-45' : ''}`}
+                title="add"
+              >
+                <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
+              </button>
+
+              {showFabActions && (
+                <>
+                  <button
+                    onClick={() => openInlinePanel('wisdom')}
+                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${activeInlinePanel === 'wisdom' ? 'bg-[#F0D6FF] text-[#8B00D4]' : 'bg-[#F2F2F3] text-[#2F3331] hover:bg-[#E8E9EA]'}`}
+                    title="add wisdom"
+                  >
+                    <FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4" />
+                    wisdom
+                  </button>
+                  <button
+                    onClick={() => openInlinePanel('note')}
+                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${activeInlinePanel === 'note' ? 'bg-[#C8F7E4] text-[#00875A]' : 'bg-[#F2F2F3] text-[#2F3331] hover:bg-[#E8E9EA]'}`}
+                    title="add note"
+                  >
+                    <FontAwesomeIcon icon={faBook} className="w-4 h-4" />
+                    note
+                  </button>
+                  <button
+                    onClick={() => openInlinePanel('idea')}
+                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${activeInlinePanel === 'idea' ? 'bg-[#FFE4B5] text-[#B45309]' : 'bg-[#F2F2F3] text-[#2F3331] hover:bg-[#E8E9EA]'}`}
+                    title="add idea"
+                  >
+                    <FontAwesomeIcon icon={faLightbulb} className="w-4 h-4" />
+                    idea
+                  </button>
+                  <button
+                    onClick={() => openInlinePanel('image')}
+                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${activeInlinePanel === 'image' ? 'bg-[#D6E4FF] text-[#1A56C4]' : 'bg-[#F2F2F3] text-[#2F3331] hover:bg-[#E8E9EA]'}`}
+                    title="add image"
+                  >
+                    <FontAwesomeIcon icon={faImage} className="w-4 h-4" />
+                    image
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowFabActions(false);
+                      handleAddLocation();
+                    }}
+                    disabled={isLocating}
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#F2F2F3] px-3 py-2 text-sm font-semibold text-[#2F3331] transition-colors hover:bg-[#E8E9EA] disabled:cursor-wait disabled:text-[#A3A7A8]"
+                    title="add current location"
+                  >
+                    <FontAwesomeIcon icon={isLocating ? faSpinner : faLocationDot} className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
+                    location
+                  </button>
+                </>
+              )}
+            </div>
+
+            {currentEntry?.location && (
+              <div className="group inline-flex max-w-full items-center gap-1 rounded-lg bg-[#F2F2F3] px-3 py-2 text-sm font-semibold text-[#2F3331] transition-colors hover:bg-[#E8E9EA]">
+                <a
+                  href={currentEntry.location.mapUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex min-w-0 items-center gap-2"
+                  title="open map"
+                >
+                  <FontAwesomeIcon icon={faLocationDot} className="w-4 h-4 shrink-0 text-[#FF9933]" />
+                  <span className="truncate">({currentEntry.location.district})</span>
+                </a>
+                <button
+                  onClick={handleRemoveLocation}
+                  className="ml-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[#A3A7A8] opacity-0 transition-opacity hover:bg-white hover:text-[#FF453A] group-hover:opacity-100"
+                  title="remove location"
+                >
+                  <FontAwesomeIcon icon={faXmark} className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+
+            {locationError && (
+              <p className="text-sm font-medium text-[#FF453A]">{locationError}</p>
+            )}
+
+            {activeInlinePanel === 'wisdom' && (
+              <div className="py-3">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-[#2F3331]">Wisdom</h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setActiveInlinePanel(null)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F3] text-[#6F7476] transition-colors hover:bg-[#E8E9EA] hover:text-[#2F3331]"
+                      title="cancel"
+                    >
+                      <FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={handleAddWisdom}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00DC7D] text-white transition-colors hover:bg-[#00B866]"
+                      title="save"
+                    >
+                      <FontAwesomeIcon icon={faCheck} className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {wisdomCategories.map(({ type, icon, label, color, bg }) => (
+                    <button
+                      key={type}
+                      onClick={() => setSelectedWisdomType(type)}
+                      className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${selectedWisdomType === type ? 'ring-2 ring-[#2F3331]/10' : ''}`}
+                      style={{ backgroundColor: bg, color }}
+                    >
+                      <FontAwesomeIcon icon={icon} className="w-3.5 h-3.5" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mb-3 border-t border-dashed border-[#D7DBDA] pt-3" />
+                
+                {selectedWisdomType === 'thought' && (
+                  <textarea
+                    value={wisdomContent}
+                    onChange={(e) => setWisdomContent(e.target.value)}
+                    placeholder="drop the thing your future self needs..."
+                    rows={3}
+                    className="w-full resize-none bg-transparent py-1 text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none text-sm leading-relaxed"
+                    autoFocus
+                  />
+                )}
+                
+                {selectedWisdomType === 'quote' && (
+                  <div className="space-y-2.5">
+                    <textarea
+                      value={wisdomContent}
+                      onChange={(e) => setWisdomContent(e.target.value)}
+                      placeholder="Quote text..."
+                      rows={2}
+                      className="w-full resize-none bg-transparent py-1 text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none text-sm leading-relaxed"
+                      autoFocus
+                    />
+                    <input
+                      type="text"
+                      value={wisdomAuthor}
+                      onChange={(e) => setWisdomAuthor(e.target.value)}
+                      placeholder="Author..."
+                      className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-xs text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#8B00D4]/30"
+                    />
+                  </div>
+                )}
+                
+                {selectedWisdomType === 'fact' && (
+                  <div className="space-y-2.5">
+                    <textarea
+                      value={wisdomContent}
+                      onChange={(e) => setWisdomContent(e.target.value)}
+                      placeholder="Fact text..."
+                      rows={2}
+                      className="w-full resize-none bg-transparent py-1 text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none text-sm leading-relaxed"
+                      autoFocus
+                    />
+                    <input
+                      type="text"
+                      value={wisdomSource}
+                      onChange={(e) => setWisdomSource(e.target.value)}
+                      placeholder="Source..."
+                      className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-xs text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#8B00D4]/30"
+                    />
+                  </div>
+                )}
+                
+                {selectedWisdomType === 'excerpt' && (
+                  <div className="space-y-2.5">
+                    <textarea
+                      value={wisdomContent}
+                      onChange={(e) => setWisdomContent(e.target.value)}
+                      placeholder="Excerpt text..."
+                      rows={2}
+                      className="w-full resize-none bg-transparent py-1 text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none text-sm leading-relaxed"
+                      autoFocus
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <input
+                        type="text"
+                        value={wisdomAuthor}
+                        onChange={(e) => setWisdomAuthor(e.target.value)}
+                        placeholder="Author..."
+                        className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-xs text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#8B00D4]/30"
+                      />
+                      <input
+                        type="text"
+                        value={wisdomSource}
+                        onChange={(e) => setWisdomSource(e.target.value)}
+                        placeholder="Source..."
+                        className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-xs text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#8B00D4]/30"
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {selectedWisdomType === 'lesson' && (
+                  <div className="space-y-2.5">
+                    <textarea
+                      value={wisdomContent}
+                      onChange={(e) => setWisdomContent(e.target.value)}
+                      placeholder="Lesson text..."
+                      rows={2}
+                      className="w-full resize-none bg-transparent py-1 text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none text-sm leading-relaxed"
+                      autoFocus
+                    />
+                    <input
+                      type="text"
+                      value={wisdomContext}
+                      onChange={(e) => setWisdomContext(e.target.value)}
+                      placeholder="How did you learn this"
+                      className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-xs text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#8B00D4]/30"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeInlinePanel === 'note' && (
+              <div className="py-3">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-[#2F3331]">Note</h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setActiveInlinePanel(null)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F3] text-[#6F7476] transition-colors hover:bg-[#E8E9EA] hover:text-[#2F3331]"
+                      title="cancel"
+                    >
+                      <FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={handleAddNote}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00DC7D] text-white transition-colors hover:bg-[#00B866]"
+                      title="save"
+                    >
+                      <FontAwesomeIcon icon={faCheck} className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  value={noteTitle}
+                  onChange={(e) => setNoteTitle(e.target.value)}
+                  placeholder="Title (optional)"
+                  className="mb-2 w-full bg-transparent text-base font-semibold text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none"
+                  autoFocus
+                />
+                <div className="mb-3 border-t border-dashed border-[#D7DBDA]" />
+                <textarea
+                  value={noteContent}
+                  onChange={(e) => setNoteContent(e.target.value)}
+                  placeholder="spill it here, keep it useful..."
+                  rows={3}
+                  className="w-full resize-none bg-transparent py-1 text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none"
+                />
+              </div>
+            )}
+
+            {activeInlinePanel === 'idea' && (
+              <div className="py-3">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-[#2F3331]">Idea</h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setActiveInlinePanel(null)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F3] text-[#6F7476] transition-colors hover:bg-[#E8E9EA] hover:text-[#2F3331]"
+                      title="cancel"
+                    >
+                      <FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={handleAddIdea}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FF9933] text-white transition-colors hover:bg-[#E68A26]"
+                      title="save"
+                    >
+                      <FontAwesomeIcon icon={faCheck} className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="mb-3 border-t border-dashed border-[#D7DBDA]" />
+                <textarea
+                  value={ideaContent}
+                  onChange={(e) => setIdeaContent(e.target.value)}
+                  placeholder="tiny spark, big maybe..."
+                  rows={3}
+                  className="w-full resize-none bg-transparent py-1 text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none"
+                  autoFocus
+                />
+              </div>
+            )}
+
+            {activeInlinePanel === 'image' && (
+              <div className="mt-3 rounded-lg border border-dashed border-[#CCD0CF] bg-[#FAFAFA] p-4 transition-all duration-300">
+                <ImageUpload
+                  maxFiles={5}
+                  showPreview={false}
+                  onUploadComplete={handleEntryMediaUpload}
+                />
+              </div>
+            )}
+
+            {selectedImageIndex !== null && isImageGalleryOpen && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm animate-in fade-in duration-300"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) {
+                    setIsImageGalleryOpen(false);
+                    setSelectedImageIndex(null);
+                  }
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setIsImageGalleryOpen(false);
+                    setSelectedImageIndex(null);
+                  }}
+                  className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+                >
+                  <FontAwesomeIcon icon={faXmark} className="w-5 h-5" />
+                </button>
+
+                {entryMedia.length > 1 && (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedImageIndex(prev => prev !== null ? (prev - 1 + entryMedia.length) % entryMedia.length : 0);
+                      }}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+                    >
+                      <FontAwesomeIcon icon={faArrowLeft} className="w-6 h-6" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedImageIndex(prev => prev !== null ? (prev + 1) % entryMedia.length : 0);
+                      }}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+                    >
+                      <FontAwesomeIcon icon={faArrowRight} className="w-6 h-6" />
+                    </button>
+                  </>
+                )}
+
+                <div className="relative max-w-full max-h-full p-4 animate-in zoom-in-95 duration-300">
+                  {entryMedia[selectedImageIndex]?.type === 'image' && (
+                    <img
+                      src={entryMedia[selectedImageIndex].publicUrl}
+                      alt="fullscreen"
+                      className="max-h-[85vh] w-auto max-w-full rounded-lg object-contain"
+                      style={{ boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}
+                    />
+                  )}
+                </div>
+
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const toDelete = selectedImageIndex;
+                      if (entryMedia.length <= 1) {
+                        setIsImageGalleryOpen(false);
+                        setSelectedImageIndex(null);
+                        handleRemoveEntryMedia(entryMedia[0].id);
+                      } else {
+                        handleRemoveEntryMedia(entryMedia[toDelete].id);
+                        setSelectedImageIndex(prev => prev !== null ? Math.min(prev, entryMedia.length - 2) : null);
+                      }
+                    }}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-red-500/50"
+                    title="delete photo"
+                  >
+                    <FontAwesomeIcon icon={faTrash} className="w-4 h-4" />
+                  </button>
+                  <span className="text-sm font-medium text-white/70">
+                    {selectedImageIndex + 1} / {entryMedia.length}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Dream Section */}
-      <div className="mb-6">
-        <button
-          onClick={() => setShowDreamInput(!showDreamInput)}
-          className="flex items-center gap-2 text-[#F59E0B] hover:text-[#FBBF24] transition-colors mb-2"
-        >
-          <MoonIcon className="w-5 h-5" />
-          <span className="text-sm font-medium">dream</span>
-          {currentEntry?.dream && (
-            <span className="ml-2 px-2 py-0.5 bg-[#F59E0B]/20 rounded-full text-xs">logged</span>
-          )}
-        </button>
-
-        {showDreamInput && (
-          <div className="bg-[#1E1A2B] rounded-lg p-4 border border-[#4A4560]">
-            <p className="text-sm text-[#8B8AA0] mb-2">
-              yo, spill the tea—what kinda wild dreams did you have last night?
-            </p>
-            <div className="flex gap-2">
+        <div className="mb-4">
+          {currentEntry?.dream && !isEditingDream ? (
+            <div className="flex items-start gap-2 group cursor-text" onClick={() => {
+              setDreamDraft(currentEntry.dream);
+              setIsEditingDream(true);
+              setTimeout(() => dreamInputRef.current?.focus(), 0);
+            }}>
+              <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#C8F7E4' }}>
+                <FontAwesomeIcon icon={faMoon} className="w-3.5 h-3.5" style={{ color: '#00875A' }} />
+              </div>
+              <p className="text-[#65796E] italic flex-1 pt-0.5">{currentEntry.dream}</p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#C8F7E4' }}>
+                <FontAwesomeIcon icon={faMoon} className="w-3.5 h-3.5" style={{ color: '#00875A' }} />
+              </div>
               <input
                 ref={dreamInputRef}
                 type="text"
-                value={dreamInput}
-                onChange={(e) => setDreamInput(e.target.value)}
+                value={dreamDraft}
+                onChange={(e) => {
+                  isUserTypingRef.current = true;
+                  setDreamDraft(e.target.value);
+                }}
                 onKeyDown={handleDreamKeyDown}
-                placeholder="describe your dream..."
-                className="flex-1 bg-[#2F2B3A] border border-[#4A4560] rounded-lg px-3 py-2 text-white placeholder-[#8B8AA0] focus:outline-none focus:border-[#C049FF] transition-colors"
+                onBlur={() => handleAddDream()}
+                placeholder="what did you dream about?"
+                className="w-full bg-transparent text-[#65796E] placeholder-[#A3A7A8] italic focus:outline-none transition-colors"
               />
-              <button
-                onClick={handleAddDream}
-                className="px-4 py-2 bg-[#F59E0B] text-black rounded-lg font-medium hover:bg-[#FBBF24] transition-colors"
-              >
-                save
-              </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {currentEntry?.dream && !showDreamInput && (
-          <div className="bg-[#1E1A2B] rounded-lg p-4 border border-[#F59E0B]/30">
-            <div className="flex items-start gap-2">
-              <MoonIcon className="w-4 h-4 text-[#F59E0B] mt-1 flex-shrink-0" />
-              <p className="text-sm text-[#8B8AA0] whitespace-pre-line">{currentEntry.dream}</p>
+        <div>
+          {currentEntry?.bullets.map((bullet) => (
+            <BulletItem
+              key={bullet.id}
+              bullet={bullet}
+              onToggleComplete={() => toggleBulletComplete(bullet.id)}
+              onDelete={() => deleteBullet(bullet.id)}
+              onUpdateText={(id, text) => updateBullet(id, { text })}
+              onUpdateStyle={(id, style) => updateBullet(id, { style })}
+            />
+          ))}
+
+          <div className="flex items-start gap-3 py-3">
+            <BulletStyleToggle
+              style={bulletStyle}
+              onToggle={() => setBulletStyle(current => {
+                if (current === 'bullet') return 'star';
+                if (current === 'star') return 'checklist';
+                return 'bullet';
+              })}
+            />
+            <div className="flex-1">
+              <MentionTextarea
+                value={bulletInput}
+                onChange={(v) => {
+                  isUserTypingRef.current = true;
+                  setBulletInput(v);
+                }}
+                onKeyDown={handleBulletKeyDown}
+                onEnter={() => handleAddBullet()}
+                placeholder="drop your thoughts here.. no cap!"
+                rows={1}
+                className="w-full bg-transparent text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none resize-none overflow-hidden"
+                style={{ minHeight: '28px', height: 'auto' }}
+              />
             </div>
           </div>
-        )}
+
+          {entryMedia.length > 0 && (
+            <div className="mt-4 border-t border-dashed border-[#CCD0CF] pt-4">
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {entryMedia.map((media, index) => (
+                  <div
+                    key={media.id}
+                    className="relative shrink-0 overflow-hidden rounded-lg bg-[#F2F2F3] transition-transform group"
+                    style={{ width: entryMedia.length === 1 ? 200 : entryMedia.length <= 2 ? 160 : 120, height: entryMedia.length === 1 ? 150 : 90 }}
+                  >
+                    <div className="w-full h-full cursor-pointer active:scale-95" onClick={() => {
+                      setSelectedImageIndex(index);
+                      setIsImageGalleryOpen(true);
+                    }}>
+                      {media.type === 'image' ? (
+                        <img src={media.publicUrl} alt="journal image" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-[#E8E9EA]">
+                          <FontAwesomeIcon icon={faImage} className="w-6 h-6 text-[#6F7476]" />
+                        </div>
+                      )}
+                    </div>
+                    
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteImageId(media.id);
+                      }}
+                      className="absolute top-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500/80 z-10"
+                      title="delete photo"
+                    >
+                      <FontAwesomeIcon icon={faTrash} className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-[#A3A7A8]">{entryMedia.length} {entryMedia.length === 1 ? 'photo' : 'photos'}</p>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Journal Bullets */}
-      <div className="mb-6">
-        <p className="flex items-center gap-2 text-[#8B8AA0] mb-3">
-          <span className="text-sm">drop your thoughts here.. no cap!</span>
-          <span
-            onClick={() => setBulletStyle(prev => prev === 'bullet' ? 'star' : prev === 'star' ? 'checklist' : 'bullet')}
-            className="ml-auto px-2 py-1 bg-[#2F2B3A] rounded text-xs cursor-pointer hover:bg-[#4A4560] transition-colors"
-            title="Tab to change style"
-          >
-            {bulletStyle === 'bullet' ? '•' : bulletStyle === 'star' ? '★' : '✓'}
-          </span>
-        </p>
+      <ConfirmModal
+        isOpen={deleteImageId !== null}
+        onClose={() => setDeleteImageId(null)}
+        onConfirm={() => {
+          if (deleteImageId) handleRemoveEntryMedia(deleteImageId);
+        }}
+        title="Delete Image"
+        message="Are you sure you want to delete this image? This action cannot be undone."
+      />
 
-        {/* Existing Bullets */}
-        <div className="space-y-3 mb-4">
-          {currentEntry?.bullets.map((bullet) => (
-            <div key={bullet.id} className="flex items-start gap-3 group">
-              <div className="mt-1 flex-shrink-0">
-                <BulletIcon style={bullet.style} />
+      {showStreakModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowStreakModal(false);
+          }}
+        >
+          <div className="relative w-full max-w-[360px] rounded-3xl bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            {/* Close button */}
+            <button
+              onClick={() => setShowStreakModal(false)}
+              className="absolute right-4 top-4 text-[#A3A7A8] hover:text-[#2F3331] transition-colors p-1.5 rounded-full hover:bg-[#F2F2F3]"
+            >
+              <FontAwesomeIcon icon={faXmark} className="w-4 h-4" />
+            </button>
+
+            {/* Content */}
+            <div className="flex flex-col items-center text-center">
+              {/* Flame Avatar */}
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#FFF4E6] border border-[#FFE4B5] text-[#FF9933] shadow-inner relative">
+                <FontAwesomeIcon icon={faFire} className="w-8 h-8 animate-bounce mt-1" />
+                <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00DC7D] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-[#00DC7D] border-2 border-white"></span>
+                </span>
               </div>
-              {editingBulletId === bullet.id ? (
-                <div className="flex-1 flex gap-2">
-                  <input
-                    type="text"
-                    value={editingText}
-                    onChange={(e) => setEditingText(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleEditBullet(bullet.id)}
-                    className="flex-1 bg-[#2F2B3A] border border-[#C049FF] rounded px-2 py-1 text-white focus:outline-none"
-                    autoFocus
-                  />
-                  <button onClick={() => handleEditBullet(bullet.id)} className="text-[#22C55E]">
-                    <CheckIcon className="w-5 h-5" />
-                  </button>
-                  <button onClick={() => setEditingBulletId(null)} className="text-[#8B8AA0]">
-                    <XMarkIcon className="w-5 h-5" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex-1">
-                  <p className={`text-white ${bullet.isHighlight ? 'font-semibold' : ''}`}>
-                    {bullet.text}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-[#8B8AA0]">
-                      {format(bullet.createdAt, 'h:mm a')}
-                    </span>
-                    {bullet.isHighlight && (
-                      <span className="px-2 py-0.5 bg-[#C049FF]/20 text-[#C049FF] text-xs rounded-full">highlight</span>
-                    )}
-                    {bullet.tags.map(tag => (
-                      <span key={tag} className="text-xs text-[#3B82F6]">#{tag}</span>
-                    ))}
-                    {bullet.mentions.map(mention => (
-                      <span key={mention} className="text-xs text-[#F97316]">@{mention}</span>
-                    ))}
-                    <div className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => toggleHighlight(bullet.id)}
-                        className="p-1 hover:bg-[#2F2B3A] rounded"
-                        title="toggle highlight"
-                      >
-                        <SparklesIcon className={`w-4 h-4 ${bullet.isHighlight ? 'text-[#C1049FF]' : 'text-[#8B8AA0]'}`} />
-                      </button>
-                      <button
-                        onClick={() => startEditing(bullet.id, bullet.text)}
-                        className="p-1 hover:bg-[#2F2B3A] rounded"
-                        title="edit"
-                      >
-                        <PencilSquareIcon className="w-4 h-4 text-[#8B8AA0]" />
-                      </button>
-                      <button
-                        onClick={() => deleteBullet(bullet.id)}
-                        className="p-1 hover:bg-[#EF4444]/20 rounded"
-                        title="delete"
-                      >
-                        <TrashIcon className="w-4 h-4 text-[#EF4444]" />
-                      </button>
+
+              <h3 className="text-2xl font-black text-[#2F3331] font-sans tracking-tight mb-1">
+                {currentStreak} Day Streak!
+              </h3>
+              <p className="text-xs text-[#6F7476] font-light leading-relaxed max-w-[260px] mb-6">
+                {currentStreak >= 3 
+                  ? "You are absolutely glowing! Keep logging daily to protect your flame. 🔥" 
+                  : "Every spark counts. Write a bullet note daily to keep the fire going! 🌱"}
+              </p>
+
+              {/* RPG Level Card */}
+              <div className="w-full bg-[#FAFAFA] rounded-2xl p-4 border border-[#E4E7E6] text-left mb-6 relative overflow-hidden">
+                <div className="absolute -right-8 -top-8 w-20 h-20 rounded-full bg-[#E9FFF4]/40 blur-2xl" />
+                <div className="flex items-center gap-3 relative z-10">
+                  <div className="text-xl">🏆</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-1">
+                      <span className="font-bold text-sm text-[#2F3331] font-sans">
+                        Level {gamificationData.level}
+                      </span>
+                      <span className="text-[9px] font-bold text-[#00A963] uppercase tracking-wider bg-[#E9FFF4] px-1.5 py-0.5 rounded">
+                        {gamificationData.levelTitle.split(' ').slice(1).join(' ')}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-[#6F7476] mt-0.5">
+                      {gamificationData.progressXP} / {gamificationData.levelCapacity} XP to Level {gamificationData.level + 1}
                     </div>
                   </div>
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
 
-        {/* Bullet Input */}
-        <div className="flex items-start gap-3">
-          <div className="mt-1 flex-shrink-0">
-            <BulletIcon style={bulletStyle} />
-          </div>
-          <div className="flex-1 relative">
-            <textarea
-              ref={bulletInputRef}
-              value={bulletInput}
-              onChange={(e) => setBulletInput(e.target.value)}
-              onKeyDown={handleBulletKeyDown}
-              placeholder="add a bullet..."
-              rows={2}
-              className="w-full bg-transparent border-b border-[#4A4560] py-2 text-white placeholder-[#8B8AA0] focus:outline-none focus:border-[#C049FF] transition-colors resize-none"
-            />
-            <div className="flex items-center justify-between mt-2">
-              <span className="text-xs text-[#8B8AA0]/50">Enter to save, Tab to change style</span>
-              <button
-                onClick={() => setShowImageUpload(!showImageUpload)}
-                className={`p-2 rounded-lg transition-colors ${showImageUpload ? 'bg-[#C049FF] text-white' : 'text-[#8B8AA0] hover:text-white'}`}
-                title="Attach images"
-              >
-                <PhotoIcon className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Image Upload Section */}
-        {showImageUpload && (
-          <div className="mt-4">
-            <ImageUpload
-              onUploadComplete={(media) => {
-                setCurrentMedia((prev) => [...prev, media]);
-              }}
-              maxFiles={3}
-            />
-          </div>
-        )}
-
-        {/* Uploaded Media Preview */}
-        {currentMedia.length > 0 && (
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {currentMedia.map((media) => (
-              <div key={media.id} className="relative group">
-                <img
-                  src={media.publicUrl}
-                  alt="uploaded"
-                  className="w-full h-24 object-cover rounded-lg border border-[#4A4560]"
-                />
-                <button
-                  onClick={() => setCurrentMedia((prev) => prev.filter((m) => m.id !== media.id))}
-                  className="absolute top-1 right-1 w-6 h-6 bg-[#EF4444] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <XMarkIcon className="w-4 h-4 text-white" />
-                </button>
+                {/* Progress bar */}
+                <div className="mt-3 relative z-10 h-2 w-full bg-[#EEF0EF] rounded-full overflow-hidden p-0.5">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#00DC7D] to-[#00B866] transition-all duration-500 shadow-sm"
+                    style={{ width: `${gamificationData.progressPercent}%` }}
+                  />
+                </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      {/* FAB Speed Dial */}
-      <div className="fixed right-4 bottom-24 z-50">
-        {showFABMenu && (
-          <div className="absolute bottom-14 right-0 bg-[#1E1A2B] rounded-xl border border-[#4A4560] p-2 space-y-1 shadow-lg min-w-[140px]">
-            <button
-              onClick={() => { setShowWisdomSubmenu(!showWisdomSubmenu); setShowNoteForm(false); setShowIdeaForm(false); }}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[#2F2B3A] text-[#3B82F6] text-sm"
-            >
-              <SparklesIcon className="w-5 h-5" />
-              wisdom
-            </button>
-            {showWisdomSubmenu && (
-              <div className="ml-4 space-y-1 border-l border-[#4A4560] pl-2">
-                {wisdomCategories.map(({ type, icon: Icon, label, color }) => (
-                  <button
-                    key={type}
-                    onClick={() => { setSelectedWisdomType(type); setShowWisdomForm(true); setShowFABMenu(false); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[#2F2B3A] text-sm transition-colors"
-                    style={{ color }}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {label}
-                  </button>
-                ))}
+              {/* Extra Stats badges */}
+              <div className="grid grid-cols-2 gap-2 w-full mb-6">
+                <div className="bg-[#FAFAFA] rounded-xl p-3 border border-[#E4E7E6]">
+                  <div className="text-lg font-bold text-[#2F3331]">{longestStreak} days</div>
+                  <div className="text-[9px] text-[#A3A7A8] uppercase tracking-wider font-semibold">Longest Streak</div>
+                </div>
+                <div className="bg-[#FAFAFA] rounded-xl p-3 border border-[#E4E7E6]">
+                  <div className="text-lg font-bold text-[#2F3331]">{gamificationData.totalXP}</div>
+                  <div className="text-[9px] text-[#A3A7A8] uppercase tracking-wider font-semibold">Total XP</div>
+                </div>
               </div>
-            )}
-            <button
-              onClick={() => { setShowNoteForm(true); setShowWisdomSubmenu(false); setShowIdeaForm(false); setShowFABMenu(false); }}
-              className="w-dropdown-item flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[#2F2B3A] text-[#22C55E] text-sm w-full"
-            >
-              <BookOpenIcon className="w-5 h-5" />
-              note
-            </button>
-            <button
-              onClick={() => { setShowIdeaForm(true); setShowWisdomSubmenu(false); setShowNoteForm(false); setShowFABMenu(false); }}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[#2F2B3A] text-[#F97316] text-sm"
-            >
-              <LightBulbIcon className="w-5 h-5" />
-              idea
-            </button>
-          </div>
-        )}
 
-        {/* Floating Action Button */}
-        <button
-          onClick={() => setShowFABMenu(!showFABMenu)}
-          className={`w-14 h-14 rounded-full gradient-brand flex items-center justify-center shadow-lg hover:scale-105 transition-transform ${showFABMenu ? 'rotate-45' : ''}`}
-        >
-          <PlusCircleIcon className="w-7 h-7 text-white" />
-        </button>
-      </div>
-
-      {/* Wisdom Form Modal */}
-      {showWisdomForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1E1A2B] rounded-xl p-6 w-full max-w-sm border border-[#4A4560]">
-            <div className="flex items-center gap-2 mb-4">
-              {wisdomCategories.find(w => w.type === selectedWisdomType)?.icon && (
-                (() => {
-                  const Icon = wisdomCategories.find(w => w.type === selectedWisdomType)!.icon;
-                  const color = wisdomCategories.find(w => w.type === selectedWisdomType)!.color;
-                  return <Icon className="w-6 h-6" style={{ color }} />;
-                })()
-              )}
-              <span className="font-semibold capitalize">{selectedWisdomType}</span>
-            </div>
-            <textarea
-              value={wisdomContent}
-              onChange={(e) => setWisdomContent(e.target.value)}
-              placeholder="drop your wisdom..."
-              rows={4}
-              className="w-full bg-[#2F2B3A] border border-[#4A4560] rounded-lg px-4 py-3 text-white placeholder-[#8B8AA0] focus:outline-none focus:border-[#C049FF] transition-colors resize-none mb-4"
-              autoFocus
-            />
-            <div className="flex gap-2">
+              {/* CTA Button */}
               <button
-                onClick={() => setShowWisdomForm(false)}
-                className="flex-1 py-2 rounded-lg border border-[#4A4560] text-[#8B8AA0] hover:bg-[#2F2B3A] transition-colors"
+                onClick={() => setShowStreakModal(false)}
+                className="w-full rounded-xl bg-[#2F3331] py-3 text-sm font-bold text-white transition-colors hover:bg-black shadow-md shadow-black/10"
               >
-                cancel
-              </button>
-              <button
-                onClick={handleAddWisdom}
-                className="flex-1 py-2 rounded-lg gradient-brand text-white font-semibold hover:opacity-90 transition-opacity"
-              >
-                saved
+                Awesome, Keep Writing
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Note Form Modal */}
-      {showNoteForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1E1A2B] rounded-xl p-6 w-full max-w-sm border border-[#4A4560]">
-            <div className="flex items-center gap-2 mb-4">
-              <BookOpenIcon className="w-6 h-6 text-[#22C55E]" />
-              <span className="font-semibold">new note</span>
-            </div>
-            <input
-              type="text"
-              value={noteTitle}
-              onChange={(e) => setNoteTitle(e.target.value)}
-              placeholder="title (optional)"
-              className="w-full bg-[#2F2B3A] border border-[#4A4560] rounded-lg px-4 py-2 text-white placeholder-[#8B8AA0] focus:outline-none focus:border-[#C049FF] transition-colors mb-3"
-              autoFocus
-            />
-            <textarea
-              value={noteContent}
-              onChange={(e) => setNoteContent(e.target.value)}
-              placeholder="write your note..."
-              rows={4}
-              className="w-full bg-[#2F2B3A] border border-[#4A4560] rounded-lg px-4 py-3 text-white placeholder-[#8B8AA0] focus:outline-none focus:border-[#C049FF] transition-colors resize-none mb-4"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowNoteForm(false)}
-                className="flex-1 py-2 rounded-lg border border-[#4A4560] text-[#8B8AA0] hover:bg-[#2F2B3A] transition-colors"
-              >
-                cancel
-              </button>
-              <button
-                onClick={handleAddNote}
-                className="flex-1 py-2 rounded-lg bg-[#22C55E] text-white font-semibold hover:bg-[#16A34A] transition-colors"
-              >
-                saved
-              </button>
-            </div>
-          </div>
-        </div>
+      {showConfetti && (
+        <canvas
+          ref={canvasRef}
+          className="fixed inset-0 z-[100] pointer-events-none w-full h-full"
+        />
       )}
-
-      {/* Idea Form Modal */}
-      {showIdeaForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1E1A2B] rounded-xl p-6 w-full max-w-sm border border-[#4A4560]">
-            <div className="flex items-center gap-2 mb-4">
-              <LightBulbIcon className="w-6 h-6 text-[#F97316]" />
-              <span className="font-semibold">new idea</span>
-            </div>
-            <textarea
-              value={ideaContent}
-              onChange={(e) => setIdeaContent(e.target.value)}
-              placeholder="drop your idea..."
-              rows={3}
-              className="w-full bg-[#2F2B3A] border border-[#4A4560] rounded-lg px-4 py-3 text-white placeholder-[#8B8AA0] focus:outline-none focus:border-[#C049FF] transition-colors resize-none mb-4"
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowIdeaForm(false)}
-                className="flex-1 py-2 rounded-lg border border-[#4A4560] text-[#8B8AA0] hover:bg-[#2F2B3A] transition-colors"
-              >
-                cancel
-              </button>
-              <button
-                onClick={handleAddIdea}
-                className="flex-1 py-2 rounded-lg bg-[#F97316] text-white font-semibold hover:bg-[#EA580C] transition-colors"
-              >
-                captured
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Streak indicator */}
-      <div className="fixed top-4 right-4">
-        <div className="flex items-center gap-1 px-3 py-1.5 bg-[#1E1A2B] rounded-full border border-[#4A4560]">
-          <FireIcon className="w-4 h-4 text-[#F97316]" />
-          <span className="text-xs font-medium">streak</span>
-        </div>
-      </div>
     </div>
   );
 }

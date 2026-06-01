@@ -1,6 +1,8 @@
 // Core data types for ASA Journey
 
 export type BulletStyle = 'bullet' | 'star' | 'checklist';
+export type WisdomType = 'thought' | 'quote' | 'fact' | 'excerpt' | 'lesson';
+export type BulletSource = 'wisdom' | 'note' | 'idea';
 
 export interface MediaItem {
   id: string;
@@ -10,16 +12,30 @@ export interface MediaItem {
   caption?: string;
 }
 
+export interface LocationItem {
+  latitude: number;
+  longitude: number;
+  district: string;
+  mapUrl: string;
+  accuracy?: number;
+  capturedAt: Date;
+}
+
 export interface Bullet {
   id: string;
   text: string;
   style: BulletStyle;
   isHighlight: boolean;
+  isCompleted?: boolean;
+  source?: BulletSource;
+  sourceType?: WisdomType;
+  sourceId?: string; // ID of the original wisdom/note/idea
   tags: string[];
   mentions: string[];
   media?: MediaItem[];
   createdAt: Date;
   updatedAt: Date;
+  scheduledAt?: Date;
 }
 
 export interface Entry {
@@ -27,11 +43,11 @@ export interface Entry {
   date: string; // YYYY-MM-DD format
   dream: string;
   bullets: Bullet[];
+  media?: MediaItem[];
+  location?: LocationItem;
   createdAt: Date;
   updatedAt: Date;
 }
-
-export type WisdomType = 'thought' | 'quote' | 'fact' | 'excerpt' | 'lesson';
 
 export interface Wisdom {
   id: string;
@@ -71,19 +87,54 @@ export interface Highlight {
   createdAt: Date;
 }
 
+export type DoMoreLess = 'more' | 'less' | null;
+
+export interface TagGroup {
+  id: string;
+  name: string;
+  tags: string[]; // tag names
+  color?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface Tag {
   id: string;
   name: string;
-  aliases?: string[];
+  aliases?: string[]; // alternative spellings/names
+  groupId?: string;
   count: number;
+  doMoreLess?: DoMoreLess;
+  firstMentioned?: Date;
+  totalDays?: number;
   createdAt: Date;
+}
+
+export interface PersonGroup {
+  id: string;
+  name: string;
+  people: string[]; // person names
+  color?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Person {
   id: string;
   name: string;
+  aliases?: string[]; // alternative names/nicknames
+  groupId?: string;
   mentions: number;
+  doMoreLess?: DoMoreLess;
+  firstMentioned?: Date;
+  totalDays?: number;
   createdAt: Date;
+}
+
+export interface SubGoal {
+  id: string;
+  content: string;
+  isCompleted: boolean;
 }
 
 export interface FocusGoal {
@@ -91,6 +142,11 @@ export interface FocusGoal {
   content: string;
   priority: number;
   isCompleted: boolean;
+  deadline?: string; // YYYY-MM-DD format
+  category?: string;
+  progress: number; // 0-100
+  focusMode?: 'hyperfocus' | 'top3' | 'pareto' | 'none';
+  subGoals?: SubGoal[]; // Sub-goals checklist
   createdAt: Date;
   updatedAt: Date;
 }
@@ -107,7 +163,12 @@ export interface UserSettings {
     ideas: boolean;
     focus: boolean;
   };
+  autoTagging: boolean;
+  autoMentioning: boolean;
   language: 'en';
+  dailyWordGoal?: number; // Daily target word count
+  showStreakWidget?: boolean; // Option to show/hide streak widget
+  showWordGoalWidget?: boolean; // Option to show/hide daily word goal battery widget
   createdAt: Date;
   updatedAt: Date;
 }

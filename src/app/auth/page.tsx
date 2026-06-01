@@ -79,61 +79,63 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#13111A] flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-[#FAFAFA] flex flex-col items-center justify-center p-6">
       {/* Logo */}
-      <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-gradient-brand mb-2">ASA Journey</h1>
-        <p className="text-[#8B8AA0]">your daily vibe, documented</p>
+      <div className="mb-10 text-center">
+        <h1 className="text-4xl font-bold font-serif text-[#2F3331] mb-2">
+          ASA Journey
+        </h1>
+        <p className="text-[#6F7476] font-light">your daily vibe, documented</p>
       </div>
 
       {/* Auth Card */}
-      <div className="w-full max-w-sm bg-[#1E1A2B] rounded-xl p-6 border border-[#4A4560]">
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="w-full max-w-sm bg-white rounded-2xl p-8 border border-[#CCD0CF] shadow-lg">
+        <form onSubmit={handleSubmit} className="space-y-5">
           {mode === 'register' && (
             <div>
-              <label className="block text-sm text-[#8B8AA0] mb-1">yo, what's your name?</label>
+              <label className="block text-sm text-[#6F7476] mb-2 font-light">yo, what's your name?</label>
               <input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full bg-[#2F2B3A] border border-[#4A4560] rounded-lg px-4 py-3 text-white placeholder-[#8B8AA0] focus:outline-none focus:border-[#C049FF] transition-colors"
+                className="w-full bg-[#F2F2F3] border border-[#CCD0CF] rounded-xl px-4 py-3 text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#5D8AFF] transition-colors"
                 placeholder="your name"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-sm text-[#8B8AA0] mb-1">email vibes</label>
+            <label className="block text-sm text-[#6F7476] mb-2 font-light">email vibes</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-[#2F2B3A] border border-[#4A4560] rounded-lg px-4 py-3 text-white placeholder-[#8B8AA0] focus:outline-none focus:border-[#C049FF] transition-colors"
+              className="w-full bg-[#F2F2F3] border border-[#CCD0CF] rounded-xl px-4 py-3 text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#5D8AFF] transition-colors"
               placeholder="you@email.com"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm text-[#8B8AA0] mb-1">password</label>
+            <label className="block text-sm text-[#6F7476] mb-2 font-light">password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-[#2F2B3A] border border-[#4A4560] rounded-lg px-4 py-3 text-white placeholder-[#8B8AA0] focus:outline-none focus:border-[#C049FF] transition-colors"
+              className="w-full bg-[#F2F2F3] border border-[#CCD0CF] rounded-xl px-4 py-3 text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#5D8AFF] transition-colors"
               placeholder="••••••••"
               required
             />
           </div>
 
           {error && (
-            <div className="text-[#EF4444] text-sm py-2">{error}</div>
+            <div className="text-[#FF453A] text-sm py-2 font-light">{error}</div>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-lg gradient-brand text-white font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="w-full py-3.5 rounded-xl bg-[#00DC7D] text-white font-semibold hover:bg-[#00B866] transition-colors disabled:opacity-50 shadow-sm"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
@@ -144,21 +146,21 @@ export default function AuthPage() {
           </button>
         </form>
 
-        <div className="mt-6">
+        <div className="mt-8">
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-[#4A4560]" />
+              <div className="w-full border-t border-[#CCD0CF]" />
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-[#1E1A2B] text-[#8B8AA0]">or just vibe</span>
+              <span className="px-3 bg-white text-[#A3A7A8]">or just vibe</span>
             </div>
           </div>
 
-          <div className="mt-4 space-y-3">
+          <div className="mt-5 space-y-3">
             <button
               onClick={handleGoogleSignIn}
               disabled={loading}
-              className="w-full py-3 rounded-lg border border-[#4A4560] text-white hover:bg-[#2F2B3A] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full py-3.5 rounded-xl border border-[#CCD0CF] text-[#2F3331] hover:bg-[#F2F2F3] transition-colors flex items-center justify-center gap-3 disabled:opacity-50 font-medium"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -172,25 +174,25 @@ export default function AuthPage() {
             <button
               onClick={handleGuestSignIn}
               disabled={loading}
-              className="w-full py-3 rounded-lg border border-[#4A4560] text-[#8B8AA0] hover:bg-[#2F2B3A] hover:text-white transition-colors disabled:opacity-50"
+              className="w-full py-3.5 rounded-xl border border-[#CCD0CF] text-[#6F7476] hover:bg-[#F2F2F3] hover:text-[#2F3331] transition-colors disabled:opacity-50 font-light"
             >
               just browsing as guest
             </button>
           </div>
         </div>
 
-        <p className="mt-6 text-center text-sm text-[#8B8AA0]">
+        <p className="mt-8 text-center text-sm text-[#6F7476] font-light">
           {mode === 'login' ? (
             <>
               no account yet?{' '}
-              <button onClick={() => setMode('register')} className="text-[#C049FF] hover:underline">
+              <button onClick={() => setMode('register')} className="text-[#00DC7D] font-medium hover:underline">
                 sign up
               </button>
             </>
           ) : (
             <>
               already vibing?{' '}
-              <button onClick={() => setMode('login')} className="text-[#C049FF] hover:underline">
+              <button onClick={() => setMode('login')} className="text-[#00DC7D] font-medium hover:underline">
                 sign in
               </button>
             </>

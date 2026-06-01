@@ -1,312 +1,357 @@
 'use client';
 
-import { useState } from 'react';
-import { useData } from '@/contexts/DataContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { format, subDays, startOfWeek, addDays, parseISO, isAfter } from 'date-fns';
+import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { addDays, format, parseISO, startOfWeek, subDays, subYears } from 'date-fns';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import {
-  SparklesIcon,
-  LightBulbIcon,
-  FireIcon,
-  BookOpenIcon,
-  CalendarIcon,
-  ChevronRightIcon,
-  BoltIcon,
-  ChatBubbleBottomCenterTextIcon,
-  InformationCircleIcon,
-  BookmarkIcon,
-  AcademicCapIcon,
-} from '@heroicons/react/24/outline';
+  faBolt,
+  faBookmark,
+  faBookOpen,
+  faCircleInfo,
+  faDice,
+  faGear,
+  faLightbulb,
+  faPlus,
+  faQuoteLeft,
+  faStar,
+  faTag,
+} from '@fortawesome/free-solid-svg-icons';
+import { HighlightedText } from '@/components/ui/HighlightedText';
+import { useData } from '@/contexts/DataContext';
 
-const wisdomIcons: Record<string, React.ElementType> = {
-  thought: BoltIcon,
-  quote: ChatBubbleBottomCenterTextIcon,
-  fact: InformationCircleIcon,
-  excerpt: BookmarkIcon,
-  lesson: AcademicCapIcon,
+const wisdomIcons: Record<string, IconDefinition> = {
+  thought: faBolt,
+  quote: faQuoteLeft,
+  fact: faCircleInfo,
+  excerpt: faBookmark,
+  lesson: faBookOpen,
+};
+
+const wisdomIconStyles: Record<string, { bg: string; color: string }> = {
+  thought: { bg: '#F0D6FF', color: '#8B00D4' },
+  quote: { bg: '#D6E4FF', color: '#1A56C4' },
+  fact: { bg: '#C8F7E4', color: '#00875A' },
+  excerpt: { bg: '#FFE4B5', color: '#B45309' },
+  lesson: { bg: '#EDD6FF', color: '#6B21A8' },
+};
+
+const sectionOptions = [
+  { id: 'random', label: 'Random items' },
+  { id: 'focus', label: 'Focus' },
+  { id: 'yesterday', label: 'Yesterday' },
+  { id: 'week', label: 'This week' },
+  { id: 'pins', label: 'Pins' },
+  { id: 'yearAgo', label: 'One year ago' },
+  { id: 'memory', label: 'Memory lane' },
+] as const;
+
+type SectionId = typeof sectionOptions[number]['id'];
+
+const defaultSections: Record<SectionId, boolean> = {
+  random: true,
+  focus: true,
+  yesterday: true,
+  week: true,
+  pins: true,
+  yearAgo: true,
+  memory: true,
 };
 
 export default function ReflectPage() {
-  const { user } = useAuth();
+  const router = useRouter();
   const {
-    wisdoms,
-    ideas,
     entries,
     goals,
+    highlights,
+    tags,
+    people,
+    wisdoms,
+    ideas,
     getWisdomOfTheDay,
     getIdeaOfTheDay,
-    currentStreak,
-    longestStreak,
   } = useData();
 
-  const [activeTab, setActiveTab] = useState<'today' | 'week' | 'goals'>('today');
+  const [showSettings, setShowSettings] = useState(false);
+  const [visibleSections, setVisibleSections] = useState(defaultSections);
+  const [memoryOffset, setMemoryOffset] = useState(0);
 
+  const today = new Date();
+  const todayKey = format(today, 'yyyy-MM-dd');
+  const yesterday = subDays(today, 1);
+  const yesterdayKey = format(yesterday, 'yyyy-MM-dd');
+  const yesterdayEntry = entries.find(entry => entry.date === yesterdayKey);
   const wisdomOfTheDay = getWisdomOfTheDay();
   const ideaOfTheDay = getIdeaOfTheDay();
-  const today = new Date();
+  const thoughtIcon = wisdomOfTheDay ? wisdomIcons[wisdomOfTheDay.type] || faBolt : faBolt;
+  const thoughtStyle = wisdomOfTheDay ? wisdomIconStyles[wisdomOfTheDay.type] || wisdomIconStyles.thought : wisdomIconStyles.thought;
 
-  const thisWeekStart = startOfWeek(today, { weekStartsOn: 1 });
-  const thisWeekEntries = entries.filter(e => {
-    const entryDate = parseISO(e.date);
-    return entryDate >= thisWeekStart && entryDate <= today;
+  const activeGoals = goals
+    .filter(goal => !goal.isCompleted)
+    .sort((a, b) => a.priority - b.priority)
+    .slice(0, 5);
+
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const weekStartKey = format(weekStart, 'yyyy-MM-dd');
+  const weekHighlights = highlights
+    .filter(highlight => highlight.entryDate >= weekStartKey && highlight.entryDate <= todayKey)
+    .slice(0, 4);
+  const weekWisdoms = wisdoms.filter(wisdom => {
+    const date = wisdom.linkedEntryId || format(wisdom.createdAt, 'yyyy-MM-dd');
+    return date >= weekStartKey && date <= todayKey;
   });
+  const weekIdeas = ideas.filter(idea => {
+    const linkedDate = idea.linkedEntries?.find(date => date >= weekStartKey && date <= todayKey);
+    const date = linkedDate || format(idea.createdAt, 'yyyy-MM-dd');
+    return date >= weekStartKey && date <= todayKey;
+  });
+  const weekTags = tags.filter(tag => format(tag.createdAt, 'yyyy-MM-dd') >= weekStartKey);
+  const weekPeople = people.filter(person => format(person.createdAt, 'yyyy-MM-dd') >= weekStartKey);
 
-  const throwbackDate = subDays(today, 365);
-  const throwbackEntry = entries.find(e => e.date === format(throwbackDate, 'yyyy-MM-dd'));
+  const topTags = useMemo(() => [...tags].sort((a, b) => b.count - a.count).slice(0, 3), [tags]);
+  const pinDays = Array.from({ length: 30 }, (_, index) => {
+    const date = addDays(subDays(today, 29), index);
+    return { date, dateKey: format(date, 'yyyy-MM-dd') };
+  });
+  const oneYearDate = subYears(today, 1);
+  const oneYearKey = format(oneYearDate, 'yyyy-MM-dd');
+  const oneYearEntry = entries.find(entry => entry.date === oneYearKey);
+  const memoryEntries = entries.filter(entry => entry.bullets.length > 0 || entry.dream).sort((a, b) => b.date.localeCompare(a.date));
+  const memoryEntry = memoryEntries.length >= 10 ? memoryEntries[memoryOffset % memoryEntries.length] : null;
 
-  const firstEntry = entries[entries.length - 1];
-  const journalAge = firstEntry
-    ? Math.floor((today.getTime() - parseISO(firstEntry.date).getTime()) / (1000 * 60 * 60 * 24))
-    : 0;
+  const toggleSection = (section: SectionId) => {
+    setVisibleSections(current => ({ ...current, [section]: !current[section] }));
+  };
 
-  const tabs = [
-    { id: 'today' as const, label: 'today' },
-    { id: 'week' as const, label: 'this week' },
-    { id: 'goals' as const, label: 'focus' },
-  ];
+  const getTagTimeline = (tagName: string) => pinDays.map(day => ({
+    ...day,
+    active: entries.some(entry =>
+      entry.date === day.dateKey && entry.bullets.some(bullet => bullet.tags.includes(tagName))
+    ),
+  }));
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-6 min-h-screen">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">reflect</h1>
-        <p className="text-[#8B8AA0]">take 5 min to check in with yourself</p>
-      </div>
-
-      {/* Streak Display */}
-      <div className="bg-[#1E1A2B] rounded-xl p-4 border border-[#4A4560] mb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FireIcon className={`w-6 h-6 ${currentStreak > 0 ? 'text-[#F97316]' : 'text-[#4A4560]'}`} />
-            <div>
-              <p className="font-bold">{currentStreak} day streak</p>
-              <p className="text-xs text-[#8B8AA0]">highest: {longestStreak} days</p>
-            </div>
+    <div className="min-h-screen bg-white pb-24">
+      <div className="mx-auto max-w-[600px] px-6 pt-8">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="font-sans text-5xl font-bold tracking-normal text-[#2F3331]">Reflect</h1>
+            <p className="mt-2 text-base font-light text-[#6F7476]">your entries, brought back into view</p>
           </div>
-          <div className="text-right">
-            <p className="text-sm text-[#8B8AA0]">journal age</p>
-            <p className="font-semibold">{journalAge} days</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Tab Navigation */}
-      <div className="flex gap-2 mb-6 overflow-x-auto">
-        {tabs.map((tab) => (
           <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-              activeTab === tab.id
-                ? 'gradient-brand text-white'
-                : 'bg-[#2F2B3A] text-[#8B8AA0] hover:text-white'
-            }`}
+            onClick={() => setShowSettings(current => !current)}
+            className="mt-1 flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#2F3331] shadow-sm ring-1 ring-[#CCD0CF] transition-colors hover:bg-[#F2F2F3]"
+            title="reflect settings"
           >
-            {tab.label}
+            <FontAwesomeIcon icon={faGear} className="h-4 w-4" />
           </button>
-        ))}
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === 'today' && (
-        <div className="space-y-6">
-          {/* Gem of the Day */}
-          {wisdomOfTheDay ? (
-            <div className="bg-[#1E1A2B] rounded-xl p-4 border border-[#3B82F6]/30">
-              <div className="flex items-center gap-2 mb-3">
-                <SparklesIcon className="w-5 h-5 text-[#C049FF]" />
-                <span className="text-sm text-[#8B8AA0]">gem of the day</span>
-              </div>
-              <div className="flex gap-3">
-                {(() => {
-                  const Icon = wisdomIcons[wisdomOfTheDay.type] || SparklesIcon;
-                  return <Icon className="w-8 h-8 text-[#3B82F6] flex-shrink-0" />;
-                })()}
-                <div>
-                  <span className="text-xs text-[#3C82F6] uppercase">{wisdomOfTheDay.type}</span>
-                  <p className="text-white mt-1">{wisdomOfTheDay.content}</p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-[#1E1A2B] rounded-xl p-4 border border-dashed border-[#4A4560]">
-              <div className="flex items-center gap-2 mb-2">
-                <SparklesIcon className="w-5 h-5 text-[#4A4560]" />
-                <span className="text-sm text-[#8B8AA0]">gem of the day</span>
-              </div>
-              <p className="text-sm text-[#4A4560]">no wisdom captured yet today</p>
-            </div>
-          )}
-
-          {/* Idea of the Day */}
-          {ideaOfTheDay ? (
-            <div className="bg-[#1E1A2B] rounded-xl p-4 border border-[#F97316]/30">
-              <div className="flex items-center gap-2 mb-3">
-                <LightBulbIcon className="w-5 h-5 text-[#F97316]" />
-                <span className="text-sm text-[#8B8AA0]">idea of the day</span>
-              </div>
-              <p className="text-white">{ideaOfTheDay.content}</p>
-            </div>
-          ) : (
-            <div className="bg-[#1E1A2B] rounded-xl p-4 border border-dashed border-[#4A4560]">
-              <div className="flex items-center gap-2 mb-2">
-                <LightBulbIcon className="w-5 h-5 text-[#4A4560]" />
-                <span className="text-sm text-[#8B8AA0]">idea of the day</span>
-              </div>
-              <p className="text-sm text-[#4A4560]">no ideas captured yet today</p>
-            </div>
-          )}
-
-          {/* Yesterday Review */}
-          {thisWeekEntries.length > 0 && thisWeekEntries[0] && (
-            <div className="bg-[#1E1A2B] rounded-xl p-4 border border-[#4A4560]">
-              <div className="flex items-center gap-2 mb-3">
-                <BookOpenIcon className="w-5 h-5 text-[#8B8AA0]" />
-                <span className="text-sm text-[#8B8AA0]">yesterday's thoughts</span>
-              </div>
-              {thisWeekEntries[0].bullets.slice(0, 2).map((bullet, i) => (
-                <p key={i} className="text-sm text-white mb-1">• {bullet.text}</p>
-              ))}
-              {thisWeekEntries[0].bullets.length === 0 && (
-                <p className="text-sm text-[#4A4560]">no thoughts yesterday</p>
-              )}
-            </div>
-          )}
-
-          {/* Throwback - 1 Year Ago */}
-          {throwbackEntry && (
-            <div className="bg-[#1E1A2B] rounded-xl p-4 border border-[#C049FF]/30">
-              <div className="flex items-center gap-2 mb-3">
-                <CalendarIcon className="w-5 h-5 text-[#C049FF]" />
-                <span className="text-sm text-[#8B8AA0]">flashback: 1 year ago</span>
-              </div>
-              <p className="text-xs text-[#8B8AA0] mb-2">
-                {format(throwbackDate, 'MMM d, yyyy')}
-              </p>
-              {throwbackEntry.bullets.slice(0, 2).map((bullet, i) => (
-                <p key={i} className="text-sm text-white mb-1">• {bullet.text}</p>
-              ))}
-            </div>
-          )}
         </div>
-      )}
 
-      {activeTab === 'week' && (
-        <div className="space-y-6">
-          {/* This Week Summary */}
-          <div className="bg-[#1E1A2B] rounded-xl p-4 border border-[#4A4560]">
-            <h3 className="font-semibold mb-3">this week's recap</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-2xl font-bold text-[#C049FF] z">{thisWeekEntries.length}</p>
-                <p className="text-xs text-[#8B8AA0]">entries</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold">
-                  {thisWeekEntries.reduce((sum, e) => sum + e.bullets.length, 0)}
-                </p>
-                <p className="text-xs text-[#8B8AA0]">bullets</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[#F59E0B]">
-                  {entries.filter(e => {
-                    const dateStr = format(parseISO(e.date), 'yyyy-MM-dd');
-                    const weekStartStr = format(thisWeekStart, 'yyyy-MM-dd');
-                    return dateStr >= weekStartStr && e.dream;
-                  }).length}
-                </p>
-                <p className="text-xs text-[#8B8AA0]">dreams logged</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[#22C55E]">
-                  {wisdoms.filter(w => {
-                    const dateStr = format(w.createdAt, 'yyyy-MM-dd');
-                    const weekStartStr = format(thisWeekStart, 'yyyy-MM-dd');
-                    return dateStr >= weekStartStr;
-                  }).length}
-                </p>
-                <p className="text-xs text-[#8B8AA0]">wisdoms captured</p>
-              </div>
-            </div>
+        {showSettings && (
+          <div className="mt-6 grid grid-cols-2 gap-2 rounded-lg bg-[#F2F2F3] p-3">
+            {sectionOptions.map(section => (
+              <label key={section.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-[#2F3331]">
+                <input
+                  type="checkbox"
+                  checked={visibleSections[section.id]}
+                  onChange={() => toggleSection(section.id)}
+                  className="accent-[#00DC7D]"
+                />
+                {section.label}
+              </label>
+            ))}
           </div>
+        )}
 
-          {/* Top Tags */}
-          <div className="bg-[#1E1A2B] rounded-xl p-4 border border-[#4A4560]">
-            <h3 className="font-semibold mb-3">trending tags</h3>
-            <div className="flex flex-wrap gap-2">
-              {/* Will implement tag extraction */}
-              <span className="text-sm text-[#4A4560]">no tags yet</span>
-            </div>
-          </div>
-
-          {/* Week's Highlights */}
-          <div className="bg-[#1E1A2B] rounded-xl p-4 border border-[#4A4560]">
-            <h3 className="font-semibold mb-3">week's highlights</h3>
-            <div className="space-y-2">
-              {thisWeekEntries.flatMap(e => e.bullets.filter(b => b.isHighlight)).slice(0, 5).map((bullet, i) => (
-                <div key={i} className="flex items-start gap-2 text-sm">
-                  <span className="text-[#C049FF]">*</span>
-                  <span className="text-white">{bullet.text}</span>
-                </div>
-              ))}
-              {thisWeekEntries.flatMap(e => e.bullets.filter(b => b.isHighlight)).length === 0 && (
-                <p className="text-sm text-[#4A4560]">no highlights this week</p>
+        <main className="mt-14 space-y-14">
+          {visibleSections.random && (
+            <section className="space-y-8">
+              {wisdomOfTheDay && (
+                <button
+                  onClick={() => router.push(`/collections?tab=wisdom&focus=${wisdomOfTheDay.id}`)}
+                  className="block w-full text-left"
+                >
+                  <h2 className="mb-4 text-lg font-bold text-[#FFB95C]">Gem of the day</h2>
+                  <div className="flex items-start gap-4">
+                    <span
+                      className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                      style={{ backgroundColor: thoughtStyle.bg, color: thoughtStyle.color }}
+                    >
+                      <FontAwesomeIcon icon={thoughtIcon} className="h-3.5 w-3.5" />
+                    </span>
+                    <p className="whitespace-pre-line text-lg font-light leading-8 text-[#2F3331]">
+                      {wisdomOfTheDay.content}
+                    </p>
+                  </div>
+                </button>
               )}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {activeTab === 'goals' && (
-        <div className="space-y-6">
-          {/* Top Goals */}
-          <div className="bg-[#1E1A2B] rounded-xl p-4 border border-[#4A4560]">
-            <h3 className="font-semibold mb-3">top goals</h3>
-            <div className="space-y-3">
-              {goals.filter(g => !g.isCompleted).slice(0, 5).map((goal, i) => (
-                <div key={goal.id} className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#2F2B3A] flex items-center justify-center text-sm font-medium">
-                    {i + 1}
-                  </span>
-                  <span className="text-white">{goal.content}</span>
-                </div>
-              ))}
-              {goals.filter(g => !g.isCompleted).length === 0 && (
-                <p className="text-sm text-[#4A4560]">no active goals</p>
+              {ideaOfTheDay && (
+                <button
+                  onClick={() => router.push(`/collections?tab=ideas&focus=${ideaOfTheDay.id}`)}
+                  className="block w-full text-left"
+                >
+                  <h2 className="mb-4 text-lg font-bold text-[#FFB95C]">Idea of the day</h2>
+                  <div className="flex items-start gap-4">
+                    <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#FFE4B5] text-[#B45309]">
+                      <FontAwesomeIcon icon={faLightbulb} className="h-3.5 w-3.5" />
+                    </span>
+                    <p className="text-lg font-light leading-8 text-[#2F3331]">
+                      {ideaOfTheDay.content}
+                    </p>
+                  </div>
+                </button>
               )}
-            </div>
-          </div>
+            </section>
+          )}
 
-          {/* Completed Goals */}
-            {goals.filter(g => g.isCompleted).length > 0 && (
-            <div className="bg-[#1E1A2B] rounded-xl p-4 border border-[#4A4560]">
-              <h3 className="font-semibold mb-3 text-[#22C55E]">done</h3>
-              <div className="space-y-2">
-                {goals.filter(g => g.isCompleted).slice(0, 5).map((goal) => (
-                  <div key={goal.id} className="flex items-center gap-3 text-sm">
-                    <span className="text-[#22C55E]">✓</span>
-                    <span className="text-[#8B8AA0] line-through">{goal.content}</span>
+          {visibleSections.focus && (
+            <section>
+              <h2 className="mb-6 font-sans text-3xl font-bold tracking-normal text-[#2F3331]">Focus</h2>
+              <div className="space-y-5">
+                {activeGoals.length > 0 ? activeGoals.map((goal, index) => (
+                  <div key={goal.id} className="flex items-start gap-4">
+                    <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#FFF0F5] text-sm font-bold text-[#F3A7C1]">
+                      {index + 1}
+                    </span>
+                    <p className="text-lg font-light leading-8 text-[#2F3331]">{goal.content}</p>
+                  </div>
+                )) : (
+                  <p className="text-lg font-light italic text-[#74797B]">No focus item yet.</p>
+                )}
+              </div>
+            </section>
+          )}
+
+          {visibleSections.yesterday && (
+            <section>
+              <h2 className="font-sans text-3xl font-bold tracking-normal text-[#2F3331]">Yesterday</h2>
+              <p className="mt-1 text-base text-[#2F3331]">{format(yesterday, 'EEEE, MMMM d')}</p>
+
+              {yesterdayEntry && yesterdayEntry.bullets.length > 0 ? (
+                <div className="mt-6 space-y-4">
+                  {yesterdayEntry.bullets.slice(0, 4).map((bullet) => (
+                    <button
+                      key={bullet.id}
+                      onClick={() => router.push(`/write?date=${yesterdayKey}`)}
+                      className="block w-full text-left text-base font-light leading-7 text-[#5D6264] transition-colors hover:text-[#2F3331]"
+                    >
+                      <HighlightedText text={bullet.text} interactive />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-6 text-lg italic text-[#74797B]">
+                  There is no entry for {format(yesterday, 'MMMM d')} yet.
+                </p>
+              )}
+
+              <button
+                onClick={() => router.push(`/write?date=${yesterdayKey}`)}
+                className="mt-6 inline-flex items-center gap-3 rounded-lg bg-[#F2F2F3] px-5 py-3 text-sm font-semibold text-[#2F3331] transition-colors hover:bg-[#E5E5E5]"
+              >
+                <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" />
+                Write entry
+              </button>
+            </section>
+          )}
+
+          {visibleSections.week && (
+            <section>
+              <h2 className="mb-6 font-sans text-3xl font-bold tracking-normal text-[#2F3331]">This week</h2>
+              <div className="space-y-4">
+                {weekHighlights.map(highlight => (
+                  <div key={highlight.id} className="flex items-start gap-4">
+                    <FontAwesomeIcon icon={faStar} className="mt-1 h-4 w-4 shrink-0 text-[#FFB95C]" />
+                    <div>
+                      <p className="text-base font-light leading-7 text-[#2F3331]">{highlight.content}</p>
+                      <p className="text-xs text-[#A3A7A8]">{format(parseISO(highlight.entryDate), 'MMM d')}</p>
+                    </div>
                   </div>
                 ))}
+                <div className="grid grid-cols-2 gap-4 pt-2 text-sm text-[#6F7476]">
+                  <p><span className="font-bold text-[#2F3331]">{weekWisdoms.length}</span> wisdom</p>
+                  <p><span className="font-bold text-[#2F3331]">{weekIdeas.length}</span> ideas</p>
+                  <p><span className="font-bold text-[#2F3331]">{weekTags.length}</span> tags</p>
+                  <p><span className="font-bold text-[#2F3331]">{weekPeople.length}</span> mentions</p>
+                </div>
               </div>
-            </div>
+            </section>
           )}
 
-          <button
-            onClick={() => {/* Open add goal modal */}}
-            className="w-full py-3 rounded-lg border border-dashed border-[#4A4560] text-[#8B8AA0] hover:border-[#C049FF] hover:text-[#C049FF] transition-colors"
-          >
-            + add a goal
-          </button>
-        </div>
-      )}
+          {visibleSections.pins && (
+            <section>
+              <h2 className="mb-6 font-sans text-3xl font-bold tracking-normal text-[#2F3331]">Pins</h2>
+              {topTags.length > 0 ? (
+                <div className="space-y-5">
+                  {topTags.map(tag => (
+                    <div key={tag.id}>
+                      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#5D8AFF]">
+                        <FontAwesomeIcon icon={faTag} className="h-3.5 w-3.5" />
+                        #{tag.name}
+                      </div>
+                      <div className="grid grid-cols-[repeat(30,minmax(0,1fr))] gap-1">
+                        {getTagTimeline(tag.name).map(day => (
+                          <span
+                            key={day.dateKey}
+                            title={day.dateKey}
+                            className={`h-2 rounded-sm ${day.active ? 'bg-[#5D8AFF]' : 'bg-[#EEF0EF]'}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-base font-light italic text-[#74797B]">No pinned tags yet.</p>
+              )}
+            </section>
+          )}
 
-      {/* Floating Wisdom Card */}
-      <div className="fixed bottom-24 right-4 bg-[#1E1A2B] rounded-xl p-3 border border-[#4A4560] shadow-lg max-w-[200px]">
-        <p className="text-sm italic text-[#8B8AA0]">
-          "the unexamined life is not worth living"
-        </p>
-        <p className="text-xs text-[#4A4560] mt-1">— Socrates</p>
+          {visibleSections.yearAgo && oneYearEntry && (
+            <section>
+              <h2 className="mb-4 font-sans text-3xl font-bold tracking-normal text-[#2F3331]">One year ago</h2>
+              <p className="mb-4 text-sm text-[#A3A7A8]">{format(oneYearDate, 'EEEE, MMMM d, yyyy')}</p>
+              <button
+                onClick={() => router.push(`/write?date=${oneYearKey}`)}
+                className="block w-full text-left text-base font-light leading-7 text-[#2F3331]"
+              >
+                {oneYearEntry.dream || oneYearEntry.bullets[0]?.text || 'Open entry'}
+              </button>
+            </section>
+          )}
+
+          {visibleSections.memory && (
+            <section>
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <h2 className="font-sans text-3xl font-bold tracking-normal text-[#2F3331]">Memory lane</h2>
+                {memoryEntry && (
+                  <button
+                    onClick={() => setMemoryOffset(current => current + 1)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F2F2F3] text-[#2F3331] transition-colors hover:bg-[#E5E5E5]"
+                    title="shuffle memory"
+                  >
+                    <FontAwesomeIcon icon={faDice} className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              {memoryEntry ? (
+                <button
+                  onClick={() => router.push(`/write?date=${memoryEntry.date}`)}
+                  className="block w-full text-left"
+                >
+                  <p className="mb-2 text-sm text-[#A3A7A8]">{format(parseISO(memoryEntry.date), 'EEEE, MMMM d, yyyy')}</p>
+                  <p className="line-clamp-4 text-base font-light leading-7 text-[#2F3331]">
+                    {memoryEntry.dream || memoryEntry.bullets[0]?.text}
+                  </p>
+                </button>
+              ) : (
+                <p className="text-base font-light italic text-[#74797B]">Memory lane opens after 10 entries.</p>
+              )}
+            </section>
+          )}
+        </main>
       </div>
     </div>
   );

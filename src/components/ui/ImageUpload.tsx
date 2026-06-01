@@ -19,12 +19,14 @@ interface ImageUploadProps {
   onUploadComplete?: (media: MediaItem) => void;
   maxFiles?: number;
   acceptedTypes?: string[];
+  showPreview?: boolean;
 }
 
 export default function ImageUpload({
   onUploadComplete,
   maxFiles = 3,
   acceptedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+  showPreview = true,
 }: ImageUploadProps) {
   const { user } = useAuth();
   const [uploads, setUploads] = useState<MediaItem[]>([]);
@@ -115,7 +117,7 @@ export default function ImageUpload({
   return (
     <div className="space-y-3">
       {/* Uploaded Files Preview */}
-      {uploads.length > 0 && (
+      {showPreview && uploads.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
           {uploads.map((upload) => (
             <div key={upload.id} className="relative group">

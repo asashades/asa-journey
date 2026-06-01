@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import {
   collection,
   doc,
@@ -9,16 +9,21 @@ import {
   getDocs,
   query,
   orderBy,
-  limit,
   onSnapshot,
   serverTimestamp,
   deleteDoc,
+  increment,
+  deleteField,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Entry, Bullet, Wisdom, Note, Idea, Highlight, Tag, Person, FocusGoal, WeeklyData } from '@/types';
+import { Entry, Bullet, Wisdom, Note, Idea, Highlight, Tag, Person, FocusGoal, WeeklyData, TagGroup, PersonGroup } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
-import { format, subDays, startOfWeek, addDays, parseISO, differenceInDays } from 'date-fns';
+import { format, addDays, parseISO, differenceInDays } from 'date-fns';
+import { playChecklistJingle } from '@/lib/audio';
+import { parseAndStripNLP } from '@/lib/nlpParser';
+
+type BulletDraftOptions = Partial<Pick<Bullet, 'isHighlight' | 'source' | 'sourceType' | 'sourceId' | 'createdAt'>>;
 
 interface DataContextType {
   currentEntry: Entry | null;
@@ -28,34 +33,50 @@ interface DataContextType {
   getEntryByDate: (date: string) => Promise<Entry | null>;
   saveEntry: (entry: Entry) => Promise<void>;
   getEntriesForDateRange: (startDate: string, endDate: string) => Promise<Entry[]>;
-  addBullet: (text: string, style?: Bullet['style']) => Promise<Bullet>;
+  addBullet: (text: string, style?: Bullet['style'], data?: BulletDraftOptions) => Promise<Bullet>;
   updateBullet: (bulletId: string, data: Partial<Bullet>) => Promise<void>;
   deleteBullet: (bulletId: string) => Promise<void>;
   toggleHighlight: (bulletId: string) => Promise<void>;
+  toggleBulletComplete: (bulletId: string) => Promise<void>;
   updateDream: (dream: string) => Promise<void>;
   wisdoms: Wisdom[];
-  addWisdom: (type: Wisdom['type'], content: string, linkedEntryId?: string) => Promise<void>;
+  addWisdom: (type: Wisdom['type'], content: string, linkedEntryId?: string) => Promise<Wisdom | null>;
+  updateWisdom: (wisdomId: string, data: Partial<Wisdom>) => Promise<void>;
+  deleteWisdom: (wisdomId: string) => Promise<void>;
   getWisdomOfTheDay: () => Wisdom | null;
   notes: Note[];
-  addNote: (title: string, content: string, labels?: string[]) => Promise<void>;
+  addNote: (title: string, content: string, labels?: string[], linkedDate?: string) => Promise<Note | null>;
   updateNote: (noteId: string, data: Partial<Note>) => Promise<void>;
   deleteNote: (noteId: string) => Promise<void>;
   ideas: Idea[];
-  addIdea: (content: string) => Promise<void>;
+  addIdea: (content: string, linkedEntryId?: string) => Promise<Idea | null>;
   updateIdea: (ideaId: string, data: Partial<Idea>) => Promise<void>;
   deleteIdea: (ideaId: string) => Promise<void>;
   getIdeaOfTheDay: () => Idea | null;
   highlights: Highlight[];
   getHighlightsForDateRange: (startDate: string, endDate: string) => Highlight[];
   tags: Tag[];
+  tagGroups: TagGroup[];
+  updateTag: (tagName: string, data: Partial<Tag>) => Promise<void>;
+  createTagGroup: (name: string, tagNames: string[]) => Promise<void>;
+  updateTagGroup: (groupId: string, data: Partial<TagGroup>) => Promise<void>;
+  deleteTagGroup: (groupId: string) => Promise<void>;
   people: Person[];
-  extractAndSaveTags: (text: string) => void;
-  extractAndSavePeople: (text: string) => void;
+  personGroups: PersonGroup[];
+  updatePerson: (personName: string, data: Partial<Person>) => Promise<void>;
+  createPersonGroup: (name: string, personNames: string[]) => Promise<void>;
+  updatePersonGroup: (groupId: string, data: Partial<PersonGroup>) => Promise<void>;
+  deletePersonGroup: (groupId: string) => Promise<void>;
+  extractAndSaveTags: (text: string) => Promise<void>;
+  extractAndSavePeople: (text: string) => Promise<void>;
+  getBulletsForTag: (tagName: string) => { entryDate: string; bulletText: string; bulletId: string }[];
+  getBulletsForPerson: (personName: string) => { entryDate: string; bulletText: string; bulletId: string }[];
   goals: FocusGoal[];
-  addGoal: (content: string) => Promise<void>;
+  addGoal: (content: string, data?: Partial<FocusGoal>) => Promise<void>;
   updateGoal: (goalId: string, data: Partial<FocusGoal>) => Promise<void>;
   deleteGoal: (goalId: string) => Promise<void>;
   toggleGoalComplete: (goalId: string) => Promise<void>;
+  reorderGoals: (goalIds: string[]) => Promise<void>;
   getWeeklyData: (weekStart: string) => WeeklyData;
   totalEntries: number;
   totalBullets: number;
@@ -70,6 +91,108 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
+type TimestampLike = {
+  toDate: () => Date;
+};
+
+type TokenUsage = {
+  count: number;
+  firstMentioned: Date;
+  days: Set<string>;
+};
+
+const extractTokenNames = (text: string, prefix: '@' | '#') => {
+  const regex = prefix === '#'
+    ? /(^|[^\p{L}\p{N}_-])#([\p{L}\p{N}_][\p{L}\p{N}_-]*)/gu
+    : /(^|[^\p{L}\p{N}_-])@([\p{L}\p{N}_][\p{L}\p{N}_-]*)/gu;
+
+  return Array.from(text.matchAll(regex), match => match[2].toLowerCase())
+    .filter(Boolean)
+    .filter((name, index, names) => names.indexOf(name) === index);
+};
+
+const extractTagNames = (text: string) => extractTokenNames(text, '#');
+const extractMentionNames = (text: string) => extractTokenNames(text, '@');
+
+const findCanonicalName = <T extends { name: string; aliases?: string[] }>(name: string, items: T[]) => {
+  const normalized = name.toLowerCase();
+  return items.find(item =>
+    item.name.toLowerCase() === normalized ||
+    (item.aliases || []).some(alias => alias.toLowerCase() === normalized)
+  )?.name.toLowerCase() || normalized;
+};
+
+const addUsage = (usage: Map<string, TokenUsage>, name: string, date: string) => {
+  const entryDate = parseISO(date);
+  const existing = usage.get(name);
+
+  if (existing) {
+    existing.count += 1;
+    existing.days.add(date);
+    if (entryDate < existing.firstMentioned) {
+      existing.firstMentioned = entryDate;
+    }
+    return;
+  }
+
+  usage.set(name, {
+    count: 1,
+    firstMentioned: entryDate,
+    days: new Set([date]),
+  });
+};
+
+const isTimestampLike = (value: unknown): value is TimestampLike => {
+  if (typeof value !== 'object' || value === null) return false;
+  const maybeTimestamp = value as { toDate?: unknown };
+  return typeof maybeTimestamp.toDate === 'function';
+};
+
+const reviveFirestoreValue = (value: unknown): unknown => {
+  if (isTimestampLike(value)) return value.toDate();
+  if (value instanceof Date) return value;
+  if (Array.isArray(value)) return value.map(reviveFirestoreValue);
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, child]) => [key, reviveFirestoreValue(child)])
+    );
+  }
+  return value;
+};
+
+const removeUndefinedFields = <T,>(value: T): T => {
+  if (value instanceof Date) return value;
+  if (Array.isArray(value)) {
+    return value
+      .filter(item => item !== undefined)
+      .map(item => removeUndefinedFields(item)) as T;
+  }
+  if (typeof value === 'object' && value !== null) {
+    const clean: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (child !== undefined) {
+        clean[key] = removeUndefinedFields(child);
+      }
+    }
+    return clean as T;
+  }
+  return value;
+};
+
+const entryFromDoc = (id: string, data: Record<string, unknown>): Entry => {
+  const revived = reviveFirestoreValue(data) as Partial<Entry>;
+  return {
+    id,
+    date: typeof revived.date === 'string' ? revived.date : id,
+    dream: typeof revived.dream === 'string' ? revived.dream : '',
+    bullets: Array.isArray(revived.bullets) ? revived.bullets : [],
+    ...(Array.isArray(revived.media) ? { media: revived.media } : {}),
+    ...(revived.location ? { location: revived.location } : {}),
+    createdAt: revived.createdAt instanceof Date ? revived.createdAt : new Date(),
+    updatedAt: revived.updatedAt instanceof Date ? revived.updatedAt : new Date(),
+  };
+};
+
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [currentDate, setCurrentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -80,15 +203,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [tagGroups, setTagGroups] = useState<TagGroup[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
+  const [personGroups, setPersonGroups] = useState<PersonGroup[]>([]);
   const [goals, setGoals] = useState<FocusGoal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isOnline, setIsOnline] = useState(true);
+  const lastTokenSyncSignatureRef = useRef('');
+  const isSyncingSourceRef = useRef(false);
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === 'undefined' ? true : navigator.onLine
+  );
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-    setIsOnline(navigator.onLine);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => {
@@ -104,7 +232,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     ideas: Idea[];
     highlights: Highlight[];
     tags: Tag[];
+    tagGroups: TagGroup[];
     people: Person[];
+    personGroups: PersonGroup[];
     goals: FocusGoal[];
   }>) => {
     if (!user) return;
@@ -119,25 +249,63 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) {
-      setCurrentEntry(null);
-      setEntries([]);
-      setLoading(false);
-      return;
+      let isActive = true;
+      queueMicrotask(() => {
+        if (!isActive) return;
+        setCurrentEntry(null);
+        setEntries([]);
+        setLoading(false);
+      });
+      return () => {
+        isActive = false;
+      };
     }
 
+    let isActive = true;
     const cacheKey = `asa_journey_${user.uid}`;
     const cachedData = localStorage.getItem(cacheKey);
     if (cachedData) {
       try {
         const parsed = JSON.parse(cachedData);
-        setEntries(parsed.entries || []);
-        setWisdoms(parsed.wisdoms || []);
-        setNotes(parsed.notes || []);
-        setIdeas(parsed.ideas || []);
-        setHighlights(parsed.highlights || []);
-        setTags(parsed.tags || []);
-        setPeople(parsed.people || []);
-        setGoals(parsed.goals || []);
+        const reviveDate = (d: unknown): Date | undefined => {
+          if (d instanceof Date) return d;
+          if (typeof d === 'string') {
+            const parsed = new Date(d);
+            return isNaN(parsed.getTime()) ? undefined : parsed;
+          }
+          return undefined;
+        };
+        const reviveDates = (obj: Record<string, unknown>): Record<string, unknown> => {
+          const result: Record<string, unknown> = {};
+          for (const [key, value] of Object.entries(obj)) {
+            if (value instanceof Date) {
+              result[key] = value;
+            } else if (typeof value === 'string' && (key === 'createdAt' || key === 'updatedAt' || key === 'capturedAt')) {
+              const revived = reviveDate(value);
+              result[key] = revived !== undefined ? revived : new Date();
+            } else if (Array.isArray(value)) {
+              result[key] = value.map(item => typeof item === 'object' && item !== null ? reviveDates(item as Record<string, unknown>) : item);
+            } else if (typeof value === 'object' && value !== null) {
+              result[key] = reviveDates(value as Record<string, unknown>);
+            } else {
+              result[key] = value;
+            }
+          }
+          return result;
+        };
+
+        const revived = reviveDates(parsed);
+        queueMicrotask(() => {
+          if (!isActive) return;
+          setEntries((revived.entries || []) as Entry[]);
+          setWisdoms((revived.wisdoms || []) as Wisdom[]);
+          setNotes((revived.notes || []) as Note[]);
+          setIdeas((revived.ideas || []) as Idea[]);
+          setHighlights((revived.highlights || []) as Highlight[]);
+          setTags((revived.tags || []) as Tag[]);
+          setPeople((revived.people || []) as Person[]);
+          setGoals((revived.goals || []) as FocusGoal[]);
+        });
       } catch {
         localStorage.removeItem(cacheKey);
       }
@@ -145,14 +313,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     const entriesRef = collection(db, 'users', user.uid, 'entries');
     const unsubEntries = onSnapshot(
-      query(entriesRef, orderBy('date', 'desc'), limit(100)),
+      query(entriesRef, orderBy('date', 'desc')),
       (snapshot) => {
-        const entriesData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        })) as Entry[];
+        const entriesData = snapshot.docs.map(doc => entryFromDoc(doc.id, doc.data()));
         setEntries(entriesData);
         updateLocalCache({ entries: entriesData });
       }
@@ -203,6 +366,66 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
     );
 
+    const tagGroupsRef = collection(db, 'users', user.uid, 'tagGroups');
+    const unsubTagGroups = onSnapshot(
+      query(tagGroupsRef, orderBy('createdAt', 'desc')),
+      (snapshot) => {
+        const tagGroupsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+        })) as TagGroup[];
+        setTagGroups(tagGroupsData);
+        updateLocalCache({ tagGroups: tagGroupsData });
+      }
+    );
+
+    const tagsRef = collection(db, 'users', user.uid, 'tags');
+    const unsubTags = onSnapshot(query(tagsRef), (snapshot) => {
+      const tagsData = snapshot.docs
+        .map(doc => ({
+          id: doc.data().id || doc.id,
+          ...doc.data(),
+          name: doc.data().name || doc.id,
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+          firstMentioned: doc.data().firstMentioned?.toDate?.() || doc.data().firstMentioned || undefined,
+        })) as Tag[];
+      const sortedTags = tagsData.sort((a, b) => (b.count || 0) - (a.count || 0));
+      setTags(sortedTags);
+      updateLocalCache({ tags: sortedTags });
+    });
+
+    const peopleRef = collection(db, 'users', user.uid, 'people');
+    const unsubPeople = onSnapshot(query(peopleRef), (snapshot) => {
+      const peopleData = snapshot.docs
+        .map(doc => ({
+          id: doc.data().id || doc.id,
+          ...doc.data(),
+          name: doc.data().name || doc.id,
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+          firstMentioned: doc.data().firstMentioned?.toDate?.() || doc.data().firstMentioned || undefined,
+        })) as Person[];
+      const sortedPeople = peopleData.sort((a, b) => (b.mentions || 0) - (a.mentions || 0));
+      setPeople(sortedPeople);
+      updateLocalCache({ people: sortedPeople });
+    });
+
+    const personGroupsRef = collection(db, 'users', user.uid, 'personGroups');
+    const unsubPersonGroups = onSnapshot(
+      query(personGroupsRef, orderBy('createdAt', 'desc')),
+      (snapshot) => {
+        const personGroupsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+        })) as PersonGroup[];
+        setPersonGroups(personGroupsData);
+        updateLocalCache({ personGroups: personGroupsData });
+      }
+    );
+
     const goalsRef = collection(db, 'users', user.uid, 'goals');
     const unsubGoals = onSnapshot(
       query(goalsRef, orderBy('priority', 'asc')),
@@ -218,16 +441,33 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    setLoading(false);
+    queueMicrotask(() => {
+      if (isActive) setLoading(false);
+    });
 
     return () => {
+      isActive = false;
       unsubEntries();
       unsubWisdoms();
       unsubNotes();
       unsubIdeas();
+      unsubTagGroups();
+      unsubTags();
+      unsubPeople();
+      unsubPersonGroups();
       unsubGoals();
     };
   }, [user, updateLocalCache]);
+
+  const getEntryByDate = useCallback(async (date: string): Promise<Entry | null> => {
+    if (!user) return null;
+    const entryRef = doc(db, 'users', user.uid, 'entries', date);
+    const entryDoc = await getDoc(entryRef);
+    if (entryDoc.exists()) {
+      return entryFromDoc(entryDoc.id, entryDoc.data());
+    }
+    return null;
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -236,107 +476,318 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setCurrentEntry(entry);
     };
     loadCurrentEntry();
-  }, [user, currentDate]);
+  }, [user, currentDate, getEntryByDate]);
 
-  const getEntryByDate = async (date: string): Promise<Entry | null> => {
-    if (!user) return null;
-    const entryRef = doc(db, 'users', user.uid, 'entries', date);
-    const entryDoc = await getDoc(entryRef);
-    if (entryDoc.exists()) {
-      return {
-        id: entryDoc.id,
-        ...entryDoc.data(),
-        createdAt: entryDoc.data().createdAt?.toDate() || new Date(),
-        updatedAt: entryDoc.data().updatedAt?.toDate() || new Date(),
-      } as Entry;
-    }
-    return null;
-  };
+  const syncTokenCollections = useCallback(async (nextEntries: Entry[]) => {
+    if (!user) return;
+
+    const tagUsage = new Map<string, TokenUsage>();
+    const peopleUsage = new Map<string, TokenUsage>();
+
+    nextEntries.forEach((entry) => {
+      entry.bullets.forEach((bullet) => {
+        extractTagNames(bullet.text).forEach((tagName) => {
+          addUsage(tagUsage, findCanonicalName(tagName, tags), entry.date);
+        });
+        extractMentionNames(bullet.text).forEach((personName) => {
+          addUsage(peopleUsage, findCanonicalName(personName, people), entry.date);
+        });
+      });
+    });
+
+    const nextTags: Tag[] = [];
+    const touchedTagNames = new Set<string>();
+
+    await Promise.all([
+      ...Array.from(tagUsage.entries()).map(async ([tagName, usage]) => {
+        const existing = tags.find(tag => tag.name.toLowerCase() === tagName);
+        const updatedTag: Tag = {
+          ...(existing || {
+            id: uuidv4(),
+            name: tagName,
+            createdAt: usage.firstMentioned,
+          }),
+          count: usage.count,
+          firstMentioned: existing?.firstMentioned && existing.firstMentioned < usage.firstMentioned
+            ? existing.firstMentioned
+            : usage.firstMentioned,
+          totalDays: usage.days.size,
+        };
+
+        touchedTagNames.add(tagName);
+        nextTags.push(updatedTag);
+        await setDoc(doc(db, 'users', user.uid, 'tags', updatedTag.name), removeUndefinedFields(updatedTag), { merge: true });
+      }),
+      ...tags
+        .filter(tag => !tagUsage.has(tag.name.toLowerCase()))
+        .map(async (tag) => {
+          touchedTagNames.add(tag.name.toLowerCase());
+          await deleteDoc(doc(db, 'users', user.uid, 'tags', tag.name));
+        }),
+    ]);
+
+    const untouchedTags = tags.filter(tag => !touchedTagNames.has(tag.name.toLowerCase()));
+    const sortedTags = [...nextTags, ...untouchedTags]
+      .filter(tag => tag.count > 0)
+      .sort((a, b) => (b.count || 0) - (a.count || 0));
+    setTags(sortedTags);
+    updateLocalCache({ tags: sortedTags });
+
+    const nextPeople: Person[] = [];
+    const touchedPersonNames = new Set<string>();
+
+    await Promise.all([
+      ...Array.from(peopleUsage.entries()).map(async ([personName, usage]) => {
+        const existing = people.find(person => person.name.toLowerCase() === personName);
+        const updatedPerson: Person = {
+          ...(existing || {
+            id: uuidv4(),
+            name: personName,
+            createdAt: usage.firstMentioned,
+          }),
+          mentions: usage.count,
+          firstMentioned: existing?.firstMentioned && existing.firstMentioned < usage.firstMentioned
+            ? existing.firstMentioned
+            : usage.firstMentioned,
+          totalDays: usage.days.size,
+        };
+
+        touchedPersonNames.add(personName);
+        nextPeople.push(updatedPerson);
+        await setDoc(doc(db, 'users', user.uid, 'people', updatedPerson.name.toLowerCase()), removeUndefinedFields(updatedPerson), { merge: true });
+      }),
+      ...people
+        .filter(person => !peopleUsage.has(person.name.toLowerCase()))
+        .map(async (person) => {
+          touchedPersonNames.add(person.name.toLowerCase());
+          await deleteDoc(doc(db, 'users', user.uid, 'people', person.name.toLowerCase()));
+        }),
+    ]);
+
+    const untouchedPeople = people.filter(person => !touchedPersonNames.has(person.name.toLowerCase()));
+    const sortedPeople = [...nextPeople, ...untouchedPeople]
+      .filter(person => person.mentions > 0)
+      .sort((a, b) => (b.mentions || 0) - (a.mentions || 0));
+    setPeople(sortedPeople);
+    updateLocalCache({ people: sortedPeople });
+  }, [people, tags, updateLocalCache, user]);
 
   const saveEntry = async (entry: Entry) => {
     if (!user) return;
-    setCurrentEntry(entry);
-    setEntries(prev => {
-      const idx = prev.findIndex(e => e.id === entry.id);
+    const nextEntries = (() => {
+      const idx = entries.findIndex(e => e.id === entry.id || e.date === entry.date);
       if (idx >= 0) {
-        const updated = [...prev];
+        const updated = [...entries];
         updated[idx] = entry;
         return updated;
       }
-      return [entry, ...prev];
-    });
+      return [entry, ...entries];
+    })();
+
+    setCurrentEntry(entry);
+    setEntries(nextEntries);
     const entryRef = doc(db, 'users', user.uid, 'entries', entry.date);
     await setDoc(entryRef, {
-      ...entry,
+      ...(removeUndefinedFields(entry) as Entry),
+      ...(!entry.media || entry.media.length === 0 ? { media: deleteField() } : {}),
+      ...(!entry.location ? { location: deleteField() } : {}),
       updatedAt: serverTimestamp(),
     }, { merge: true });
-    entry.bullets.forEach(bullet => {
-      extractAndSaveTags(bullet.text);
-      extractAndSavePeople(bullet.text);
-    });
+    await syncTokenCollections(nextEntries).catch(() => undefined);
   };
+
+  useEffect(() => {
+    if (!user || loading) return;
+
+    const signature = entries
+      .map(entry => `${entry.date}:${entry.bullets.map(bullet => `${bullet.id}:${bullet.text}`).join('|')}`)
+      .sort()
+      .join('||');
+
+    if (signature === lastTokenSyncSignatureRef.current) return;
+    lastTokenSyncSignatureRef.current = signature;
+
+    syncTokenCollections(entries).catch(() => undefined);
+  }, [entries, loading, syncTokenCollections, user]);
 
   const getEntriesForDateRange = async (startDate: string, endDate: string): Promise<Entry[]> => {
     if (!user) return [];
     const entriesRef = collection(db, 'users', user.uid, 'entries');
     const q = query(entriesRef);
     const snapshot = await getDocs(q);
-    const allEntries = snapshot.docs
-      .map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          date: data.date as string,
-          dream: data.dream || '',
-          bullets: data.bullets || [],
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-        } as Entry;
-      });
+    const allEntries = snapshot.docs.map(doc => entryFromDoc(doc.id, doc.data()));
     return allEntries
       .filter(e => e.date >= startDate && e.date <= endDate)
       .sort((a, b) => a.date.localeCompare(b.date));
   };
 
-  const addBullet = async (text: string, style: Bullet['style'] = 'bullet'): Promise<Bullet> => {
+  const addBullet = async (text: string, style: Bullet['style'] = 'bullet', data: BulletDraftOptions = {}): Promise<Bullet> => {
+    // Run NLP Parser!
+    const { cleanText, parsedDate, hasCustomDate, hasCustomTime } = parseAndStripNLP(text, currentDate);
+
+    // Creation timestamp always remains the exact log entry creation date/time
+    const bulletCreatedAt = data.createdAt || new Date();
+    
+    // Parsed date/time from NLP goes strictly into scheduledAt (as task deadline)
+    const bulletScheduledAt = (hasCustomDate || hasCustomTime) ? parsedDate : undefined;
+
     const bullet: Bullet = {
       id: uuidv4(),
-      text,
+      text: cleanText,
       style,
-      isHighlight: text.includes('*'),
-      tags: text.match(/#(\w+)/g)?.map(t => t.slice(1)) || [],
-      mentions: text.match(/@(\w+)/g)?.map(m => m.slice(1)) || [],
-      createdAt: new Date(),
+      isHighlight: data.isHighlight ?? cleanText.includes('*'),
+      tags: extractTagNames(cleanText),
+      mentions: extractMentionNames(cleanText),
+      isCompleted: false,
+      ...(data.source ? { source: data.source } : {}),
+      ...(data.sourceType ? { sourceType: data.sourceType } : {}),
+      ...(data.sourceId ? { sourceId: data.sourceId } : {}),
+      createdAt: bulletCreatedAt,
+      updatedAt: new Date(),
+      ...(bulletScheduledAt ? { scheduledAt: bulletScheduledAt } : {})
+    };
+    const entry = currentEntry || { id: currentDate, date: currentDate, dream: '', bullets: [], createdAt: new Date(), updatedAt: new Date() };
+    const updatedEntry = {
+      ...entry,
+      bullets: [...entry.bullets, bullet],
       updatedAt: new Date(),
     };
-    let entry = currentEntry;
-    if (!entry) {
-      entry = { id: currentDate, date: currentDate, dream: '', bullets: [], createdAt: new Date(), updatedAt: new Date() };
-    }
-    entry.bullets.push(bullet);
-    entry.updatedAt = new Date();
-    await saveEntry(entry);
+    await saveEntry(updatedEntry);
     return bullet;
   };
 
   const updateBullet = async (bulletId: string, data: Partial<Bullet>) => {
-    if (!currentEntry) return;
-    const bulletIndex = currentEntry.bullets.findIndex(b => b.id === bulletId);
-    if (bulletIndex < 0) return;
-    const updatedBullet = { ...currentEntry.bullets[bulletIndex], ...data, updatedAt: new Date() };
-    if (data.text) {
-      updatedBullet.tags = data.text.match(/#(\w+)/g)?.map(t => t.slice(1)) || [];
-      updatedBullet.mentions = data.text.match(/@(\w+)/g)?.map(m => m.slice(1)) || [];
-      updatedBullet.isHighlight = data.text.includes('*');
+    // Find the bullet in currentEntry first
+    let bullet = currentEntry?.bullets.find(b => b.id === bulletId);
+    let targetEntry = currentEntry;
+
+    if (!bullet) {
+      // Search all loaded entries
+      for (const entry of entries) {
+        const found = entry.bullets.find(b => b.id === bulletId);
+        if (found) {
+          bullet = found;
+          targetEntry = entry;
+          break;
+        }
+      }
     }
-    const updatedBullets = [...currentEntry.bullets];
+
+    if (!bullet || !targetEntry) return;
+
+    const bulletIndex = targetEntry.bullets.findIndex(b => b.id === bulletId);
+    if (bulletIndex < 0) return;
+
+    const originalBullet = targetEntry.bullets[bulletIndex];
+    
+    // Create copy of updates
+    const updates = { ...data };
+
+    if (data.text) {
+      // Parse NLP on the text!
+      const { cleanText, parsedDate, hasCustomDate, hasCustomTime } = parseAndStripNLP(data.text, targetEntry.date);
+      updates.text = cleanText;
+      updates.tags = extractTagNames(cleanText);
+      updates.mentions = extractMentionNames(cleanText);
+      updates.isHighlight = cleanText.includes('*');
+      
+      // If NLP matched, update the scheduledAt field (leaving createdAt alone!)
+      if (hasCustomDate || hasCustomTime) {
+        updates.scheduledAt = parsedDate;
+      }
+    }
+
+    const updatedBullet = { ...originalBullet, ...updates, updatedAt: new Date() };
+    const updatedBullets = [...targetEntry.bullets];
     updatedBullets[bulletIndex] = updatedBullet;
-    const updatedEntry = { ...currentEntry, bullets: updatedBullets, updatedAt: new Date() };
-    await saveEntry(updatedEntry);
+
+    const updatedEntry = { ...targetEntry, bullets: updatedBullets, updatedAt: new Date() };
+
+    // Update state
+    setEntries(prev => prev.map(e => e.id === updatedEntry.id ? updatedEntry : e));
+    if (currentEntry && currentEntry.id === updatedEntry.id) {
+      setCurrentEntry(updatedEntry);
+    }
+
+    // Save to database
+    if (user) {
+      const entryRef = doc(db, 'users', user.uid, 'entries', updatedEntry.id);
+      await setDoc(entryRef, {
+        ...updatedEntry,
+        createdAt: updatedEntry.createdAt,
+        updatedAt: updatedEntry.updatedAt,
+        bullets: updatedEntry.bullets.map(b => ({
+          ...b,
+          createdAt: b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt),
+          updatedAt: b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt),
+          ...(b.scheduledAt ? { scheduledAt: b.scheduledAt instanceof Date ? b.scheduledAt : new Date(b.scheduledAt) } : {})
+        }))
+      });
+    }
+
+    // Sync text change to the linked collection item (wisdom/note/idea)
+    if (updates.text && originalBullet.source && originalBullet.sourceId && !isSyncingSourceRef.current) {
+      isSyncingSourceRef.current = true;
+      try {
+        if (originalBullet.source === 'wisdom') {
+          await updateWisdom(originalBullet.sourceId, { content: updates.text });
+        } else if (originalBullet.source === 'note') {
+          const colonIndex = updates.text.indexOf(': ');
+          if (colonIndex > 0) {
+            await updateNote(originalBullet.sourceId, {
+              title: updates.text.substring(0, colonIndex),
+              content: updates.text.substring(colonIndex + 2),
+            });
+          } else {
+            await updateNote(originalBullet.sourceId, { content: updates.text });
+          }
+        } else if (originalBullet.source === 'idea') {
+          await updateIdea(originalBullet.sourceId, { content: updates.text });
+        }
+      } finally {
+        isSyncingSourceRef.current = false;
+      }
+    }
   };
 
   const deleteBullet = async (bulletId: string) => {
     if (!currentEntry) return;
+    const bullet = currentEntry.bullets.find(b => b.id === bulletId);
+    const sourceId = bullet?.sourceId || (() => {
+      if (!bullet?.source) return undefined;
+      if (bullet.source === 'wisdom') {
+        return wisdoms.find(w =>
+          w.linkedEntryId === currentEntry.date &&
+          w.content === bullet.text &&
+          (!bullet.sourceType || w.type === bullet.sourceType)
+        )?.id;
+      }
+      if (bullet.source === 'note') {
+        return notes.find(note => {
+          const noteBulletText = note.content ? (note.title ? `${note.title}: ${note.content}` : note.content) : note.title;
+          return (note.linkedEntryId === currentEntry.date || note.linkedDate === currentEntry.date) && noteBulletText === bullet.text;
+        })?.id;
+      }
+      if (bullet.source === 'idea') {
+        return ideas.find(idea =>
+          idea.linkedEntries?.includes(currentEntry.date) &&
+          idea.content === bullet.text
+        )?.id;
+      }
+      return undefined;
+    })();
+
+    // If bullet has source, delete the source data too
+    if (bullet?.source && sourceId) {
+      if (bullet.source === 'wisdom') {
+        await deleteWisdom(sourceId);
+      } else if (bullet.source === 'note') {
+        await deleteNote(sourceId);
+      } else if (bullet.source === 'idea') {
+        await deleteIdea(sourceId);
+      }
+    }
+
     const updatedBullets = currentEntry.bullets.filter(b => b.id !== bulletId);
     const updatedEntry = { ...currentEntry, bullets: updatedBullets, updatedAt: new Date() };
     await saveEntry(updatedEntry);
@@ -355,22 +806,127 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await updateBullet(bulletId, { isHighlight: !bullet.isHighlight });
   };
 
-  const updateDream = async (dream: string) => {
-    let entry = currentEntry;
-    if (!entry) {
-      entry = { id: currentDate, date: currentDate, dream: '', bullets: [], createdAt: new Date(), updatedAt: new Date() };
+  const toggleBulletComplete = async (bulletId: string) => {
+    // Find the bullet in currentEntry first
+    let bullet = currentEntry?.bullets.find(b => b.id === bulletId);
+    let targetEntry = currentEntry;
+
+    if (!bullet) {
+      // Search all loaded entries
+      for (const entry of entries) {
+        const found = entry.bullets.find(b => b.id === bulletId);
+        if (found) {
+          bullet = found;
+          targetEntry = entry;
+          break;
+        }
+      }
     }
-    const newDream = entry.dream ? `${entry.dream}\n${dream}` : dream;
-    const updatedEntry = { ...entry, dream: newDream, updatedAt: new Date() };
+
+    if (!bullet || !targetEntry) return;
+
+    const nextCompleted = !bullet.isCompleted;
+
+    const bulletIndex = targetEntry.bullets.findIndex(b => b.id === bulletId);
+    if (bulletIndex < 0) return;
+
+    const originalBullet = targetEntry.bullets[bulletIndex];
+    const updatedBullet = { ...originalBullet, isCompleted: nextCompleted, updatedAt: new Date() };
+    const updatedBullets = [...targetEntry.bullets];
+    updatedBullets[bulletIndex] = updatedBullet;
+
+    const updatedEntry = { ...targetEntry, bullets: updatedBullets, updatedAt: new Date() };
+
+    // Update state
+    setEntries(prev => prev.map(e => e.id === updatedEntry.id ? updatedEntry : e));
+    if (currentEntry && currentEntry.id === updatedEntry.id) {
+      setCurrentEntry(updatedEntry);
+    }
+
+    // Save to database
+    if (user) {
+      const entryRef = doc(db, 'users', user.uid, 'entries', updatedEntry.id);
+      await setDoc(entryRef, {
+        ...updatedEntry,
+        createdAt: updatedEntry.createdAt,
+        updatedAt: updatedEntry.updatedAt,
+        bullets: updatedEntry.bullets.map(b => ({
+          ...b,
+          createdAt: b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt),
+          updatedAt: b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt)
+        }))
+      });
+    }
+
+    // Play soft ascending done jingle
+    if (nextCompleted) {
+      playChecklistJingle();
+    }
+  };
+
+  const updateDream = async (dream: string) => {
+    const cleanDream = dream.trim();
+    const entry = currentEntry || { id: currentDate, date: currentDate, dream: '', bullets: [], createdAt: new Date(), updatedAt: new Date() };
+    const updatedEntry = { ...entry, dream: cleanDream, updatedAt: new Date() };
     await saveEntry(updatedEntry);
   };
 
-  const addWisdom = async (type: Wisdom['type'], content: string, linkedEntryId?: string) => {
-    if (!user) return;
-    const wisdom: Wisdom = { id: uuidv4(), type, content, linkedEntryId, createdAt: new Date(), updatedAt: new Date() };
+  const addWisdom = async (type: Wisdom['type'], content: string, linkedEntryId?: string): Promise<Wisdom | null> => {
+    if (!user) return null;
+    const wisdom: Wisdom = {
+      id: uuidv4(),
+      type,
+      content,
+      ...(linkedEntryId ? { linkedEntryId } : {}),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
     setWisdoms(prev => [wisdom, ...prev]);
     const wisdomRef = doc(db, 'users', user.uid, 'wisdoms', wisdom.id);
-    await setDoc(wisdomRef, wisdom);
+    await setDoc(wisdomRef, removeUndefinedFields(wisdom));
+    return wisdom;
+  };
+
+  const updateWisdom = async (wisdomId: string, data: Partial<Wisdom>) => {
+    if (!user) return;
+    const cleanData = Object.fromEntries(
+      Object.entries({ ...data, updatedAt: new Date() }).filter(([, value]) => value !== undefined)
+    ) as Partial<Wisdom>;
+    setWisdoms(prev => prev.map(w => w.id === wisdomId ? { ...w, ...cleanData } : w));
+    const wisdomRef = doc(db, 'users', user.uid, 'wisdoms', wisdomId);
+    await setDoc(wisdomRef, removeUndefinedFields(cleanData), { merge: true });
+
+    // Sync content change to linked bullets across all entries
+    if (data.content && !isSyncingSourceRef.current) {
+      isSyncingSourceRef.current = true;
+      try {
+        const updatedEntries = entries.map(entry => {
+          const hasBulletToUpdate = entry.bullets.some(b => b.sourceId === wisdomId && b.source === 'wisdom');
+          if (!hasBulletToUpdate) return entry;
+          return {
+            ...entry,
+            bullets: entry.bullets.map(b =>
+              b.sourceId === wisdomId && b.source === 'wisdom'
+                ? { ...b, text: data.content!, tags: extractTagNames(data.content!), mentions: extractMentionNames(data.content!), updatedAt: new Date() }
+                : b
+            ),
+            updatedAt: new Date(),
+          };
+        });
+        const changedEntries = updatedEntries.filter((entry, i) => entry !== entries[i]);
+        for (const entry of changedEntries) {
+          await saveEntry(entry);
+        }
+      } finally {
+        isSyncingSourceRef.current = false;
+      }
+    }
+  };
+
+  const deleteWisdom = async (wisdomId: string) => {
+    if (!user) return;
+    setWisdoms(prev => prev.filter(w => w.id !== wisdomId));
+    await deleteDoc(doc(db, 'users', user.uid, 'wisdoms', wisdomId));
   };
 
   const getWisdomOfTheDay = (): Wisdom | null => {
@@ -381,19 +937,60 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return wisdoms[Math.floor(Math.random() * wisdoms.length)];
   };
 
-  const addNote = async (title: string, content: string, labels: string[] = []) => {
-    if (!user) return;
-    const note: Note = { id: uuidv4(), title, content, labels, createdAt: new Date(), updatedAt: new Date() };
+  const addNote = async (title: string, content: string, labels: string[] = [], linkedDate?: string): Promise<Note | null> => {
+    if (!user) return null;
+    const note: Note = {
+      id: uuidv4(),
+      title,
+      content,
+      labels,
+      ...(linkedDate ? { linkedDate, linkedEntryId: linkedDate } : {}),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
     setNotes(prev => [note, ...prev]);
     const noteRef = doc(db, 'users', user.uid, 'notes', note.id);
-    await setDoc(noteRef, note);
+    await setDoc(noteRef, removeUndefinedFields(note));
+    return note;
   };
 
   const updateNote = async (noteId: string, data: Partial<Note>) => {
     if (!user) return;
-    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, ...data, updatedAt: new Date() } : n));
+    const cleanData = removeUndefinedFields({ ...data, updatedAt: new Date() }) as Partial<Note>;
+    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, ...cleanData } : n));
     const noteRef = doc(db, 'users', user.uid, 'notes', noteId);
-    await setDoc(noteRef, data, { merge: true });
+    await setDoc(noteRef, cleanData, { merge: true });
+
+    // Sync content change to linked bullets across all entries
+    if ((data.title !== undefined || data.content !== undefined) && !isSyncingSourceRef.current) {
+      isSyncingSourceRef.current = true;
+      try {
+        const note = notes.find(n => n.id === noteId);
+        const newTitle = data.title ?? note?.title ?? '';
+        const newContent = data.content ?? note?.content ?? '';
+        const bulletText = newContent ? (newTitle ? `${newTitle}: ${newContent}` : newContent) : newTitle;
+
+        const updatedEntries = entries.map(entry => {
+          const hasBulletToUpdate = entry.bullets.some(b => b.sourceId === noteId && b.source === 'note');
+          if (!hasBulletToUpdate) return entry;
+          return {
+            ...entry,
+            bullets: entry.bullets.map(b =>
+              b.sourceId === noteId && b.source === 'note'
+                ? { ...b, text: bulletText, tags: extractTagNames(bulletText), mentions: extractMentionNames(bulletText), updatedAt: new Date() }
+                : b
+            ),
+            updatedAt: new Date(),
+          };
+        });
+        const changedEntries = updatedEntries.filter((entry, i) => entry !== entries[i]);
+        for (const entry of changedEntries) {
+          await saveEntry(entry);
+        }
+      } finally {
+        isSyncingSourceRef.current = false;
+      }
+    }
   };
 
   const deleteNote = async (noteId: string) => {
@@ -402,19 +999,53 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await deleteDoc(doc(db, 'users', user.uid, 'notes', noteId));
   };
 
-  const addIdea = async (content: string) => {
-    if (!user) return;
-    const idea: Idea = { id: uuidv4(), content, createdAt: new Date(), updatedAt: new Date() };
+  const addIdea = async (content: string, linkedEntryId?: string): Promise<Idea | null> => {
+    if (!user) return null;
+    const idea: Idea = {
+      id: uuidv4(),
+      content,
+      ...(linkedEntryId ? { linkedEntries: [linkedEntryId] } : {}),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
     setIdeas(prev => [idea, ...prev]);
     const ideaRef = doc(db, 'users', user.uid, 'ideas', idea.id);
-    await setDoc(ideaRef, idea);
+    await setDoc(ideaRef, removeUndefinedFields(idea));
+    return idea;
   };
 
   const updateIdea = async (ideaId: string, data: Partial<Idea>) => {
     if (!user) return;
-    setIdeas(prev => prev.map(i => i.id === ideaId ? { ...i, ...data, updatedAt: new Date() } : i));
+    const cleanData = removeUndefinedFields({ ...data, updatedAt: new Date() }) as Partial<Idea>;
+    setIdeas(prev => prev.map(i => i.id === ideaId ? { ...i, ...cleanData } : i));
     const ideaRef = doc(db, 'users', user.uid, 'ideas', ideaId);
-    await setDoc(ideaRef, data, { merge: true });
+    await setDoc(ideaRef, cleanData, { merge: true });
+
+    // Sync content change to linked bullets across all entries
+    if (data.content && !isSyncingSourceRef.current) {
+      isSyncingSourceRef.current = true;
+      try {
+        const updatedEntries = entries.map(entry => {
+          const hasBulletToUpdate = entry.bullets.some(b => b.sourceId === ideaId && b.source === 'idea');
+          if (!hasBulletToUpdate) return entry;
+          return {
+            ...entry,
+            bullets: entry.bullets.map(b =>
+              b.sourceId === ideaId && b.source === 'idea'
+                ? { ...b, text: data.content!, tags: extractTagNames(data.content!), mentions: extractMentionNames(data.content!), updatedAt: new Date() }
+                : b
+            ),
+            updatedAt: new Date(),
+          };
+        });
+        const changedEntries = updatedEntries.filter((entry, i) => entry !== entries[i]);
+        for (const entry of changedEntries) {
+          await saveEntry(entry);
+        }
+      } finally {
+        isSyncingSourceRef.current = false;
+      }
+    }
   };
 
   const deleteIdea = async (ideaId: string) => {
@@ -431,58 +1062,137 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return ideas[Math.floor(Math.random() * ideas.length)];
   };
 
-  const extractAndSaveTags = (text: string) => {
+  const extractAndSaveTags = async (text: string) => {
     if (!user) return;
-    (text.match(/#(\w+)/g) || []).forEach(async (tag) => {
-      const tagName = tag.slice(1).toLowerCase();
-      const existingTag = tags.find(t => t.name === tagName);
-      if (existingTag) {
-        const updatedTag = { ...existingTag, count: existingTag.count + 1 };
-        setTags(prev => prev.map(t => t.name === tagName ? updatedTag : t));
-        await setDoc(doc(db, 'users', user.uid, 'tags', tagName), updatedTag, { merge: true });
-      } else {
-        const newTag: Tag = { id: uuidv4(), name: tagName, count: 1, createdAt: new Date() };
-        setTags(prev => [...prev, newTag]);
-        await setDoc(doc(db, 'users', user.uid, 'tags', tagName), newTag);
-      }
+    const tagNames = extractTagNames(text);
+    if (tagNames.length === 0) return;
+
+    const now = new Date();
+
+    setTags(prev => {
+      const next = [...prev];
+      tagNames.forEach((tagName) => {
+        const index = next.findIndex(t =>
+          t.name.toLowerCase() === tagName || (t.aliases || []).some(alias => alias.toLowerCase() === tagName)
+        );
+
+        if (index >= 0) {
+          next[index] = {
+            ...next[index],
+            count: (next[index].count || 0) + 1,
+            firstMentioned: next[index].firstMentioned || now,
+          };
+        } else {
+          next.push({
+            id: uuidv4(),
+            name: tagName,
+            count: 1,
+            firstMentioned: now,
+            createdAt: now,
+          });
+        }
+      });
+
+      const sorted = next.sort((a, b) => (b.count || 0) - (a.count || 0));
+      updateLocalCache({ tags: sorted });
+      return sorted;
     });
+
+    await Promise.all(tagNames.map(async (tagName) => {
+      const existingTag = tags.find(t =>
+        t.name.toLowerCase() === tagName || (t.aliases || []).some(alias => alias.toLowerCase() === tagName)
+      );
+      const docId = existingTag?.name || tagName;
+      await setDoc(doc(db, 'users', user.uid, 'tags', docId), {
+        id: existingTag?.id || uuidv4(),
+        name: existingTag?.name || tagName,
+        count: increment(1),
+        firstMentioned: existingTag?.firstMentioned || now,
+        createdAt: existingTag?.createdAt || now,
+      }, { merge: true });
+    }));
   };
 
-  const extractAndSavePeople = (text: string) => {
+  const extractAndSavePeople = async (text: string) => {
     if (!user) return;
-    (text.match(/@(\w+)/g) || []).forEach(async (mention) => {
-      const personName = mention.slice(1);
-      const existingPerson = people.find(p => p.name.toLowerCase() === personName.toLowerCase());
-      if (existingPerson) {
-        const updatedPerson = { ...existingPerson, mentions: existingPerson.mentions + 1 };
-        setPeople(prev => prev.map(p => p.name.toLowerCase() === personName.toLowerCase() ? updatedPerson : p));
-        await setDoc(doc(db, 'users', user.uid, 'people', personName.toLowerCase()), updatedPerson, { merge: true });
-      } else {
-        const newPerson: Person = { id: uuidv4(), name: personName, mentions: 1, createdAt: new Date() };
-        setPeople(prev => [...prev, newPerson]);
-        await setDoc(doc(db, 'users', user.uid, 'people', personName.toLowerCase()), newPerson);
-      }
+    const mentionNames = extractMentionNames(text);
+    if (mentionNames.length === 0) return;
+
+    const now = new Date();
+
+    setPeople(prev => {
+      const next = [...prev];
+      mentionNames.forEach((personName) => {
+        const index = next.findIndex(p =>
+          p.name.toLowerCase() === personName || (p.aliases || []).some(alias => alias.toLowerCase() === personName)
+        );
+
+        if (index >= 0) {
+          next[index] = {
+            ...next[index],
+            mentions: (next[index].mentions || 0) + 1,
+            firstMentioned: next[index].firstMentioned || now,
+          };
+        } else {
+          next.push({
+            id: uuidv4(),
+            name: personName,
+            mentions: 1,
+            firstMentioned: now,
+            createdAt: now,
+          });
+        }
+      });
+
+      const sorted = next.sort((a, b) => (b.mentions || 0) - (a.mentions || 0));
+      updateLocalCache({ people: sorted });
+      return sorted;
     });
+
+    await Promise.all(mentionNames.map(async (personName) => {
+      const existingPerson = people.find(p =>
+        p.name.toLowerCase() === personName ||
+        (p.aliases || []).some(alias => alias.toLowerCase() === personName)
+      );
+      const docId = existingPerson?.name.toLowerCase() || personName.toLowerCase();
+      await setDoc(doc(db, 'users', user.uid, 'people', docId), {
+        id: existingPerson?.id || uuidv4(),
+        name: existingPerson?.name || personName,
+        mentions: increment(1),
+        firstMentioned: existingPerson?.firstMentioned || now,
+        createdAt: existingPerson?.createdAt || now,
+      }, { merge: true });
+    }));
   };
 
   const getHighlightsForDateRange = (startDate: string, endDate: string): Highlight[] => {
     return highlights.filter(h => h.entryDate >= startDate && h.entryDate <= endDate);
   };
 
-  const addGoal = async (content: string) => {
+  const addGoal = async (content: string, data?: Partial<FocusGoal>) => {
     if (!user) return;
     const maxPriority = goals.reduce((max, g) => Math.max(max, g.priority), 0);
-    const goal: FocusGoal = { id: uuidv4(), content, priority: maxPriority + 1, isCompleted: false, createdAt: new Date(), updatedAt: new Date() };
+    const goal: FocusGoal = {
+      id: uuidv4(),
+      content,
+      priority: maxPriority + 1,
+      isCompleted: false,
+      progress: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...data,
+    };
     setGoals(prev => [...prev, goal]);
     const goalRef = doc(db, 'users', user.uid, 'goals', goal.id);
-    await setDoc(goalRef, goal);
+    await setDoc(goalRef, removeUndefinedFields(goal));
   };
 
   const updateGoal = async (goalId: string, data: Partial<FocusGoal>) => {
     if (!user) return;
-    setGoals(prev => prev.map(g => g.id === goalId ? { ...g, ...data, updatedAt: new Date() } : g));
+    const cleanData = removeUndefinedFields({ ...data, updatedAt: new Date() }) as Partial<FocusGoal>;
+    setGoals(prev => prev.map(g => g.id === goalId ? { ...g, ...cleanData } : g));
     const goalRef = doc(db, 'users', user.uid, 'goals', goalId);
-    await setDoc(goalRef, data, { merge: true });
+    await setDoc(goalRef, cleanData, { merge: true });
   };
 
   const deleteGoal = async (goalId: string) => {
@@ -497,6 +1207,42 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await updateGoal(goalId, { isCompleted: !goal.isCompleted });
   };
 
+  const reorderGoals = async (goalIds: string[]) => {
+    if (!user) return;
+    const updates = goalIds.map((id, index) => {
+      const goal = goals.find(g => g.id === id);
+      if (!goal) return null;
+      return updateGoal(id, { priority: index + 1 });
+    });
+    await Promise.all(updates.filter(Boolean));
+  };
+
+  const getBulletsForTag = (tagName: string) => {
+    const normalizedTag = tagName.toLowerCase();
+    const results: { entryDate: string; bulletText: string; bulletId: string }[] = [];
+    entries.forEach(entry => {
+      entry.bullets.forEach(bullet => {
+        if (bullet.tags.some(t => t.toLowerCase() === normalizedTag)) {
+          results.push({ entryDate: entry.date, bulletText: bullet.text, bulletId: bullet.id });
+        }
+      });
+    });
+    return results;
+  };
+
+  const getBulletsForPerson = (personName: string) => {
+    const normalizedPerson = personName.toLowerCase();
+    const results: { entryDate: string; bulletText: string; bulletId: string }[] = [];
+    entries.forEach(entry => {
+      entry.bullets.forEach(bullet => {
+        if (bullet.mentions.some(m => m.toLowerCase() === normalizedPerson)) {
+          results.push({ entryDate: entry.date, bulletText: bullet.text, bulletId: bullet.id });
+        }
+      });
+    });
+    return results;
+  };
+
   const getWeeklyData = (weekStart: string): WeeklyData => {
     const data: WeeklyData = { date: weekStart, entries: 0, bullets: 0, dreams: 0, wisdom: 0, notes: 0, ideas: 0 };
     const start = parseISO(weekStart);
@@ -506,9 +1252,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (entry) { data.entries++; data.bullets += entry.bullets.length; if (entry.dream) data.dreams++; }
     }
     const weekEnd = format(addDays(start, 6), 'yyyy-MM-dd');
-    data.wisdom = wisdoms.filter(w => { const d = format(w.createdAt, 'yyyy-MM-dd'); return d >= weekStart && d <= weekEnd; }).length;
-    data.notes = notes.filter(n => { const d = format(n.createdAt, 'yyyy-MM-dd'); return d >= weekStart && d <= weekEnd; }).length;
-    data.ideas = ideas.filter(i => { const d = format(i.createdAt, 'yyyy-MM-dd'); return d >= weekStart && d <= weekEnd; }).length;
+    data.wisdom = wisdoms.filter(w => {
+      const d = w.linkedEntryId || format(w.createdAt, 'yyyy-MM-dd');
+      return d >= weekStart && d <= weekEnd;
+    }).length;
+    data.notes = notes.filter(n => {
+      const d = n.linkedDate || n.linkedEntryId || format(n.createdAt, 'yyyy-MM-dd');
+      return d >= weekStart && d <= weekEnd;
+    }).length;
+    data.ideas = ideas.filter(i => {
+      const linkedDate = i.linkedEntries?.find(d => d >= weekStart && d <= weekEnd);
+      const d = linkedDate || format(i.createdAt, 'yyyy-MM-dd');
+      return d >= weekStart && d <= weekEnd;
+    }).length;
     return data;
   };
 
@@ -544,16 +1300,94 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const { current: currentStreak, longest: longestStreak } = calculateStreak();
 
+  // Tag CRUD
+  const updateTag = async (tagName: string, data: Partial<Tag>) => {
+    if (!user) return;
+    const tagToUpdate = tags.find(t => t.name === tagName);
+    if (!tagToUpdate) return;
+    const cleanData = removeUndefinedFields({ ...data, updatedAt: new Date() }) as Partial<Tag>;
+    setTags(prev => prev.map(t => t.name === tagName ? { ...t, ...cleanData } : t));
+    await setDoc(doc(db, 'users', user.uid, 'tags', tagName), cleanData, { merge: true });
+  };
+
+  const createTagGroup = async (name: string, tagNames: string[]) => {
+    if (!user) return;
+    const group: TagGroup = {
+      id: uuidv4(),
+      name,
+      tags: tagNames,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    setTagGroups(prev => [group, ...prev]);
+    const groupRef = doc(db, 'users', user.uid, 'tagGroups', group.id);
+    await setDoc(groupRef, group);
+  };
+
+  const updateTagGroup = async (groupId: string, data: Partial<TagGroup>) => {
+    if (!user) return;
+    const cleanData = removeUndefinedFields({ ...data, updatedAt: new Date() }) as Partial<TagGroup>;
+    setTagGroups(prev => prev.map(g => g.id === groupId ? { ...g, ...cleanData } : g));
+    const groupRef = doc(db, 'users', user.uid, 'tagGroups', groupId);
+    await setDoc(groupRef, cleanData, { merge: true });
+  };
+
+  const deleteTagGroup = async (groupId: string) => {
+    if (!user) return;
+    setTagGroups(prev => prev.filter(g => g.id !== groupId));
+    await deleteDoc(doc(db, 'users', user.uid, 'tagGroups', groupId));
+  };
+
+  // Person CRUD
+  const updatePerson = async (personName: string, data: Partial<Person>) => {
+    if (!user) return;
+    const personToUpdate = people.find(p => p.name.toLowerCase() === personName.toLowerCase());
+    if (!personToUpdate) return;
+    const cleanData = removeUndefinedFields({ ...data, updatedAt: new Date() }) as Partial<Person>;
+    setPeople(prev => prev.map(p => p.name.toLowerCase() === personName.toLowerCase() ? { ...p, ...cleanData } : p));
+    await setDoc(doc(db, 'users', user.uid, 'people', personName.toLowerCase()), cleanData, { merge: true });
+  };
+
+  const createPersonGroup = async (name: string, personNames: string[]) => {
+    if (!user) return;
+    const group: PersonGroup = {
+      id: uuidv4(),
+      name,
+      people: personNames,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    setPersonGroups(prev => [group, ...prev]);
+    const groupRef = doc(db, 'users', user.uid, 'personGroups', group.id);
+    await setDoc(groupRef, group);
+  };
+
+  const updatePersonGroup = async (groupId: string, data: Partial<PersonGroup>) => {
+    if (!user) return;
+    const cleanData = removeUndefinedFields({ ...data, updatedAt: new Date() }) as Partial<PersonGroup>;
+    setPersonGroups(prev => prev.map(g => g.id === groupId ? { ...g, ...cleanData } : g));
+    const groupRef = doc(db, 'users', user.uid, 'personGroups', groupId);
+    await setDoc(groupRef, cleanData, { merge: true });
+  };
+
+  const deletePersonGroup = async (groupId: string) => {
+    if (!user) return;
+    setPersonGroups(prev => prev.filter(g => g.id !== groupId));
+    await deleteDoc(doc(db, 'users', user.uid, 'personGroups', groupId));
+  };
+
   return (
     <DataContext.Provider value={{
       currentEntry, currentDate, setCurrentDate, entries, getEntryByDate, saveEntry, getEntriesForDateRange,
-      addBullet, updateBullet, deleteBullet, toggleHighlight, updateDream,
-      wisdoms, addWisdom, getWisdomOfTheDay,
+      addBullet, updateBullet, deleteBullet, toggleHighlight, toggleBulletComplete, updateDream,
+      wisdoms, addWisdom, updateWisdom, deleteWisdom, getWisdomOfTheDay,
       notes, addNote, updateNote, deleteNote,
       ideas, addIdea, updateIdea, deleteIdea, getIdeaOfTheDay,
       highlights, getHighlightsForDateRange,
-      tags, people, extractAndSaveTags, extractAndSavePeople,
-      goals, addGoal, updateGoal, deleteGoal, toggleGoalComplete,
+      tags, tagGroups, updateTag, createTagGroup, updateTagGroup, deleteTagGroup,
+      people, personGroups, updatePerson, createPersonGroup, updatePersonGroup, deletePersonGroup,
+      extractAndSaveTags, extractAndSavePeople, getBulletsForTag, getBulletsForPerson,
+      goals, addGoal, updateGoal, deleteGoal, toggleGoalComplete, reorderGoals,
       getWeeklyData,
       totalEntries, totalBullets, totalHighlights, totalTags, totalMentions, currentStreak, longestStreak,
       loading, isOnline,
