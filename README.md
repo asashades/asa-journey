@@ -22,6 +22,8 @@ Format *micro-journaling* intuitif yang mendorong Anda untuk mengekspresikan pik
 - **Bullet Points**: Pecah entri harian menjadi poin-poin terstruktur.
 - **Micro-Tagging & Mentions**: Gunakan `#tag` untuk menandai aktivitas/tema dan `@nama` untuk menyebut orang terdekat layaknya media sosial.
 - **Bullet Styles & Highlights**: Siklus jenis bullet menggunakan keyboard shortcut (`Tab`), dan buat highlight instan menggunakan tanda bintang `*` di sekeliling teks untuk menandai momen penting.
+- **AI Suggested Tags**: Mendapatkan saran tag secara cerdas saat sedang mengetik entri jurnal.
+- **Wisdom Quick Panel**: Mempermudah pencatatan mutiara hikmah secara kategoris langsung dari FAB tulis dengan pewarnaan indah terkoordinasi (Thought, Quote, Fact, Excerpt, Lesson).
 
 ### 2. 🪐 Journal (Timeline & Orbit)
 Visualisasikan perjalanan hidup Anda secara kronologis yang indah:
@@ -29,8 +31,10 @@ Visualisasikan perjalanan hidup Anda secara kronologis yang indah:
 - **Weekly Orbit & Streak Metrics**: Monitor konsistensi menulis Anda melalui grafik streak mingguan untuk membangun kebiasaan positif.
 - **Calendar & Time Travel**: Lompat ke tanggal mana pun di masa lalu untuk membaca kembali atau menulis entri yang terlewat.
 
-### 3. 💡 Reflect (Refleksi Harian 5 Menit)
+### 3. 💡 Reflect (Refleksi Harian & Cosmic Recap)
 Halaman cerdas yang mengurasi memori dan tujuan Anda untuk sesi introspeksi harian:
+- **Cosmic Recap (AI Weekly Reflection)**: Menjelajahi pola emosi, tema berulang, pelajaran hidup, serta target mingguan yang disarankan secara otomatis dari catatan Anda menggunakan Google Gemini API (`gemini-flash-latest`).
+- **Use Simulation Option**: Opsi manual berbasis simulasi data apabila koneksi API Key mengalami error atau batas kuota tercapai.
 - **Yesterday & Flashback**: Baca kembali apa yang Anda lakukan kemarin atau tepat 1 tahun yang lalu (*throwback*).
 - **Gem & Idea of the Day**: Menampilkan kutipan bijak acak dari modul *Wisdom* atau gagasan cemerlang dari modul *Ideas* Anda.
 - **Memory Lane**: Temukan kembali entri masa lalu yang dipilih secara acak untuk membangkitkan nostalgia positif.
@@ -61,8 +65,11 @@ Modul catatan independen yang terpisah dari lini masa jurnal harian:
 - **Double Labeling**: Kelompokkan catatan Anda dengan banyak label.
 - **Context Linking**: Hubungkan catatan panjang, riset buku, atau rekapan bulanan Anda langsung ke tanggal jurnal tertentu.
 
-### 9. 🎯 Focus (Prioritas Hidup Pro)
+### 9. 🎯 Goals & Focus (Prioritas Hidup Pro)
 Kelola tujuan jangka pendek dan jangka panjang tanpa merasa kewalahan:
+- **Goal Priority Levels**: Atur tingkat prioritas target Anda menjadi **High**, **Medium**, atau **Low** untuk pengelompokan fokus.
+- **Smart Category Dropdown**: Kelompokkan target dengan memilih kategori dari daftar pintar (Health, Work, Creative, dsb.) atau buat kategori kustom baru.
+- **Action Item Conversion**: Konversi item rencana aksi hasil Cosmic Recap secara instan menjadi checklist harian yang terintegrasi pada catatan hari ini, lengkap dengan penentuan tenggat waktu (deadline).
 - **Focus Modes**: Pilih visualisasi target Anda menggunakan mode *Hyperfocus* (fokus pada 1 target utama), *Top 3*, atau menggunakan hukum *Pareto* (aturan 80/20).
 - **Overload Prevention**: Peringatan otomatis agar tidak membuat terlalu banyak target sekaligus.
 
@@ -83,6 +90,7 @@ Aplikasi ini menggunakan sistem desain premium yang terinspirasi dari estetika *
   - **Accent Labels**: Sentuhan aksen script (**Brush Script MT**) yang hangat dan personal untuk elemen micro-journaling dekoratif.
 * **Layout & Spacing**: Konsisten menggunakan grid berbasis kelipatan `8px` dengan margin yang sangat lega demi mencegah kelelahan kognitif (*cognitive overload*).
 * **Elevation & Corner**: Konsisten dengan sudut membulat elegan (`border-radius: 10.4px`) dan bayangan lembut (*subtle shadows*) untuk efek kedalaman visual yang premium.
+* **Smooth Transitions**: Animasi mikro yang sangat halus pada FAB speed-dial menggunakan transform dan dynamic `max-height` transition untuk merespon reflow mobile tanpa patah-patah.
 
 ---
 
@@ -96,22 +104,21 @@ Aplikasi ini menggunakan sistem desain premium yang terinspirasi dari estetika *
   - **Firebase Authentication**: Sistem masuk pengguna yang aman (Google Sign-In & Email/Password).
   - **Cloud Firestore**: Database NoSQL *real-time* dengan fitur *Offline Persistence* agar data tetap dapat dibaca/ditulis tanpa internet.
   - **Firebase Hosting**: Pengiriman PWA ultra-cepat dengan protokol HTTPS otomatis.
-- **Deployment**: Dikonfigurasi untuk dapat dideploy dengan mudah ke platform cloud seperti Vercel, Railway, atau Firebase Hosting.
+- **AI Integrations**: Google Gemini API (`gemini-flash-latest`) untuk Cosmic Recap, dengan perlindungan server-only key & fallback client-side API parsing.
 
 ---
 
 ## 🚀 Panduan Memulai (Getting Started)
 
 ### Prasyarat (Prerequisites)
-Pastikan Anda sudah menginstal alat-alat berikut di komputer Anda:
-- **Node.js**: Versi 22 atau lebih baru
-- **NPM** atau **Yarn**
-- Akun **Firebase Console** aktif
+Ensure you have the following installed on your machine:
+- **Node.js**: Version 22 or later
+- **NPM** or **Yarn**
+- An active **Firebase Console** account
 
 ---
 
 ### Langkah 1: Kloning & Instalasi
-Kloning repositori ini dan masuk ke direktori proyek:
 ```bash
 git clone https://github.com/asashades/asa-journey.git
 cd asa-journey
@@ -121,12 +128,12 @@ npm install
 ---
 
 ### Langkah 2: Konfigurasi Environment Variables
-Salin berkas contoh environment variables dan ganti namanya menjadi `.env.local`:
+Rename `.env.example` to `.env.local`:
 ```bash
 cp .env.example .env.local
 ```
 
-Buka berkas `.env.local` dan masukkan kredensial proyek Firebase Anda:
+Input your Firebase credentials and Gemini API configurations inside `.env.local`:
 ```env
 NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key_here
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
@@ -134,6 +141,12 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id_here
 NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id_here
+
+# AI configuration resolver settings
+AI_DEFAULT_PROVIDER=gemini
+AI_DEFAULT_MODEL=gemini-flash-latest
+GEMINI_API_KEY=your_gemini_api_key_here
+NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 ---
@@ -143,16 +156,13 @@ NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id_here
 2. **Authentication**: Aktifkan metode masuk **Google** dan **Email/Password** di tab *Sign-in method*.
 3. **Cloud Firestore**: 
    - Klik *Create database*.
-   - Pilih wilayah terdekat (misal: `asia-southeast1` untuk Singapura/Jakarta).
+   - Pilih wilayah terdekat (misal: `asia-southeast1`).
    - Jalankan database dalam **production mode**.
 4. **Storage**: Aktifkan Cloud Storage jika Anda berencana mengunggah media.
 
 ---
 
 ### Langkah 4: Terapkan Security Rules & Indexes
-Pastikan keamanan database Anda terjaga dengan menerapkan Firestore Security Rules. Berkas konfigurasi bawaan telah disediakan di `firestore.rules`.
-
-Untuk mengunggah konfigurasi keamanan dan indeks ke Firebase secara langsung, pasang Firebase CLI dan jalankan deploy:
 ```bash
 # Login ke akun Firebase Anda
 npx firebase login
@@ -164,13 +174,9 @@ npx firebase use --add
 npx firebase deploy --only firestore
 ```
 
-> [!IMPORTANT]  
-> Aturan keamanan Firestore bawaan kami (`firestore.rules`) menerapkan kebijakan privasi ketat di mana pengguna **hanya** dapat membaca dan menulis data miliknya sendiri. Data antar-pengguna terisolasi secara sempurna di level database.
-
 ---
 
 ### Langkah 5: Jalankan di Server Lokal
-Mulai server pengembangan lokal dengan perintah berikut:
 ```bash
 npm run dev
 ```
