@@ -11,6 +11,7 @@ import {
   parseISO,
   startOfMonth,
   startOfYear,
+  subMonths,
 } from 'date-fns';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
@@ -31,11 +32,15 @@ import {
   faMoon,
   faQuoteLeft,
   faImages,
+  faTree,
+  faChartLine,
+  faClock,
+  faSun,
 } from '@fortawesome/free-solid-svg-icons';
 import { Entry, WisdomType } from '@/types';
 import { ActivityHeatmap } from '@/components/ui/ActivityHeatmap';
 
-type InsightTab = 'journal' | 'dreams' | 'highlights' | 'tags' | 'people' | 'wisdom' | 'ideas';
+type InsightTab = 'journal' | 'dreams' | 'stars' | 'tags' | 'people' | 'wisdom' | 'ideas';
 type InsightScope = 'year' | 'alltime';
 type ActivityRecord = {
   id: string;
@@ -54,10 +59,10 @@ type DreamReadyEntry = Entry & {
 const tabs: { id: InsightTab; label: string; icon: IconDefinition }[] = [
   { id: 'journal', label: 'Journal', icon: faBook },
   { id: 'dreams', label: 'Dreams', icon: faMoon },
-  { id: 'highlights', label: 'Highlights', icon: faStar },
+  { id: 'stars', label: 'Stars', icon: faStar },
   { id: 'tags', label: 'Tags', icon: faTag },
   { id: 'people', label: 'People', icon: faAt },
-  { id: 'wisdom', label: 'Wisdom', icon: faWandMagicSparkles },
+  { id: 'wisdom', label: 'Wisdom', icon: faTree },
   { id: 'ideas', label: 'Ideas', icon: faLightbulb },
 ];
 
@@ -102,9 +107,14 @@ const getScopeBounds = (records: ActivityRecord[], scope: InsightScope, now: Dat
     };
   }
 
-  const firstDate = records.length > 0
+  let firstDate = records.length > 0
     ? records.map(record => parseISO(record.date)).sort((a, b) => a.getTime() - b.getTime())[0]
-    : startOfYear(now);
+    : subMonths(now, 3);
+
+  const minStartDate = subMonths(now, 3);
+  if (firstDate.getTime() > minStartDate.getTime()) {
+    firstDate = minStartDate;
+  }
 
   return {
     start: firstDate,
@@ -263,6 +273,44 @@ export default function InsightsPage() {
     const activeDreams = entries.filter((e) => e.dream?.trim()).length;
     const activePhotos = entries.reduce((sum, e) => sum + (e.media?.filter((m) => m.type === 'image').length || 0), 0);
 
+    const getBadgeTiers = (
+      currentVal: number,
+      tiers: { target: number; label: string }[]
+    ) => {
+      let activeIndex = 0;
+      for (let i = 0; i < tiers.length; i++) {
+        activeIndex = i;
+        if (currentVal < tiers[i].target) {
+          break;
+        }
+      }
+      const activeTier = tiers[activeIndex];
+      const isUnlocked = currentVal >= tiers[0].target;
+      const isFullyUnlocked = currentVal >= tiers[tiers.length - 1].target;
+      return {
+        label: activeTier.label,
+        target: activeTier.target,
+        isUnlocked,
+        isFullyUnlocked,
+        progressText: `${Math.min(currentVal, activeTier.target)} / ${activeTier.target}`,
+      };
+    };
+
+    const dreamTiers = [{ target: 3, label: 'I' }, { target: 10, label: 'II' }, { target: 30, label: 'III' }];
+    const dreamTierInfo = getBadgeTiers(activeDreams, dreamTiers);
+
+    const entryTiers = [{ target: 5, label: 'I' }, { target: 15, label: 'II' }, { target: 50, label: 'III' }];
+    const entryTierInfo = getBadgeTiers(entries.length, entryTiers);
+
+    const wisdomTiers = [{ target: 5, label: 'I' }, { target: 15, label: 'II' }, { target: 40, label: 'III' }];
+    const wisdomTierInfo = getBadgeTiers(wisdoms.length, wisdomTiers);
+
+    const ideaTiers = [{ target: 5, label: 'I' }, { target: 15, label: 'II' }, { target: 40, label: 'III' }];
+    const ideaTierInfo = getBadgeTiers(ideas.length, ideaTiers);
+
+    const photoTiers = [{ target: 5, label: 'I' }, { target: 15, label: 'II' }, { target: 40, label: 'III' }];
+    const photoTierInfo = getBadgeTiers(activePhotos, photoTiers);
+
     const badges = [
       {
         id: 'streak_3',
@@ -272,6 +320,8 @@ export default function InsightsPage() {
         color: '#FF9933',
         bg: '#FFF4E6',
         isUnlocked: currentStreak >= 3 || longestStreak >= 3,
+        isFullyUnlocked: currentStreak >= 3 || longestStreak >= 3,
+        tierLabel: '',
         progressText: `${Math.min(3, Math.max(currentStreak, longestStreak))} / 3 days`,
       },
       {
@@ -282,6 +332,8 @@ export default function InsightsPage() {
         color: '#00DC7D',
         bg: '#E9FFF4',
         isUnlocked: currentStreak >= 7 || longestStreak >= 7,
+        isFullyUnlocked: currentStreak >= 7 || longestStreak >= 7,
+        tierLabel: '',
         progressText: `${Math.min(7, Math.max(currentStreak, longestStreak))} / 7 days`,
       },
       {
@@ -292,57 +344,69 @@ export default function InsightsPage() {
         color: '#8B00D4',
         bg: '#F0D6FF',
         isUnlocked: currentStreak >= 15 || longestStreak >= 15,
+        isFullyUnlocked: currentStreak >= 15 || longestStreak >= 15,
+        tierLabel: '',
         progressText: `${Math.min(15, Math.max(currentStreak, longestStreak))} / 15 days`,
       },
       {
-        id: 'entries_5',
-        title: 'Word Weaver',
-        description: 'Logged 5 daily journal entries',
+        id: 'entries_tiered',
+        title: `Word Weaver ${entryTierInfo.label}`,
+        description: `Logged ${entryTierInfo.target} daily journal entries`,
         icon: faBook,
         color: '#1A56C4',
         bg: '#D6E4FF',
-        isUnlocked: entries.length >= 5,
-        progressText: `${Math.min(5, entries.length)} / 5 entries`,
+        isUnlocked: entryTierInfo.isUnlocked,
+        isFullyUnlocked: entryTierInfo.isFullyUnlocked,
+        tierLabel: entryTierInfo.label,
+        progressText: entryTierInfo.progressText,
       },
       {
-        id: 'wisdom_5',
-        title: 'Sage Apprentice',
-        description: 'Recorded 5 wisdom collection notes',
+        id: 'wisdom_tiered',
+        title: `Sage Apprentice ${wisdomTierInfo.label}`,
+        description: `Recorded ${wisdomTierInfo.target} wisdom collection notes`,
         icon: faWandMagicSparkles,
         color: '#B45309',
         bg: '#FFE4B5',
-        isUnlocked: wisdoms.length >= 5,
-        progressText: `${Math.min(5, wisdoms.length)} / 5 wisdom`,
+        isUnlocked: wisdomTierInfo.isUnlocked,
+        isFullyUnlocked: wisdomTierInfo.isFullyUnlocked,
+        tierLabel: wisdomTierInfo.label,
+        progressText: wisdomTierInfo.progressText,
       },
       {
-        id: 'ideas_5',
-        title: 'Eureka Moment',
-        description: 'Captured 5 creative ideas',
+        id: 'ideas_tiered',
+        title: `Eureka Moment ${ideaTierInfo.label}`,
+        description: `Captured ${ideaTierInfo.target} creative ideas`,
         icon: faLightbulb,
         color: '#FFCC33',
         bg: '#FFFCE6',
-        isUnlocked: ideas.length >= 5,
-        progressText: `${Math.min(5, ideas.length)} / 5 ideas`,
+        isUnlocked: ideaTierInfo.isUnlocked,
+        isFullyUnlocked: ideaTierInfo.isFullyUnlocked,
+        tierLabel: ideaTierInfo.label,
+        progressText: ideaTierInfo.progressText,
       },
       {
-        id: 'dreams_3',
-        title: 'Dreamcatcher',
-        description: 'Logged 3 nightly dreams',
+        id: 'dreams_tiered',
+        title: `Dreamcatcher ${dreamTierInfo.label}`,
+        description: `Logged ${dreamTierInfo.target} nightly dreams`,
         icon: faMoon,
         color: '#9E77ED',
         bg: '#F4F3FF',
-        isUnlocked: activeDreams >= 3,
-        progressText: `${Math.min(3, activeDreams)} / 3 dreams`,
+        isUnlocked: dreamTierInfo.isUnlocked,
+        isFullyUnlocked: dreamTierInfo.isFullyUnlocked,
+        tierLabel: dreamTierInfo.label,
+        progressText: dreamTierInfo.progressText,
       },
       {
-        id: 'photos_5',
-        title: 'Lens of Life',
-        description: 'Uploaded 5 gallery memory photos',
+        id: 'photos_tiered',
+        title: `Lens of Life ${photoTierInfo.label}`,
+        description: `Uploaded ${photoTierInfo.target} gallery memory photos`,
         icon: faImages,
         color: '#00B8D9',
         bg: '#E6FCFF',
-        isUnlocked: activePhotos >= 5,
-        progressText: `${Math.min(5, activePhotos)} / 5 photos`,
+        isUnlocked: photoTierInfo.isUnlocked,
+        isFullyUnlocked: photoTierInfo.isFullyUnlocked,
+        tierLabel: photoTierInfo.label,
+        progressText: photoTierInfo.progressText,
       },
     ];
 
@@ -426,12 +490,34 @@ export default function InsightsPage() {
     return Array.from(counts, ([name, mentions]) => ({ id: name, name, mentions })).sort((a, b) => b.mentions - a.mentions);
   }, [scopedEntries]);
   const scopedBulletCount = scopedEntries.reduce((sum, entry) => sum + entry.bullets.length, 0);
-  const scopedWordCount = scopedEntries.reduce(
-    (sum, entry) => sum + entry.bullets.reduce((bulletSum, bullet) => bulletSum + bullet.text.trim().split(/\s+/).filter(Boolean).length, 0),
-    0
-  );
+  const scopedWordCount = scopedEntries.reduce((sum, entry) => {
+    const dreamWords = entry.dream ? entry.dream.trim().split(/\s+/).filter(Boolean).length : 0;
+    const bulletWords = entry.bullets.reduce(
+      (bulletSum, bullet) => bulletSum + bullet.text.trim().split(/\s+/).filter(Boolean).length,
+      0
+    );
+    return sum + dreamWords + bulletWords;
+  }, 0);
   const daysInScope = getDaysInScope(entryRecords, insightScope, now, selectedYear);
   const wordsPerDay = Math.round(scopedWordCount / daysInScope);
+  const wordsPerDayDecimal = daysInScope > 0 ? (scopedWordCount / daysInScope).toFixed(1) : '0.0';
+
+  const highlightRate = useMemo(() => {
+    if (scopedEntries.length === 0) return 0;
+    const entriesWithHighlights = scopedEntries.filter(entry => 
+      entry.bullets.some(bullet => bullet.isHighlight) ||
+      scopedHighlights.some(h => h.entryId === entry.id)
+    );
+    return Math.round((entriesWithHighlights.length / scopedEntries.length) * 100);
+  }, [scopedEntries, scopedHighlights]);
+
+  const weeksInScope = getWeeksInScope(entryRecords, insightScope, now, selectedYear);
+  const writingFrequencyPerWeek = weeksInScope > 0 ? (scopedEntries.length / weeksInScope).toFixed(1) : '0.0';
+
+  const bulletRate = scopedEntries.length > 0
+    ? (scopedBulletCount / scopedEntries.length).toFixed(1)
+    : '0.0';
+
   const writingFrequency = scopedEntries.length > 0
     ? ((scopedEntries.length / daysInScope) * 100).toFixed(0)
     : '0';
@@ -447,11 +533,18 @@ export default function InsightsPage() {
   const scopeLabel = insightScope === 'year' ? `in ${selectedYear}` : 'all time';
   const heatmapTitle = insightScope === 'year' ? `yearly heatmap ${selectedYear}` : 'all time heatmap';
 
+  const journalStats = useMemo(() => buildActivityStats(journalRecords, insightScope, now, selectedYear), [journalRecords, insightScope, now, selectedYear]);
   const dreamStats = useMemo(() => buildActivityStats(dreamRecords, insightScope, now, selectedYear), [dreamRecords, insightScope, now, selectedYear]);
   const wisdomStats = useMemo(() => buildActivityStats(wisdomRecords, insightScope, now, selectedYear), [wisdomRecords, insightScope, now, selectedYear]);
+  const starStats = useMemo(() => buildActivityStats(highlightRecords, insightScope, now, selectedYear), [highlightRecords, insightScope, now, selectedYear]);
+  const ideaStats = useMemo(() => buildActivityStats(ideaRecords, insightScope, now, selectedYear), [ideaRecords, insightScope, now, selectedYear]);
+
   const journalHeatmap = useMemo(() => getHeatmapData(journalRecords, insightScope, now, selectedYear), [journalRecords, insightScope, now, selectedYear]);
   const dreamHeatmap = useMemo(() => getHeatmapData(dreamRecords, insightScope, now, selectedYear), [dreamRecords, insightScope, now, selectedYear]);
   const wisdomHeatmap = useMemo(() => getHeatmapData(wisdomRecords, insightScope, now, selectedYear), [wisdomRecords, insightScope, now, selectedYear]);
+  const starHeatmap = useMemo(() => getHeatmapData(highlightRecords, insightScope, now, selectedYear), [highlightRecords, insightScope, now, selectedYear]);
+  const ideaHeatmap = useMemo(() => getHeatmapData(ideaRecords, insightScope, now, selectedYear), [ideaRecords, insightScope, now, selectedYear]);
+
   const wisdomTypeCounts = useMemo(() => {
     return (Object.keys(wisdomTypeMeta) as WisdomType[]).map(type => ({
       type,
@@ -463,15 +556,14 @@ export default function InsightsPage() {
     <div className="min-h-screen bg-[#FAFAFA] pb-24">
       {/* Header */}
       <div className="max-w-[600px] mx-auto px-6 pt-8 pb-6">
-        <h1 className="text-3xl font-bold font-serif text-[#2F3331] mb-2">
-          insights
-        </h1>
-        <p className="text-[#6F7476] font-light">your writing journey in numbers</p>
-      </div>
-
-      <div className="max-w-[600px] mx-auto px-6 mb-6">
-        <div className="flex items-center justify-end gap-2">
-          <div className="relative">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-5xl font-bold font-sans text-[#2F3331] mb-2">
+              insights
+            </h1>
+            <p className="text-[#6F7476] font-light">your writing journey in numbers</p>
+          </div>
+          <div className="relative pt-2">
             <button
               type="button"
               onClick={() => setIsScopeDialOpen(open => !open)}
@@ -540,23 +632,32 @@ export default function InsightsPage() {
         </div>
       </div>
 
-      {/* Tab Navigation */}
+      {/* Tab Navigation (Styled exactly like Collections) */}
       <div className="max-w-[600px] mx-auto px-6 mb-6">
-        <div className="flex gap-2 overflow-x-auto pb-2">
+        <div className="flex items-center gap-1 rounded-full bg-white/80 p-1 shadow-sm ring-1 ring-[#EEF0EF]">
           {tabs.map((tab) => {
             const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-[#00DC7D] text-white shadow-sm'
-                    : 'bg-white text-[#6F7476] hover:bg-[#F2F2F3] border border-[#CCD0CF]'
+                className={`flex h-9 min-w-0 items-center justify-center overflow-hidden rounded-full text-sm font-semibold transition-all duration-300 ease-out ${
+                  isActive
+                    ? 'flex-[2.35] bg-[#00DC7D] px-2.5 text-white shadow-sm'
+                    : 'flex-1 px-0 text-[#6F7476] hover:bg-[#F2F2F3] hover:text-[#2F3331]'
                 }`}
+                title={tab.label}
+                aria-label={tab.label}
               >
-                <FontAwesomeIcon icon={Icon} className="w-4 h-4" />
-                {tab.label}
+                <FontAwesomeIcon icon={Icon} className="h-4 w-4 shrink-0" />
+                <span
+                  className={`overflow-hidden whitespace-nowrap text-xs transition-all duration-300 ease-out ${
+                    isActive ? 'ml-1.5 max-w-[72px] translate-x-0 opacity-100' : 'ml-0 max-w-0 -translate-x-2 opacity-0'
+                  }`}
+                >
+                  {tab.label}
+                </span>
               </button>
             );
           })}
@@ -603,22 +704,67 @@ export default function InsightsPage() {
             </div>
 
             {/* Key Metrics */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white rounded-2xl p-5 border border-[#CCD0CF] shadow-sm">
-                <p className="text-3xl font-bold text-[#2F3331]">{scopedEntries.length}</p>
-                <p className="text-xs text-[#A3A7A8] mt-1">entries {scopeLabel}</p>
+            <div className="grid grid-cols-4 gap-2">
+              <div className="bg-white dark:bg-[#1E2022] rounded-2xl p-3 border border-[#CCD0CF] dark:border-[#2E3133] shadow-sm flex flex-col justify-between h-[82px] relative overflow-hidden">
+                <span className="text-xl font-bold text-[#2F3331] dark:text-[#FAFAFA] tracking-tight">{scopedEntries.length}</span>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] leading-tight">entries</span>
+                  <span className="text-[8px] text-[#A3A7A8] dark:text-[#6F7476] leading-none mt-0.5">{scopeLabel}</span>
+                </div>
               </div>
-              <div className="bg-white rounded-2xl p-5 border border-[#CCD0CF] shadow-sm">
-                <p className="text-3xl font-bold text-[#2F3331]">{scopedBulletCount}</p>
-                <p className="text-xs text-[#A3A7A8] mt-1">bullets {scopeLabel}</p>
+              <div className="bg-white dark:bg-[#1E2022] rounded-2xl p-3 border border-[#CCD0CF] dark:border-[#2E3133] shadow-sm flex flex-col justify-between h-[82px] relative overflow-hidden">
+                <span className="text-xl font-bold text-[#2F3331] dark:text-[#FAFAFA] tracking-tight">{scopedBulletCount}</span>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] leading-tight">bullets</span>
+                  <span className="text-[8px] text-[#A3A7A8] dark:text-[#6F7476] leading-none mt-0.5">{scopeLabel}</span>
+                </div>
               </div>
-              <div className="bg-white rounded-2xl p-5 border border-[#CCD0CF] shadow-sm">
-                <p className="text-3xl font-bold text-[#2F3331]">{journalAge}</p>
-                <p className="text-xs text-[#A3A7A8] mt-1">journal age (days)</p>
+              <div className="bg-white dark:bg-[#1E2022] rounded-2xl p-3 border border-[#CCD0CF] dark:border-[#2E3133] shadow-sm flex flex-col justify-between h-[82px] relative overflow-hidden">
+                <span className="text-xl font-bold text-[#2F3331] dark:text-[#FAFAFA] tracking-tight">{journalAge}</span>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] leading-tight">journal age</span>
+                  <span className="text-[8px] text-[#A3A7A8] dark:text-[#6F7476] leading-none mt-0.5">days</span>
+                </div>
               </div>
-              <div className="bg-white rounded-2xl p-5 border border-[#CCD0CF] shadow-sm">
-                <p className="text-3xl font-bold text-[#2F3331]">{wordsPerDay}</p>
-                <p className="text-xs text-[#A3A7A8] mt-1">avg words/day</p>
+              <div className="bg-white dark:bg-[#1E2022] rounded-2xl p-3 border border-[#CCD0CF] dark:border-[#2E3133] shadow-sm flex flex-col justify-between h-[82px] relative overflow-hidden">
+                <span className="text-xl font-bold text-[#2F3331] dark:text-[#FAFAFA] tracking-tight">{wordsPerDay}</span>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] leading-tight">avg words</span>
+                  <span className="text-[8px] text-[#A3A7A8] dark:text-[#6F7476] leading-none mt-0.5">/ day</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Advanced Metrics / Detailed Stats Card */}
+            <div className="bg-white dark:bg-[#1E2022] rounded-3xl p-5 border border-[#CCD0CF] dark:border-[#2E3133] shadow-sm">
+              <h3 className="font-bold text-[#2F3331] dark:text-[#FAFAFA] text-sm flex items-center gap-2 mb-4">
+                <FontAwesomeIcon icon={faChartLine} className="text-[#00DC7D]" />
+                <span>journal stats detail</span>
+              </h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-[#6F7476] dark:text-[#A3A7A8] font-light">Journal age</span>
+                  <span className="font-semibold text-[#2F3331] dark:text-[#FAFAFA]">{journalAge} days</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-[#6F7476] dark:text-[#A3A7A8] font-light">Words</span>
+                  <div className="text-right">
+                    <span className="font-semibold text-[#2F3331] dark:text-[#FAFAFA]">{scopedWordCount} total</span>
+                    <span className="text-[10px] text-[#A3A7A8] dark:text-[#6F7476] ml-2">({wordsPerDayDecimal} / day)</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-[#6F7476] dark:text-[#A3A7A8] font-light">Highlight rate</span>
+                  <span className="font-semibold text-[#2F3331] dark:text-[#FAFAFA]">{highlightRate}% of entries</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-[#6F7476] dark:text-[#A3A7A8] font-light">Writing frequency</span>
+                  <span className="font-semibold text-[#2F3331] dark:text-[#FAFAFA]">{writingFrequencyPerWeek} entries / week</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-[#6F7476] dark:text-[#A3A7A8] font-light">Bullet rate</span>
+                  <span className="font-semibold text-[#2F3331] dark:text-[#FAFAFA]">{bulletRate} / entry</span>
+                </div>
               </div>
             </div>
 
@@ -626,6 +772,18 @@ export default function InsightsPage() {
               title={heatmapTitle}
               data={journalHeatmap}
               color="#00DC7D"
+            />
+
+            {/* Word Count Timeline Chart */}
+            <WordCountTimelineChart entries={scopedEntries} />
+
+            {/* Daytime Distribution Chart */}
+            <DaytimeDistributionChart entries={scopedEntries} />
+
+            {/* Weekday Distribution Chart */}
+            <WeekdayChart
+              title="weekday distribution"
+              counts={journalStats.weekdays}
             />
 
             {/* Badges Achievements Gallery */}
@@ -676,11 +834,18 @@ export default function InsightsPage() {
                     
                     {/* Progress tracking chip */}
                     <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md ${
-                      badge.isUnlocked 
-                        ? 'bg-[#E9FFF4] text-[#00A963]' 
+                      badge.isFullyUnlocked || (badge.id.startsWith('streak_') && badge.isUnlocked)
+                        ? 'bg-[#E9FFF4] text-[#00A963]'
+                        : badge.isUnlocked
+                        ? 'bg-[#E6F0FF] text-[#5D8AFF]'
                         : 'bg-[#EEF0EF] text-[#6F7476]'
                     }`}>
-                      {badge.isUnlocked ? 'Unlocked!' : badge.progressText}
+                      {badge.isFullyUnlocked || (badge.id.startsWith('streak_') && badge.isUnlocked)
+                        ? 'Completed! 🎉'
+                        : badge.isUnlocked
+                        ? `Tier ${badge.tierLabel} Unlocked! (${badge.progressText})`
+                        : badge.progressText
+                      }
                     </span>
                   </div>
                 ))}
@@ -743,31 +908,38 @@ export default function InsightsPage() {
               max={dreamStats.maxMonth}
               color={dreamColor}
             />
-            <BarChart
+            <WeekdayChart
               title="weekday distribution"
-              rows={dreamStats.weekdays.map((value, index) => ({ label: weekdayLabels[index].slice(0, 3), value }))}
-              max={dreamStats.maxWeekday}
-              color={dreamColor}
+              counts={dreamStats.weekdays}
             />
           </div>
         )}
 
-        {activeTab === 'highlights' && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-2xl p-5 border border-[#CCD0CF] shadow-sm">
-              <h3 className="font-bold font-serif text-[#2F3331] mb-2">
-                highlights {scopeLabel}
-              </h3>
-              <p className="text-3xl font-bold text-[#FF9933]">{scopedHighlights.length}</p>
-            </div>
-            <div className="space-y-2">
-              {scopedHighlights.slice(0, 10).map((h) => (
-                <div key={h.id} className="bg-white rounded-xl p-4 border border-[#FFEEAA] shadow-sm">
-                  <p className="text-[#2F3331] text-sm font-light">{h.content}</p>
-                  <p className="text-xs text-[#A3A7A8] mt-2">{format(h.createdAt, 'MMM d, yyyy')}</p>
-                </div>
-              ))}
-            </div>
+        {activeTab === 'stars' && (
+          <div className="space-y-8">
+            <MetricChips
+              items={[
+                { label: 'stars', value: starStats.scopedRecords.length, color: '#FF9933' },
+                { label: 'avg / week', value: starStats.averagePerWeek.toFixed(1), color: '#2F3331' },
+                { label: 'stars this month', value: starStats.thisMonthCount, color: '#6F7476' },
+              ]}
+            />
+            <ActivityHeatmap
+              title={heatmapTitle}
+              data={starHeatmap}
+              color="#FF9933"
+            />
+            <InsightLines lines={getInsightSentences('stars', starStats, starStats.scopedRecords.length)} />
+            <BarChart
+              title="monthly variation"
+              rows={starStats.months.map(item => ({ label: formatChartMonth(item.month, starStats.months.length), value: item.count }))}
+              max={starStats.maxMonth}
+              color="#FF9933"
+            />
+            <WeekdayChart
+              title="weekday distribution"
+              counts={starStats.weekdays}
+            />
           </div>
         )}
 
@@ -833,31 +1005,38 @@ export default function InsightsPage() {
               max={wisdomStats.maxMonth}
               color="#C494FF"
             />
-            <BarChart
+            <WeekdayChart
               title="weekday distribution"
-              rows={wisdomStats.weekdays.map((value, index) => ({ label: weekdayLabels[index].slice(0, 3), value }))}
-              max={wisdomStats.maxWeekday}
-              color="#C494FF"
+              counts={wisdomStats.weekdays}
             />
           </div>
         )}
 
         {activeTab === 'ideas' && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-2xl p-5 border border-[#CCD0CF] shadow-sm">
-              <h3 className="font-bold font-serif text-[#2F3331] mb-2">
-                ideas {scopeLabel}
-              </h3>
-              <p className="text-3xl font-bold text-[#FF9933]">{scopedIdeas.length}</p>
-            </div>
-            <div className="space-y-2">
-              {scopedIdeas.slice(0, 10).map((idea) => (
-                <div key={idea.id} className="bg-white rounded-xl p-4 border border-[#FFEEAA] shadow-sm">
-                  <p className="text-[#2F3331] text-sm font-light">{idea.content}</p>
-                  <p className="text-xs text-[#A3A7A8] mt-2">{format(idea.createdAt, 'MMM d, yyyy')}</p>
-                </div>
-              ))}
-            </div>
+          <div className="space-y-8">
+            <MetricChips
+              items={[
+                { label: 'ideas', value: ideaStats.scopedRecords.length, color: '#FFCC33' },
+                { label: 'avg / week', value: ideaStats.averagePerWeek.toFixed(1), color: '#2F3331' },
+                { label: 'ideas this month', value: ideaStats.thisMonthCount, color: '#6F7476' },
+              ]}
+            />
+            <ActivityHeatmap
+              title={heatmapTitle}
+              data={ideaHeatmap}
+              color="#FFCC33"
+            />
+            <InsightLines lines={getInsightSentences('ideas', ideaStats, ideaStats.scopedRecords.length)} />
+            <BarChart
+              title="monthly variation"
+              rows={ideaStats.months.map(item => ({ label: formatChartMonth(item.month, ideaStats.months.length), value: item.count }))}
+              max={ideaStats.maxMonth}
+              color="#FFCC33"
+            />
+            <WeekdayChart
+              title="weekday distribution"
+              counts={ideaStats.weekdays}
+            />
           </div>
         )}
       </div>
@@ -879,6 +1058,73 @@ function MetricChips({
           <span className="text-xs font-semibold uppercase text-[#A3A7A8]">{item.label}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function WeekdayChart({
+  title,
+  counts,
+}: {
+  title: string;
+  counts: number[];
+}) {
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const maxVal = Math.max(...counts, 1);
+
+  return (
+    <div className="bg-white dark:bg-[#1E2022] rounded-3xl p-5 border border-[#CCD0CF] dark:border-[#2E3133] shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-[#2F3331] dark:text-[#FAFAFA] text-sm flex items-center gap-2">
+          <FontAwesomeIcon icon={faCalendar} className="text-[#00DC7D]" />
+          <span>{title}</span>
+        </h3>
+        <div className="flex items-center gap-3 text-[9px] font-bold text-[#6F7476] dark:text-[#A3A7A8]">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: '#3B82F6' }}></span>
+            Weekday
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: '#F97316' }}></span>
+            Weekend
+          </span>
+        </div>
+      </div>
+      
+      <div className="flex gap-2 items-end w-full">
+        {counts.map((val, i) => {
+          const isWeekend = i === 0 || i === 6;
+          const barColor = isWeekend ? '#F97316' : '#3B82F6';
+          const barBg = isWeekend ? 'rgba(249,115,22,0.1)' : 'rgba(59,130,246,0.1)';
+          const heightPct = Math.round((val / maxVal) * 100);
+          
+          return (
+            <div key={i} className="flex flex-col items-center gap-1" style={{ flex: 1 }}>
+              <span 
+                className="text-[9px] font-bold" 
+                style={{ color: val > 0 ? barColor : '#CBD5E1' }}
+              >
+                {val > 0 ? val : '-'}
+              </span>
+              <div 
+                className="w-full rounded-t-md flex items-end" 
+                style={{ height: '80px', backgroundColor: barBg }}
+              >
+                <div 
+                  className="w-full rounded-t-md transition-all duration-300" 
+                  style={{ 
+                    height: `${Math.max(heightPct, val > 0 ? 4 : 0)}%`, 
+                    backgroundColor: val > 0 ? barColor : 'transparent' 
+                  }}
+                />
+              </div>
+              <span className="text-[9px] font-bold text-gray-400 dark:text-[#A3A7A8]">
+                {dayNames[i]}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -984,5 +1230,294 @@ function WisdomPolarChart({ counts }: { counts: Array<{ type: WisdomType; count:
         </div>
       </div>
     </section>
+  );
+}
+
+const getEntryHour = (entry: Entry): number => {
+  let dateObj: Date | null = null;
+  
+  if (entry.createdAt) {
+    if (entry.createdAt instanceof Date) {
+      dateObj = entry.createdAt;
+    } else if (typeof entry.createdAt === 'string') {
+      dateObj = parseISO(entry.createdAt);
+    } else if (typeof entry.createdAt === 'object' && entry.createdAt !== null) {
+      const ts = entry.createdAt as any;
+      if (typeof ts.toDate === 'function') {
+        dateObj = ts.toDate();
+      } else if (ts.seconds !== undefined) {
+        dateObj = new Date(ts.seconds * 1000);
+      }
+    }
+  }
+  
+  if (!dateObj && entry.date) {
+    dateObj = parseISO(entry.date);
+  }
+  
+  return dateObj ? dateObj.getHours() : 12;
+};
+
+function WordCountTimelineChart({
+  entries,
+}: {
+  entries: Entry[];
+}) {
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+  const dailyData = sorted.map(entry => {
+    const dreamWords = entry.dream ? entry.dream.trim().split(/\s+/).filter(Boolean).length : 0;
+    const bulletWords = entry.bullets.reduce((sum, b) => sum + b.text.trim().split(/\s+/).filter(Boolean).length, 0);
+    const totalWords = dreamWords + bulletWords;
+    return {
+      date: parseISO(entry.date),
+      count: totalWords,
+    };
+  });
+
+  const shouldGroupByMonth = dailyData.length > 30;
+  
+  let data: Array<{ label: string; count: number }> = [];
+  
+  if (shouldGroupByMonth) {
+    const groups: { [key: string]: { label: string; count: number } } = {};
+    dailyData.forEach(item => {
+      const monthKey = format(item.date, 'yyyy-MM');
+      const label = format(item.date, 'MMM yy');
+      if (!groups[monthKey]) {
+        groups[monthKey] = { label, count: 0 };
+      }
+      groups[monthKey].count += item.count;
+    });
+    data = Object.keys(groups)
+      .sort()
+      .map(key => groups[key]);
+  } else {
+    data = dailyData.map(item => ({
+      label: format(item.date, 'd MMM'),
+      count: item.count,
+    }));
+  }
+  
+  const maxVal = Math.max(...data.map(d => d.count), 1);
+  
+  // Chart dimensions
+  const height = 180;
+  const paddingTop = 25;
+  const paddingBottom = 25;
+  const paddingLeft = 35; // a bit more padding on left for larger numbers (e.g. monthly totals)
+  const paddingRight = 30;
+  
+  const stepWidth = 55;
+  const width = Math.max(500, data.length * stepWidth);
+  
+  const chartWidth = width - paddingLeft - paddingRight;
+  const chartHeight = height - paddingTop - paddingBottom;
+  
+  // Compute coordinates for data points
+  const points = data.map((item, i) => {
+    const x = paddingLeft + (i / Math.max(1, data.length - 1)) * chartWidth;
+    const y = paddingTop + chartHeight - (item.count / maxVal) * chartHeight;
+    return { ...item, x, y };
+  });
+  
+  // Generate the line path
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  
+  // Generate the closed area path
+  const areaPath = points.length > 0
+    ? `${linePath} L ${points[points.length - 1].x} ${paddingTop + chartHeight} L ${points[0].x} ${paddingTop + chartHeight} Z`
+    : '';
+
+  return (
+    <div className="bg-white dark:bg-[#1E2022] rounded-3xl p-5 border border-[#CCD0CF] dark:border-[#2E3133] shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-[#2F3331] dark:text-[#FAFAFA] text-sm flex items-center gap-2">
+          <FontAwesomeIcon icon={faChartLine} className="text-[#00DC7D]" />
+          <span>word count timeline {shouldGroupByMonth ? '(monthly)' : '(daily)'}</span>
+        </h3>
+      </div>
+      
+      {data.length === 0 ? (
+        <p className="text-xs text-[#A3A7A8] dark:text-[#6F7476] text-center py-6">No data in this period</p>
+      ) : (
+        <div className="overflow-x-auto pb-2 scrollbar-thin">
+          <div style={{ width: `${width}px` }} className="relative h-[180px]">
+            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
+              <defs>
+                <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#00DC7D" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#00DC7D" stopOpacity="0.00" />
+                </linearGradient>
+              </defs>
+              
+              {/* Horizontal gridlines */}
+              {[0, 0.5, 1].map((ratio, index) => {
+                const y = paddingTop + chartHeight - ratio * chartHeight;
+                const gridVal = Math.round(ratio * maxVal);
+                return (
+                  <g key={index}>
+                    <line 
+                      x1={paddingLeft} 
+                      y1={y} 
+                      x2={width - paddingRight} 
+                      y2={y} 
+                      stroke="#EEF0EF" 
+                      className="stroke-[#EEF0EF] dark:stroke-[#2E3133]"
+                      strokeDasharray="4 4" 
+                    />
+                    <text 
+                      x={paddingLeft - 8} 
+                      y={y + 3} 
+                      textAnchor="end" 
+                      className="text-[8px] font-bold fill-gray-400 dark:fill-[#6F7476]"
+                    >
+                      {gridVal >= 1000 ? `${(gridVal / 1000).toFixed(1)}k` : gridVal}
+                    </text>
+                  </g>
+                );
+              })}
+              
+              {/* Area path */}
+              {areaPath && (
+                <path d={areaPath} fill="url(#areaGradient)" />
+              )}
+              
+              {/* Line path */}
+              {linePath && (
+                <path 
+                  d={linePath} 
+                  fill="none" 
+                  stroke="#00DC7D" 
+                  strokeWidth="2.5" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                />
+              )}
+              
+              {/* Points, values and date text */}
+              {points.map((item, i) => (
+                <g key={i}>
+                  <circle 
+                    cx={item.x} 
+                    cy={item.y} 
+                    r="5" 
+                    fill="white" 
+                    stroke="#00DC7D" 
+                    strokeWidth="1.5" 
+                    className="fill-white dark:fill-[#1E2022]"
+                  />
+                  <circle 
+                    cx={item.x} 
+                    cy={item.y} 
+                    r="2" 
+                    fill="#00DC7D" 
+                  />
+                  <text 
+                    x={item.x} 
+                    y={item.y - 8} 
+                    textAnchor="middle" 
+                    className="text-[9px] font-extrabold fill-[#00DC7D]"
+                  >
+                    {item.count >= 1000 ? `${(item.count / 1000).toFixed(1)}k` : item.count}
+                  </text>
+                  <text 
+                    x={item.x} 
+                    y={paddingTop + chartHeight + 15} 
+                    textAnchor="middle" 
+                    className="text-[8px] font-bold fill-gray-400 dark:fill-[#A3A7A8]"
+                  >
+                    {item.label}
+                  </text>
+                </g>
+              ))}
+            </svg>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DaytimeDistributionChart({
+  entries,
+}: {
+  entries: Entry[];
+}) {
+  const counts = {
+    Morning: 0,
+    Afternoon: 0,
+    Evening: 0,
+    Night: 0,
+  };
+  
+  entries.forEach(entry => {
+    const hour = getEntryHour(entry);
+    if (hour >= 6 && hour < 12) {
+      counts.Morning++;
+    } else if (hour >= 12 && hour < 18) {
+      counts.Afternoon++;
+    } else if (hour >= 18 && hour < 24) {
+      counts.Evening++;
+    } else {
+      counts.Night++;
+    }
+  });
+
+  const items = [
+    { label: 'Morning', sub: '6am - 12pm', count: counts.Morning, color: '#3B82F6', icon: faSun },
+    { label: 'Afternoon', sub: '12pm - 6pm', count: counts.Afternoon, color: '#FFB800', icon: faSun },
+    { label: 'Evening', sub: '6pm - 12am', count: counts.Evening, color: '#F97316', icon: faSun },
+    { label: 'Night', sub: '12am - 6am', count: counts.Night, color: '#8B00D4', icon: faMoon },
+  ];
+  
+  const maxVal = Math.max(...items.map(c => c.count), 1);
+  
+  return (
+    <div className="bg-white dark:bg-[#1E2022] rounded-3xl p-5 border border-[#CCD0CF] dark:border-[#2E3133] shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-[#2F3331] dark:text-[#FAFAFA] text-sm flex items-center gap-2">
+          <FontAwesomeIcon icon={faClock} className="text-[#00DC7D]" />
+          <span>daytime distribution</span>
+        </h3>
+      </div>
+      
+      <div className="grid grid-cols-4 gap-2 items-end w-full">
+        {items.map((item, i) => {
+          const heightPct = Math.round((item.count / maxVal) * 100);
+          
+          return (
+            <div key={i} className="flex flex-col items-center gap-1" style={{ flex: 1 }}>
+              <span 
+                className="text-[9px] font-bold" 
+                style={{ color: item.count > 0 ? item.color : '#CBD5E1' }}
+              >
+                {item.count > 0 ? item.count : '-'}
+              </span>
+              <div 
+                className="w-full rounded-t-md flex items-end" 
+                style={{ height: '80px', backgroundColor: `${item.color}15` }}
+              >
+                <div 
+                  className="w-full rounded-t-md transition-all duration-300" 
+                  style={{ 
+                    height: `${Math.max(heightPct, item.count > 0 ? 4 : 0)}%`, 
+                    backgroundColor: item.count > 0 ? item.color : 'transparent' 
+                  }}
+                />
+              </div>
+              <span className="text-[10px] font-bold text-[#2F3331] dark:text-[#FAFAFA] mt-1">
+                <FontAwesomeIcon icon={item.icon} style={{ color: item.count > 0 ? item.color : '#CBD5E1' }} className="w-3.5 h-3.5" />
+              </span>
+              <span className="text-[9px] font-bold text-gray-500 dark:text-[#A3A7A8] mt-0.5">
+                {item.label}
+              </span>
+              <span className="text-[7px] text-gray-400 dark:text-[#6F7476] text-center leading-none">
+                {item.sub}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

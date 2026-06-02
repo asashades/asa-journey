@@ -1,4 +1,4 @@
-import { Entry } from '@/types';
+import { Entry, Bullet } from '@/types';
 
 export const hasEntryContent = (entry: Entry) =>
   Boolean(
@@ -29,3 +29,11 @@ export const getEntryNumberForDate = (entries: Entry[], date: string) => {
 
   return chronologicalEntries.filter(entry => entry.date < date).length + 1;
 };
+
+export const sortBullets = <T extends { style: string; isCompleted?: boolean }>(bullets: T[]): T[] => {
+  if (!bullets) return [];
+  const active = bullets.filter(b => !(b.style === 'checklist' && b.isCompleted));
+  const completed = bullets.filter(b => b.style === 'checklist' && b.isCompleted);
+  return [...active, ...completed];
+};
+

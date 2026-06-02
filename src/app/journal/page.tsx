@@ -4,7 +4,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useData } from '@/contexts/DataContext';
 import { HighlightedText } from '@/components/ui/HighlightedText';
-import { getEntryNumberByDate, hasEntryContent } from '@/lib/entryUtils';
+import { getEntryNumberByDate, hasEntryContent, sortBullets } from '@/lib/entryUtils';
 import { Entry } from '@/types';
 import {
   addDays,
@@ -30,7 +30,7 @@ import {
   faPlus,
   faSquare,
   faStar,
-  faWandMagicSparkles,
+  faTree,
   faImage,
   faLocationDot,
 } from '@fortawesome/free-solid-svg-icons';
@@ -192,7 +192,7 @@ export default function JournalPage() {
       <div className="mt-3 flex items-center gap-1.5 select-none" onClick={(e) => e.stopPropagation()}>
         {hasWisdom && (
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F0D6FF] text-[#8B00D4]" title="Wisdom inside log">
-            <FontAwesomeIcon icon={faWandMagicSparkles} className="h-2.5 w-2.5" />
+            <FontAwesomeIcon icon={faTree} className="h-2.5 w-2.5" />
           </span>
         )}
         {hasNote && (
@@ -230,16 +230,19 @@ export default function JournalPage() {
           animation: orbit-float 3s ease-in-out infinite;
         }
         .orbit-dot:nth-child(2) {
-          animation-delay: 0.5s;
+          animation-delay: 0.25s;
         }
         .orbit-dot:nth-child(3) {
-          animation-delay: 1s;
+          animation-delay: 0.5s;
+        }
+        .orbit-dot:nth-child(4) {
+          animation-delay: 0.75s;
         }
       `}</style>
 
       <header className="mx-auto max-w-[680px] px-6 pt-8">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="font-sans text-4xl font-bold leading-none tracking-normal text-[#151719] sm:text-5xl">
+          <h1 className="font-sans text-4xl font-bold leading-none tracking-normal text-primary sm:text-5xl">
             Journal
           </h1>
 
@@ -249,14 +252,14 @@ export default function JournalPage() {
               className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${showSearch ? 'bg-[#F2F2F3]' : 'hover:bg-[#F2F2F3]'}`}
               title="search entries"
             >
-              <FontAwesomeIcon icon={faMagnifyingGlass} className="h-5 w-5 text-[#151719]" />
+              <FontAwesomeIcon icon={faMagnifyingGlass} className="h-5 w-5 text-primary" />
             </button>
             <button
               onClick={() => setShowDatePicker(current => !current)}
               className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${showDatePicker ? 'bg-[#F2F2F3]' : 'hover:bg-[#F2F2F3]'}`}
               title="open calendar"
             >
-              <FontAwesomeIcon icon={faCalendarDays} className="h-5 w-5 text-[#151719]" />
+              <FontAwesomeIcon icon={faCalendarDays} className="h-5 w-5 text-primary" />
             </button>
           </div>
         </div>
@@ -372,12 +375,12 @@ export default function JournalPage() {
                   onClick={() => goToDate(dateStr)}
                   className={`relative flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold transition-all sm:h-14 sm:w-14 ${
                     isToday
-                      ? 'border-2 border-[#151719] bg-white text-[#151719] shadow-sm ring-2 ring-[#151719]/10'
+                      ? 'border-2 border-primary bg-surface text-primary shadow-sm ring-2 ring-primary/10'
                       : hasMinimumBullets
                       ? 'bg-[#FFF4E6] text-[#FF9933]'
                       : hasContent
-                      ? 'bg-[#F2F2F3] text-[#2F3331]'
-                      : 'bg-[#F7F7F7] text-[#6F7476]'
+                      ? 'bg-surface-alt text-primary'
+                      : 'bg-surface-alt/40 text-secondary'
                   }`}
                   title={format(day, 'EEEE, MMMM d')}
                 >
@@ -392,16 +395,18 @@ export default function JournalPage() {
                         fill="none"
                         stroke={isToday ? '#FFCC33' : '#D7DBDA'}
                         strokeWidth="2"
-                        strokeDasharray={`${Math.min(data.bullets * 10, 56)} ${100 - Math.min(data.bullets * 10, 56)}`}
+                        pathLength="100"
+                        strokeDasharray={`${Math.min(data.bullets * 20, 100)} ${100 - Math.min(data.bullets * 20, 100)}`}
                       />
                     </svg>
                   )}
                 </button>
 
-                <div className="mt-2 flex h-3 items-center gap-1">
-                  {data.bullets > 0 && <span className="orbit-dot h-1.5 w-1.5 rounded-full bg-[#A3A7A8]" />}
-                  {data.hasDream && <span className="orbit-dot h-1.5 w-1.5 rounded-full bg-[#00DC7D]" />}
-                  {(data.hasWisdom || data.hasNote || data.hasIdea) && <span className="orbit-dot h-1.5 w-1.5 rounded-full bg-[#5D8AFF]" />}
+                <div className="mt-2 flex h-3 items-center gap-1.5 justify-center">
+                  {data.hasDream && <span className="orbit-dot h-1.5 w-1.5 rounded-full bg-[#00DC7D]" title="Dream" />}
+                  {data.hasWisdom && <span className="orbit-dot h-1.5 w-1.5 rounded-full bg-[#5D8AFF]" title="Wisdom" />}
+                  {data.hasNote && <span className="orbit-dot h-1.5 w-1.5 rounded-full bg-[#00875A]" title="Note" />}
+                  {data.hasIdea && <span className="orbit-dot h-1.5 w-1.5 rounded-full bg-[#FFA952]" title="Idea" />}
                 </div>
               </div>
             );
@@ -449,7 +454,7 @@ export default function JournalPage() {
             const isEntryToday = entry.date === today;
             const entryNumber = entryNumberByDate.get(entry.date) || 1;
             const heading = format(entryDate, format(entryDate, 'yyyy') === format(todayDate, 'yyyy') ? 'EEE, MMM d' : 'EEE, MMM d, yyyy');
-            const visibleBullets = entry.bullets.slice(0, 5);
+            const visibleBullets = sortBullets(entry.bullets).slice(0, 5);
 
             return (
               <Fragment key={entry.id}>
@@ -458,7 +463,7 @@ export default function JournalPage() {
                   className="group w-full py-5 text-left transition-colors"
                 >
                   <div>
-                    <h2 className="font-sans text-2xl font-bold leading-tight tracking-normal text-[#151719] sm:text-[26px]">
+                    <h2 className="font-sans text-2xl font-bold leading-tight tracking-normal text-primary sm:text-[26px]">
                       {heading}
                     </h2>
                     <p className="mt-0.5 text-sm font-semibold text-[#6F7476]">
@@ -482,11 +487,19 @@ export default function JournalPage() {
                     {entry.bullets.length > 0 ? (
                       <div className="space-y-1.5">
                         {visibleBullets.map((bullet) => {
-                          const sourceColors = bullet.source === 'wisdom'
+                          const isSourceValid = !bullet.source || (
+                            bullet.source === 'wisdom' ? wisdoms.some(w => w.id === bullet.sourceId || (w.linkedEntryId === entry.date && w.content === bullet.text)) :
+                            bullet.source === 'note' ? notes.some(n => n.id === bullet.sourceId || ((n.linkedEntryId === entry.date || n.linkedDate === entry.date) && (n.content === bullet.text || (n.title && `${n.title}: ${n.content}` === bullet.text)))) :
+                            bullet.source === 'idea' ? ideas.some(i => i.id === bullet.sourceId || (i.linkedEntries?.includes(entry.date) && i.content === bullet.text)) :
+                            false
+                          );
+                          const hasValidSource = bullet.source && isSourceValid;
+
+                          const sourceColors = hasValidSource && bullet.source === 'wisdom'
                             ? { bg: 'bg-[#F0D6FF]', text: 'text-[#8B00D4]' }
-                            : bullet.source === 'note'
+                            : hasValidSource && bullet.source === 'note'
                             ? { bg: 'bg-[#C8F7E4]', text: 'text-[#00875A]' }
-                            : bullet.source === 'idea'
+                            : hasValidSource && bullet.source === 'idea'
                             ? { bg: 'bg-[#FFE4B5]', text: 'text-[#B45309]' }
                             : null;
 
@@ -506,13 +519,13 @@ export default function JournalPage() {
                                 <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${bullet.isHighlight ? 'bg-[#FF9933]' : 'bg-[#9AA0A1]'}`} />
                               )}
                               <div className="min-w-0 flex-1">
-                                <p className={`line-clamp-2 text-sm font-light leading-6 ${bullet.source ? sourceColors?.text || 'text-[#5D5AEF]' : 'text-[#2F3331]'} ${bullet.isHighlight ? 'font-semibold' : ''} ${bullet.isCompleted ? 'text-[#A3A7A8] line-through' : ''}`}>
+                                <p className={`line-clamp-2 text-sm font-light leading-6 ${hasValidSource ? sourceColors?.text || 'text-[#5D5AEF]' : 'text-[#2F3331]'} ${bullet.isHighlight ? 'font-semibold' : ''} ${bullet.isCompleted ? 'text-[#A3A7A8] line-through' : ''}`}>
                                   <HighlightedText text={bullet.text} interactive />
                                 </p>
                                 {sourceColors && (
                                   <span className={`mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider ${sourceColors.bg} ${sourceColors.text}`}>
                                     <FontAwesomeIcon icon={
-                                      bullet.source === 'wisdom' ? faWandMagicSparkles :
+                                      bullet.source === 'wisdom' ? faTree :
                                       bullet.source === 'note' ? faBook :
                                       faLightbulb
                                     } className="h-2.5 w-2.5" />

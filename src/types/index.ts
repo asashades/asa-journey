@@ -74,6 +74,7 @@ export interface Idea {
   content: string;
   solutions?: string[];
   linkedEntries?: string[];
+  status?: 'cooking' | 'grinding' | 'slayed';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -146,6 +147,7 @@ export interface FocusGoal {
   category?: string;
   progress: number; // 0-100
   focusMode?: 'hyperfocus' | 'top3' | 'pareto' | 'none';
+  priorityLevel?: 'low' | 'medium' | 'high';
   subGoals?: SubGoal[]; // Sub-goals checklist
   createdAt: Date;
   updatedAt: Date;
@@ -169,6 +171,15 @@ export interface UserSettings {
   dailyWordGoal?: number; // Daily target word count
   showStreakWidget?: boolean; // Option to show/hide streak widget
   showWordGoalWidget?: boolean; // Option to show/hide daily word goal battery widget
+  theme?: 'journalistic' | 'cosmic' | 'moss' | 'nocturne';
+  aiConfig?: {
+    mode: 'built_in' | 'bring_your_own_key';
+    provider?: 'gemini' | 'openai' | 'anthropic';
+    apiKey?: string;
+    modelName?: string;
+  };
+  pinnedTags?: string[];
+  pinnedGroups?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -206,3 +217,5 @@ export interface WeeklyData {
   notes: number;
   ideas: number;
 }
+
+export * from './ai';

@@ -1,7 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  /* Journalistic Design System - Light Theme */
+  /* Default Typography */
+  --font-sans-active: var(--font-poppins);
+  --font-display-active: var(--font-montserrat);
+  --font-mono-active: monospace;
+
+  /* Classic Journalistic Design System - Light Theme */
   --background: #FAFAFA;
   --foreground: #2F3331;
 
@@ -60,6 +65,398 @@
   --shadow-xl: 0px 8px 24px rgba(0, 0, 0, 0.16);
 }
 
+/* ==========================================================================
+   THEME DEFINITIONS (Dual-mode variations)
+   ========================================================================== */
+
+/* 1. Classic Journalistic Theme (Dark) */
+.theme-journalistic-dark {
+  --background: #121314;
+  --foreground: #FAFAFA;
+  --color-primary: #FAFAFA;
+  --color-secondary: #A3A7A8;
+  --color-tertiary: #6F7476;
+  --color-surface: #1E2022;
+  --color-surface-alt: #282A2D;
+  --color-border: #2E3133;
+}
+
+/* 2. Cosmic Editorial Theme (Light - Editorial Daylight) */
+.theme-cosmic-light {
+  --font-sans-active: var(--font-inter);
+  --font-display-active: var(--font-fraunces);
+  --font-mono-active: var(--font-jetbrains-mono);
+
+  --background: #FFFDF6;
+  --foreground: #201D19;
+  --color-primary: #201D19;
+  --color-secondary: #6E675E;
+  --color-tertiary: #A09689;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F8F3EA;
+  --color-border: #EBE5D8;
+
+  --color-accent-mint: #057D75;
+  --color-accent-purple: #6653D9;
+  --color-accent-yellow: #B86B00;
+  --color-accent-orange: #7A9A14;
+  --color-accent-rose: #C84873;
+}
+
+/* 2. Cosmic Editorial Theme (Dark - Cosmic Quiet) */
+.theme-cosmic-dark {
+  --font-sans-active: var(--font-inter);
+  --font-display-active: var(--font-fraunces);
+  --font-mono-active: var(--font-jetbrains-mono);
+
+  --background: #08090D;
+  --foreground: #F8F4E8;
+  --color-primary: #F8F4E8;
+  --color-secondary: #A9A59C;
+  --color-tertiary: #6F6A63;
+  --color-surface: #11141D;
+  --color-surface-alt: #181C27;
+  --color-border: #1F2433;
+
+  --color-accent-mint: #9CF6F6;
+  --color-accent-purple: #B79CFF;
+  --color-accent-orange: #D9FF7A;
+  --color-accent-rose: #FF8FB3;
+  --color-accent-yellow: #FFD166;
+}
+
+/* 3. Ink & Paper Theme (Light - Soft Paper & Cream) */
+.theme-moss-light {
+  --font-sans-active: var(--font-inter);
+  --font-display-active: var(--font-fraunces);
+  --font-mono-active: var(--font-jetbrains-mono);
+
+  --background: #F7F1E6;
+  --foreground: #111412;
+  --color-primary: #111412;
+  --color-secondary: #8C918B;
+  --color-tertiary: #B8BCB7;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #FFF8E8;
+  --color-border: #E3DDD2;
+
+  --color-accent-mint: #00DC7D;
+  --color-accent-yellow: #FFEEAA;
+  --color-accent-purple: #6653D9;
+  --color-accent-blue: #5D8AFF;
+  --color-accent-rose: #FF9B8A;
+}
+
+/* 3. Ink & Paper Theme (Dark - Ink & Moss) */
+.theme-moss-dark {
+  --font-sans-active: var(--font-inter);
+  --font-display-active: var(--font-fraunces);
+  --font-mono-active: var(--font-jetbrains-mono);
+
+  --background: #111412;
+  --foreground: #F7F1E6;
+  --color-primary: #F7F1E6;
+  --color-secondary: #8C918B;
+  --color-tertiary: #5D615C;
+  --color-surface: #1B211D;
+  --color-surface-alt: #232B25;
+  --color-border: #2E3832;
+
+  --color-accent-mint: #00DC7D;
+  --color-accent-yellow: #FFEEAA;
+  --color-accent-purple: #BBA7FF;
+  --color-accent-blue: #8CCBFF;
+  --color-accent-rose: #FF9B8A;
+}
+
+/* 4. Nocturne Lab Theme (Light - Luminous Day) */
+.theme-nocturne-light {
+  --font-sans-active: var(--font-inter);
+  --font-display-active: var(--font-space-grotesk);
+  --font-mono-active: var(--font-jetbrains-mono);
+
+  --background: #F5F7FA;
+  --foreground: #1C202E;
+  --color-primary: #1C202E;
+  --color-secondary: #68718A;
+  --color-tertiary: #9EA8C0;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #EEF2F6;
+  --color-border: #DCE2EC;
+
+  --color-accent-mint: #00A3A3;
+  --color-accent-purple: #7C3AED;
+  --color-accent-orange: #84CC16;
+  --color-accent-rose: #EC4899;
+  --color-accent-yellow: #D97706;
+}
+
+/* 4. Nocturne Lab Theme (Dark - Void Aurora) */
+.theme-nocturne-dark {
+  --font-sans-active: var(--font-inter);
+  --font-display-active: var(--font-space-grotesk);
+  --font-mono-active: var(--font-jetbrains-mono);
+
+  --background: #08090D;
+  --foreground: #F7F4EA;
+  --color-primary: #F7F4EA;
+  --color-secondary: #A9A39A;
+  --color-tertiary: #6F6A63;
+  --color-surface: #11131A;
+  --color-surface-alt: #171A24;
+  --color-border: #202433;
+
+  --color-accent-mint: #9CF6F6;
+  --color-accent-purple: #B79CFF;
+  --color-accent-orange: #D9FF7A;
+  --color-accent-rose: #FF8FB3;
+  --color-accent-yellow: #FFD166;
+}
+
+/* ==========================================================================
+   CSS CUSTOM OVERRIDES (For seamless theme changes with hardcoded utility classes)
+   ========================================================================== */
+
+/* Overrides apply to any customized theme (excluding default journalistic light) */
+html[class^="theme-"]:not(.theme-journalistic-light),
+html[class*=" theme-"]:not(.theme-journalistic-light) {
+  background-color: var(--background) !important;
+}
+
+html[class^="theme-"]:not(.theme-journalistic-light) body,
+html[class*=" theme-"]:not(.theme-journalistic-light) body {
+  background: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+/* Background overrides: White surfaces map to theme surface variable */
+html[class^="theme-"]:not(.theme-journalistic-light) .bg-white,
+html[class*=" theme-"]:not(.theme-journalistic-light) .bg-white {
+  background-color: var(--color-surface) !important;
+}
+
+html[class^="theme-"]:not(.theme-journalistic-light) .bg-\[\#FAFAFA\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .bg-\[\#FAFAFA\],
+html[class^="theme-"]:not(.theme-journalistic-light) .bg-gray-50,
+html[class*=" theme-"]:not(.theme-journalistic-light) .bg-gray-50 {
+  background-color: var(--color-surface-alt) !important;
+}
+
+html[class^="theme-"]:not(.theme-journalistic-light) .bg-\[\#F2F2F3\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .bg-\[\#F2F2F3\],
+html[class^="theme-"]:not(.theme-journalistic-light) .bg-gray-100,
+html[class*=" theme-"]:not(.theme-journalistic-light) .bg-gray-100 {
+  background-color: var(--color-surface-alt) !important;
+}
+
+html[class^="theme-"]:not(.theme-journalistic-light) .bg-\[\#F6F1E8\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .bg-\[\#F6F1E8\],
+html[class^="theme-"]:not(.theme-journalistic-light) .bg-\[\#FFF8E8\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .bg-\[\#FFF8E8\] {
+  background-color: var(--color-surface-alt) !important;
+}
+
+/* Dynamic Text Overrides */
+html[class^="theme-"]:not(.theme-journalistic-light) .text-\[\#2F3331\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .text-\[\#2F3331\] {
+  color: var(--foreground) !important;
+}
+
+html[class^="theme-"]:not(.theme-journalistic-light) .text-\[\#6F7476\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .text-\[\#6F7476\],
+html[class^="theme-"]:not(.theme-journalistic-light) .text-\[\#5D6264\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .text-\[\#5D6264\],
+html[class^="theme-"]:not(.theme-journalistic-light) .text-gray-700,
+html[class*=" theme-"]:not(.theme-journalistic-light) .text-gray-700 {
+  color: var(--color-secondary) !important;
+}
+
+html[class^="theme-"]:not(.theme-journalistic-light) .text-\[\#A3A7A8\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .text-\[\#A3A7A8\] {
+  color: var(--color-tertiary) !important;
+}
+
+/* Border overrides */
+html[class^="theme-"]:not(.theme-journalistic-light) .border-\[\#EEF0EF\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .border-\[\#EEF0EF\],
+html[class^="theme-"]:not(.theme-journalistic-light) .border-\[\#CCD0CF\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .border-\[\#CCD0CF\],
+html[class^="theme-"]:not(.theme-journalistic-light) .border-\[\#E4E7E6\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .border-\[\#E4E7E6\] {
+  border-color: var(--color-border) !important;
+}
+
+/* Map the hardcoded Mint accent colors dynamically */
+html[class^="theme-"]:not(.theme-journalistic-light) .bg-\[\#00DC7D\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .bg-\[\#00DC7D\] {
+  background-color: var(--color-accent-mint) !important;
+}
+
+html[class^="theme-"]:not(.theme-journalistic-light) .text-\[\#00DC7D\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .text-\[\#00DC7D\] {
+  color: var(--color-accent-mint) !important;
+}
+
+html[class^="theme-"]:not(.theme-journalistic-light) .border-\[\#00DC7D\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .border-\[\#00DC7D\] {
+  border-color: var(--color-accent-mint) !important;
+}
+
+/* Hovers in all custom themes */
+html[class^="theme-"]:not(.theme-journalistic-light) .hover\:bg-\[\#E5E5E5\]:hover,
+html[class*=" theme-"]:not(.theme-journalistic-light) .hover\:bg-\[\#E5E5E5\]:hover,
+html[class^="theme-"]:not(.theme-journalistic-light) .hover\:bg-gray-50:hover,
+html[class*=" theme-"]:not(.theme-journalistic-light) .hover\:bg-gray-50:hover {
+  background-color: var(--color-surface-alt) !important;
+  color: var(--foreground) !important;
+}
+
+html[class^="theme-"]:not(.theme-journalistic-light) .hover\:bg-\[\#FF453A\]\/5:hover,
+html[class*=" theme-"]:not(.theme-journalistic-light) .hover\:bg-\[\#FF453A\]\/5:hover {
+  background-color: rgba(255, 69, 58, 0.15) !important;
+}
+
+/* ==========================================================================
+   DARK MODE SPECIFIC CONTRAST & ACCENT ADJUSTMENTS
+   ========================================================================== */
+
+/* Overrides for ALL dark mode themes (*-dark) */
+html.dark {
+  background-color: var(--background) !important;
+}
+
+/* Page canvas background (min-h-screen bg-[#FAFAFA]) gets the main deep background */
+html.dark .min-h-screen.bg-\[\#FAFAFA\] {
+  background-color: var(--background) !important;
+}
+
+/* All other nested cards, lists, or widgets using bg-[#FAFAFA] get the beautiful surface background for high contrast! */
+html.dark :not(.min-h-screen).bg-\[\#FAFAFA\] {
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* Subgoals, list items or elevated widgets inside cards */
+html.dark .bg-gray-50,
+html.dark .bg-gray-100 {
+  background-color: var(--color-surface-alt) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* 1. Purple Card Override (Focus Mode: Hyperfocus) */
+html.dark .bg-\[\#FAF5FF\]\/70 {
+  background-color: rgba(187, 167, 255, 0.08) !important; /* Translucent deep purple/violet */
+  border-color: rgba(187, 167, 255, 0.32) !important;
+  backdrop-filter: blur(8px) !important;
+}
+html.dark .bg-\[\#FAF5FF\]\/70 .text-purple-800,
+html.dark .bg-\[\#FAF5FF\]\/70 .text-purple-700 {
+  color: #D6C8FF !important; /* Very soft readable violet */
+}
+
+/* 2. Green Card Override (Focus Mode: Top 3) */
+html.dark .bg-\[\#F2FFF9\]\/70 {
+  background-color: rgba(0, 220, 125, 0.06) !important; /* Translucent deep mint */
+  border-color: rgba(0, 220, 125, 0.28) !important;
+  backdrop-filter: blur(8px) !important;
+}
+html.dark .bg-\[\#F2FFF9\]\/70 .text-emerald-800,
+html.dark .bg-\[\#F2FFF9\]\/70 .text-emerald-700 {
+  color: #A3FFD6 !important; /* Soft high-contrast mint green */
+}
+
+/* 3. Orange/Amber Card Override (Focus Mode: Pareto) */
+html.dark .bg-\[\#FFF9F2\]\/70 {
+  background-color: rgba(255, 153, 51, 0.06) !important; /* Translucent deep orange */
+  border-color: rgba(255, 153, 51, 0.28) !important;
+  backdrop-filter: blur(8px) !important;
+}
+html.dark .bg-\[\#FFF9F2\]\/70 .text-amber-800,
+html.dark .bg-\[\#FFF9F2\]\/70 .text-amber-700 {
+  color: #FFE5C4 !important; /* Soft warm high-contrast cream/amber */
+}
+
+/* Subgoal checklist badges & text contrasts */
+html.dark .bg-gray-50 .text-gray-700,
+html.dark .bg-gray-50 .text-\[\#6F7476\] {
+  color: var(--color-secondary) !important;
+}
+
+html.dark .text-gray-700,
+html.dark .text-gray-800,
+html.dark .text-slate-800,
+html.dark .text-neutral-800 {
+  color: var(--foreground) !important;
+}
+
+html.dark .text-gray-900,
+html.dark .text-slate-900,
+html.dark .text-neutral-900 {
+  color: var(--color-primary) !important;
+}
+
+/* Fix hardcoded date text color in journal page (text-[#151719]) */
+html[class^="theme-"]:not(.theme-journalistic-light) .text-\[\#151719\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .text-\[\#151719\] {
+  color: var(--foreground) !important;
+}
+
+html[class^="theme-"]:not(.theme-journalistic-light) .border-\[\#151719\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .border-\[\#151719\],
+html[class^="theme-"]:not(.theme-journalistic-light) .ring-\[\#151719\]\/10,
+html[class*=" theme-"]:not(.theme-journalistic-light) .ring-\[\#151719\]\/10 {
+  border-color: var(--color-border) !important;
+  --tw-ring-color: var(--color-border) !important;
+}
+
+/* Collections & Insights Top Navigation Container (bg-white/80 and ring-1) */
+html[class^="theme-"]:not(.theme-journalistic-light) .bg-white\/80,
+html[class*=" theme-"]:not(.theme-journalistic-light) .bg-white\/80 {
+  background-color: var(--color-surface-alt) !important;
+}
+
+html[class^="theme-"]:not(.theme-journalistic-light) .ring-1.ring-\[\#EEF0EF\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .ring-1.ring-\[\#EEF0EF\] {
+  --tw-ring-color: var(--color-border) !important;
+}
+
+/* Bottom navbar glassmorphism background matching the active theme's surface color */
+.theme-journalistic-dark .bg-white\/95 {
+  background-color: rgba(30, 32, 34, 0.92) !important;
+}
+
+.theme-cosmic-dark .bg-white\/95 {
+  background-color: rgba(17, 20, 29, 0.92) !important;
+}
+
+.theme-cosmic-light .bg-white\/95 {
+  background-color: rgba(255, 253, 246, 0.92) !important;
+}
+
+.theme-moss-dark .bg-white\/95 {
+  background-color: rgba(27, 33, 29, 0.92) !important;
+}
+
+.theme-moss-light .bg-white\/95 {
+  background-color: rgba(247, 241, 230, 0.92) !important;
+}
+
+.theme-nocturne-dark .bg-white\/95 {
+  background-color: rgba(17, 19, 26, 0.92) !important;
+}
+
+.theme-nocturne-light .bg-white\/95 {
+  background-color: rgba(245, 247, 250, 0.92) !important;
+}
+
+html[class^="theme-"]:not(.theme-journalistic-light) .border-\[\#E4E7E6\],
+html[class*=" theme-"]:not(.theme-journalistic-light) .border-\[\#E4E7E6\] {
+  border-color: var(--color-border) !important;
+}
+
+
+
+/* Tailwind configuration integration */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -78,8 +475,10 @@
   --color-surface: var(--color-surface);
   --color-surface-alt: var(--color-surface-alt);
   --color-border: var(--color-border);
-  --font-sans: var(--font-poppins), 'Helvetica Neue', Arial, sans-serif;
-  --font-serif: var(--font-montserrat), 'Helvetica Neue', Arial, sans-serif;
+  
+  --font-sans: var(--font-sans-active), system-ui, sans-serif;
+  --font-serif: var(--font-display-active), Georgia, serif;
+  --font-mono: var(--font-mono-active), monospace;
 }
 
 * {
@@ -252,5 +651,156 @@ input, textarea {
   transform: rotateY(180deg);
 }
 
+/* ==========================================================================
+   THEME FONT OVERRIDES (Forces display/UI fonts globally when customized theme is active)
+   ========================================================================== */
+
+/* Overrides the .font-sans utility class on headings to correctly use the editorial display font (Fraunces / Space Grotesk) */
+html[class^="theme-"] h1,
+html[class^="theme-"] h2,
+html[class^="theme-"] h3,
+html[class^="theme-"] h4,
+html[class^="theme-"] h5,
+html[class^="theme-"] h6,
+html[class*=" theme-"] h1,
+html[class*=" theme-"] h2,
+html[class*=" theme-"] h3,
+html[class*=" theme-"] h4,
+html[class*=" theme-"] h5,
+html[class*=" theme-"] h6 {
+  font-family: var(--font-serif) !important;
+}
+
+/* Forces all buttons, inputs, textareas, and UI controls to use the theme's active sans font (Inter / Poppins) */
+html[class^="theme-"] button,
+html[class^="theme-"] input,
+html[class^="theme-"] textarea,
+html[class^="theme-"] select,
+html[class*=" theme-"] button,
+html[class*=" theme-"] input,
+html[class*=" theme-"] textarea,
+html[class*=" theme-"] select {
+  font-family: var(--font-sans) !important;
+}
+
+/* Specific elements like display text blocks or special quotes */
+html[class^="theme-"] .font-serif,
+html[class*=" theme-"] .font-serif {
+  font-family: var(--font-serif) !important;
+}
+
+html[class^="theme-"] .font-mono,
+html[class*=" theme-"] .font-mono {
+  font-family: var(--font-mono) !important;
+}
+
+/* ==========================================================================
+   PREMIUM UX ANIMATIONS & DYNAMIC DARK CONTRAST ADJUSTMENTS
+   ========================================================================== */
+
+/* 1. High-Contrast Active Tab in Collections & Insights under Dark Mode */
+html.dark .bg-\[\#00DC7D\].text-white {
+  color: var(--background) !important;
+}
+html.dark .bg-\[\#00DC7D\].text-white .bg-white\/20 {
+  background-color: rgba(0, 0, 0, 0.12) !important;
+  color: var(--background) !important;
+}
+
+/* 2. Sleek Translucent Active Bottom Nav Items in Dark Mode */
+html.dark .bg-\[\#E9FFF4\] {
+  background-color: rgba(0, 220, 125, 0.15) !important;
+}
+html.dark .text-\[\#00A963\] {
+  color: var(--color-accent-mint) !important;
+}
+
+.fab-actions-transition {
+  transition: max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@media (min-width: 640px) {
+  .fab-actions-transition {
+    transition: max-width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+}
+
+.fab-trigger-transition {
+  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background-color 0.2s ease;
+}
+
+/* 4. High-Contrast Collection Focus Overrides under Dark Mode */
+html.dark .bg-\[\#F7EFFF\],
+html.dark .bg-\[\#EAD8FF\] {
+  background-color: rgba(196, 148, 255, 0.12) !important;
+  border-color: rgba(196, 148, 255, 0.3) !important;
+}
+
+html.dark .bg-\[\#FFF8ED\],
+html.dark .bg-\[\#FFEEAA\] {
+  background-color: rgba(255, 153, 51, 0.08) !important;
+  border-color: rgba(255, 153, 51, 0.25) !important;
+}
+
+/* 5. High-Contrast Write Inline Linked Highlights under Dark Mode */
+/* Wisdom source box */
+html.dark .bg-\[\#F8F0FF\] {
+  background-color: rgba(196, 148, 255, 0.08) !important;
+}
+html.dark .border-\[\#C494FF\]\/30 {
+  border-color: rgba(196, 148, 255, 0.25) !important;
+}
+html.dark .text-\[\#8B00D4\] {
+  color: #C494FF !important;
+}
+
+/* Note source box */
+html.dark .bg-\[\#F2FFF8\] {
+  background-color: rgba(0, 220, 125, 0.06) !important;
+}
+html.dark .border-\[\#00DC7D\]\/25 {
+  border-color: rgba(0, 220, 125, 0.22) !important;
+}
+html.dark .text-\[\#00875A\] {
+  color: #00DC7D !important;
+}
+
+/* Idea source box */
+html.dark .bg-\[\#FFF8ED\] {
+  background-color: rgba(255, 153, 51, 0.06) !important;
+}
+html.dark .border-\[\#FF9933\]\/30 {
+  border-color: rgba(255, 153, 51, 0.25) !important;
+}
+html.dark .text-\[\#B45309\] {
+  color: #FFA952 !important;
+}
+
+/* Wisdom Quote text color in dark mode */
+html.dark .text-\[\#4D5652\] {
+  color: var(--color-secondary) !important;
+  opacity: 0.95;
+}
+
+/* Wisdom Source/Context detail text in dark mode */
+html.dark .text-\[\#8B9390\] {
+  color: var(--color-tertiary) !important;
+}
+
+@keyframes moving-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: moving-gradient 8s ease infinite;
+}
 
 

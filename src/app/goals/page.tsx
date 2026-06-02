@@ -53,6 +53,32 @@ const getCategoryIcon = (category: string) => {
   return faCrosshairs;
 };
 
+const playClickSound = () => {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(520, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(680, ctx.currentTime + 0.06);
+    
+    gain.gain.setValueAtTime(0.001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.start();
+    osc.stop(ctx.currentTime + 0.07);
+  } catch (err) {
+    console.warn("Sound playback blocked or failed:", err);
+  }
+};
+
 export default function GoalsPage() {
   const router = useRouter();
   const {
@@ -70,13 +96,18 @@ export default function GoalsPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newGoalContent, setNewGoalContent] = useState('');
   const [newGoalDeadline, setNewGoalDeadline] = useState('');
-  const [newGoalCategory, setNewGoalCategory] = useState('');
+  const [newGoalPriority, setNewGoalPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [categorySelectOption, setCategorySelectOption] = useState('General');
+  const [customCategory, setCustomCategory] = useState('');
   
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [editDeadline, setEditDeadline] = useState('');
-  const [editCategory, setEditCategory] = useState('');
   const [editProgress, setEditProgress] = useState(0);
+  const [editPriority, setEditPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [editCategorySelectOption, setEditCategorySelectOption] = useState('General');
+  const [editCustomCategory, setEditCustomCategory] = useState('');
+  
   const [draggedGoalId, setDraggedGoalId] = useState<string | null>(null);
 
   const [focusMode, setFocusMode] = useState<FocusMode | 'none'>('none');
@@ -128,23 +159,42 @@ export default function GoalsPage() {
     [goals]
   );
 
+  const defaultCategories = ['General', 'Health', 'Work', 'Creative', 'Relationship', 'Self-Care', 'Spirituality'];
+
   const categories = useMemo(() => {
-    const cats = new Set<string>();
-    goals.forEach(g => { if (g.category) cats.add(g.category); });
+    const cats = new Set(defaultCategories);
+    goals.forEach(g => {
+      if (g.category) {
+        const trimmed = g.category.trim();
+        if (trimmed) {
+          const exists = Array.from(cats).some(c => c.toLowerCase() === trimmed.toLowerCase());
+          if (!exists) {
+            cats.add(trimmed);
+          }
+        }
+      }
+    });
     return Array.from(cats).sort();
   }, [goals]);
 
   const handleAddGoal = async () => {
     if (!newGoalContent.trim()) return;
+    const resolvedCategory = categorySelectOption === '__custom__'
+      ? customCategory.trim()
+      : categorySelectOption;
+      
     await addGoal(newGoalContent.trim(), {
       deadline: newGoalDeadline || undefined,
-      category: newGoalCategory || undefined,
+      category: resolvedCategory || 'General',
+      priorityLevel: newGoalPriority,
       progress: 0,
       subGoals: [],
     });
     setNewGoalContent('');
     setNewGoalDeadline('');
-    setNewGoalCategory('');
+    setCategorySelectOption('General');
+    setCustomCategory('');
+    setNewGoalPriority('medium');
     setShowAddForm(false);
   };
 
@@ -152,8 +202,18 @@ export default function GoalsPage() {
     setEditingGoalId(goal.id);
     setEditContent(goal.content);
     setEditDeadline(goal.deadline || '');
-    setEditCategory(goal.category || '');
     setEditProgress(goal.progress);
+    setEditPriority(goal.priorityLevel || 'medium');
+    
+    const cat = goal.category || 'General';
+    const match = categories.find(c => c.toLowerCase() === cat.trim().toLowerCase());
+    if (match) {
+      setEditCategorySelectOption(match);
+      setEditCustomCategory('');
+    } else {
+      setEditCategorySelectOption('__custom__');
+      setEditCustomCategory(cat);
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -167,10 +227,15 @@ export default function GoalsPage() {
       progress = Math.round((completedCount / goalToEdit.subGoals.length) * 100);
     }
 
+    const resolvedCategory = editCategorySelectOption === '__custom__'
+      ? editCustomCategory.trim()
+      : editCategorySelectOption;
+
     await updateGoal(editingGoalId, {
       content: editContent.trim(),
       deadline: editDeadline || undefined,
-      category: editCategory || undefined,
+      category: resolvedCategory || 'General',
+      priorityLevel: editPriority,
       progress,
     });
     setEditingGoalId(null);
@@ -377,7 +442,7 @@ export default function GoalsPage() {
         </div>
 
         {showAddForm && (
-          <div className="mt-6 rounded-2xl bg-white/70 backdrop-blur-sm p-6 border border-[#EEF0EF]/80 shadow-[0_8px_30px_rgba(0,0,0,0.02)] transition-all duration-300">
+          <div className="mt-6 rounded-3xl bg-white p-6 border border-[#EEF0EF] shadow-md transition-all duration-300">
             <h3 className="text-sm font-bold text-[#2F3331] mb-4 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
               ✨ New Goal
             </h3>
@@ -391,45 +456,84 @@ export default function GoalsPage() {
               autoFocus
             />
             
-            <div className="mb-6 grid grid-cols-2 gap-4">
-              <div>
-                <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#6F7476]">Deadline (optional)</label>
-                <input
-                  type="date"
-                  value={newGoalDeadline}
-                  onChange={(e) => setNewGoalDeadline(e.target.value)}
-                  className="w-full bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-1.5 text-sm text-[#2F3331] focus:outline-none transition-all duration-300"
-                />
+            <div className="mb-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#6F7476]">Deadline (optional)</label>
+                  <input
+                    type="date"
+                    value={newGoalDeadline}
+                    onChange={(e) => setNewGoalDeadline(e.target.value)}
+                    className="w-full bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-1.5 text-sm text-[#2F3331] focus:outline-none transition-all duration-300"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#6F7476]">Category</label>
+                  <select
+                    value={categorySelectOption}
+                    onChange={(e) => setCategorySelectOption(e.target.value)}
+                    className="w-full bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-1.5 text-sm text-[#2F3331] focus:outline-none transition-all duration-300"
+                  >
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                    <option value="__custom__">➕ Create new...</option>
+                  </select>
+                  {categorySelectOption === '__custom__' && (
+                    <input
+                      type="text"
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      placeholder="Enter custom category"
+                      className="mt-2 w-full bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-1 text-xs text-[#2F3331] placeholder-[#CCD0CF]/80 focus:outline-none transition-all duration-300"
+                    />
+                  )}
+                </div>
               </div>
+              
               <div>
-                <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#6F7476]">Category (optional)</label>
-                <input
-                  type="text"
-                  value={newGoalCategory}
-                  onChange={(e) => setNewGoalCategory(e.target.value)}
-                  placeholder="e.g. work, health, study"
-                  list="categories"
-                  className="w-full bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-1.5 text-sm text-[#2F3331] placeholder-[#CCD0CF]/80 focus:outline-none transition-all duration-300"
-                />
-                <datalist id="categories">
-                  {categories.map(cat => <option key={cat} value={cat} />)}
-                </datalist>
+                <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-[#6F7476]">Priority Level</label>
+                <div className="flex gap-2">
+                  {(['low', 'medium', 'high'] as const).map((level) => {
+                    const active = newGoalPriority === level;
+                    const colorClasses = 
+                      level === 'low'
+                        ? active ? 'bg-gray-100 text-gray-800 border-gray-300 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                        : level === 'medium'
+                        ? active ? 'bg-yellow-50 text-yellow-800 border-yellow-300 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-yellow-50/30'
+                        : active ? 'bg-red-50 text-red-700 border-red-300 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-red-50/30';
+                    return (
+                      <button
+                        key={level}
+                        type="button"
+                        onClick={() => setNewGoalPriority(level)}
+                        className={`flex-1 py-2 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer text-center ${colorClasses}`}
+                      >
+                        {level}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
             
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setShowAddForm(false)}
-                className="rounded-xl border border-[#CCD0CF] bg-white px-4 py-2 text-sm font-semibold text-[#6F7476] hover:bg-[#F2F2F3] transition-colors cursor-pointer active:scale-95"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#CCD0CF] bg-white text-[#6F7476] hover:bg-[#F2F2F3] hover:text-[#2F3331] transition-all cursor-pointer active:scale-95"
+                title="Cancel"
+                aria-label="Cancel"
               >
-                cancel
+                <FontAwesomeIcon icon={faXmark} className="h-4 w-4" />
               </button>
               <button
                 onClick={handleAddGoal}
                 disabled={!newGoalContent.trim()}
-                className="rounded-xl bg-[#00DC7D] px-5 py-2 text-sm font-semibold text-white hover:bg-[#00B866] disabled:opacity-50 transition-all cursor-pointer active:scale-95 shadow-sm shadow-[#00DC7D]/10"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00DC7D] text-white hover:bg-[#00B866] disabled:opacity-50 transition-all cursor-pointer active:scale-95 shadow-sm shadow-[#00DC7D]/10"
+                title="Add Goal"
+                aria-label="Add Goal"
               >
-                add goal
+                <FontAwesomeIcon icon={faCheck} className="h-4 w-4" />
               </button>
             </div>
           </div>
@@ -506,11 +610,24 @@ export default function GoalsPage() {
                           {/* Top Row: Category (Left) and Big Checklist Button (Right) */}
                           <div className="flex justify-between items-start select-none z-10 w-full mb-1">
                             <div className="flex flex-col items-start gap-1">
-                              {/* Category Chip using Solid FontAwesome Icon */}
-                              <span className="text-[9px] font-bold text-[#6F7476] uppercase tracking-wider bg-white/90 border border-[#EEF0EF]/70 px-2 py-0.5 rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.01)] truncate max-w-[110px] flex items-center gap-1.5 transition-transform hover:scale-105">
-                                <FontAwesomeIcon icon={getCategoryIcon(goal.category || '')} className="text-gray-400 h-3 w-3" />
-                                <span>{goal.category || 'General'}</span>
-                              </span>
+                               <div className="flex flex-wrap gap-1 items-center max-w-[150px]">
+                                 {/* Category Chip using Solid FontAwesome Icon */}
+                                 <span className="text-[9px] font-bold text-[#6F7476] uppercase tracking-wider bg-white/90 border border-[#EEF0EF]/70 px-2 py-0.5 rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.01)] truncate flex items-center gap-1.5 transition-transform hover:scale-105">
+                                   <FontAwesomeIcon icon={getCategoryIcon(goal.category || '')} className="text-gray-400 h-3 w-3" />
+                                   <span>{goal.category || 'General'}</span>
+                                 </span>
+                                 {goal.priorityLevel && (
+                                   <span className={`text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${
+                                     goal.priorityLevel === 'high'
+                                       ? 'bg-red-50 text-red-700 border-red-100'
+                                       : goal.priorityLevel === 'low'
+                                       ? 'bg-gray-50 text-gray-500 border-gray-100'
+                                       : 'bg-yellow-50 text-yellow-800 border-yellow-200'
+                                   }`}>
+                                     {goal.priorityLevel}
+                                   </span>
+                                 )}
+                               </div>
                               
                               {deadlineInfo && (
                                 <span className={`text-[8.5px] font-bold uppercase tracking-wider flex items-center gap-1 mt-0.5 ${
@@ -526,6 +643,7 @@ export default function GoalsPage() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                playClickSound();
                                 toggleGoalComplete(goal.id);
                               }}
                               className={`h-7 w-7 rounded-full border flex items-center justify-center transition-all duration-200 cursor-pointer shadow-sm hover:scale-110 active:scale-90 ${checkboxStyle}`}
@@ -555,13 +673,47 @@ export default function GoalsPage() {
                                     onChange={(e) => setEditDeadline(e.target.value)}
                                     className="bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-0.5 text-[9px] text-[#2F3331] focus:outline-none"
                                   />
-                                  <input
-                                    type="text"
-                                    value={editCategory}
-                                    onChange={(e) => setEditCategory(e.target.value)}
-                                    placeholder="category"
+                                  <select
+                                    value={editCategorySelectOption}
+                                    onChange={(e) => setEditCategorySelectOption(e.target.value)}
                                     className="bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-0.5 text-[9px] text-[#2F3331] focus:outline-none"
-                                  />
+                                  >
+                                    {categories.map(cat => (
+                                      <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                    <option value="__custom__">➕ Create new...</option>
+                                  </select>
+                                  {editCategorySelectOption === '__custom__' && (
+                                    <input
+                                      type="text"
+                                      value={editCustomCategory}
+                                      onChange={(e) => setEditCustomCategory(e.target.value)}
+                                      placeholder="custom category"
+                                      className="bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-0.5 text-[9px] text-[#2F3331] focus:outline-none"
+                                    />
+                                  )}
+                                </div>
+                                
+                                <div className="flex gap-1">
+                                  {(['low', 'medium', 'high'] as const).map((level) => {
+                                    const active = editPriority === level;
+                                    const colorClasses = 
+                                      level === 'low'
+                                        ? active ? 'bg-gray-100 text-gray-800 border-gray-300' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                                        : level === 'medium'
+                                        ? active ? 'bg-yellow-50 text-yellow-800 border-yellow-300' : 'bg-white text-gray-500 border-gray-200 hover:bg-yellow-50/30'
+                                        : active ? 'bg-red-50 text-red-700 border-red-300' : 'bg-white text-gray-500 border-gray-200 hover:bg-red-50/30';
+                                    return (
+                                      <button
+                                        key={level}
+                                        type="button"
+                                        onClick={() => setEditPriority(level)}
+                                        className={`flex-1 py-0.5 rounded-lg border text-[8px] font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer text-center ${colorClasses}`}
+                                      >
+                                        {level}
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                                 
                                 <div className="text-[10px] flex items-center gap-1.5 my-1 justify-between">
@@ -659,6 +811,7 @@ export default function GoalsPage() {
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
+                                            playClickSound();
                                             handleToggleSubGoal(goal, sub.id);
                                           }}
                                           className={`h-4.5 w-4.5 rounded-full flex items-center justify-center cursor-pointer transition-all hover:scale-105 active:scale-95 text-white ${solidGradient}`}
@@ -691,6 +844,7 @@ export default function GoalsPage() {
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
+                                            playClickSound();
                                             handleToggleSubGoal(goal, sub.id);
                                           }}
                                           className="h-4.5 w-4.5 rounded-full border border-gray-300 bg-white flex items-center justify-center cursor-pointer transition-all hover:border-[#00DC7D] hover:bg-[#E9FFF4]"
@@ -846,15 +1000,25 @@ export default function GoalsPage() {
                       className="group relative flex flex-col justify-between aspect-[4/5] w-full rounded-2xl border border-[#EEF0EF]/80 bg-[#FAFAFA]/70 shadow-sm transition-all hover:bg-white hover:shadow-[0_12px_35px_rgba(0,0,0,0.02)] px-6.5 py-5 pb-7.5"
                     >
                       <div className="flex justify-between items-center select-none w-full mb-1">
-                        {/* Completed Category Badge with FontAwesome icon */}
-                        <span className="text-[9px] font-bold text-[#A3A7A8] uppercase tracking-wider bg-white/90 border border-[#EEF0EF]/70 px-2 py-0.5 rounded-md flex items-center gap-1.5 truncate max-w-[110px]">
-                          <FontAwesomeIcon icon={getCategoryIcon(goal.category || '')} className="text-gray-300 h-3 w-3" />
-                          <span>{goal.category || 'General'}</span>
-                        </span>
+                        <div className="flex flex-wrap gap-1 items-center max-w-[150px]">
+                          {/* Completed Category Badge with FontAwesome icon */}
+                          <span className="text-[9px] font-bold text-[#A3A7A8] uppercase tracking-wider bg-white/90 border border-[#EEF0EF]/70 px-2 py-0.5 rounded-md flex items-center gap-1.5 truncate">
+                            <FontAwesomeIcon icon={getCategoryIcon(goal.category || '')} className="text-gray-300 h-3 w-3" />
+                            <span>{goal.category || 'General'}</span>
+                          </span>
+                          {goal.priorityLevel && (
+                            <span className="text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md border bg-gray-50 text-gray-400 border-gray-100">
+                              {goal.priorityLevel}
+                            </span>
+                          )}
+                        </div>
                         
                         <div className="flex items-center gap-1.5">
                           <button
-                            onClick={() => toggleGoalComplete(goal.id)}
+                            onClick={() => {
+                              playClickSound();
+                              toggleGoalComplete(goal.id);
+                            }}
                             className="h-4.5 w-4.5 rounded-full bg-[#E9FFF4] border border-[#00DC7D] text-[#00A963] flex items-center justify-center hover:scale-105 transition-transform cursor-pointer"
                             title="mark incomplete"
                           >
@@ -929,7 +1093,10 @@ export default function GoalsPage() {
                 {/* Circular timeline bullet checkbox indicator */}
                 <div className="absolute -left-[42px] flex h-5 w-5 items-center justify-center rounded-full border border-[#CCD0CF] bg-[#FAFAFA] text-[#CCD0CF] hover:text-[#00DC7D] hover:border-[#00DC7D] transition-all cursor-pointer z-10 hover:scale-105 active:scale-90">
                   <button
-                    onClick={() => toggleBulletComplete(task.id)}
+                    onClick={() => {
+                      playClickSound();
+                      toggleBulletComplete(task.id);
+                    }}
                     className="flex h-full w-full items-center justify-center cursor-pointer"
                     title="Mark Done"
                   >

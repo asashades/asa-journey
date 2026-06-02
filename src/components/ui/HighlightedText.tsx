@@ -58,8 +58,8 @@ const getTagTokenClassName = (doMoreLess: TagDoMoreLess, variant: HighlightVaria
 const getTokenHref = (token: string) => {
   const name = encodeURIComponent(token.slice(1).toLowerCase());
   return token.startsWith('@')
-    ? `/people/${name}`
-    : `/tags/${name}`;
+    ? `/people?name=${name}`
+    : `/tags?name=${name}`;
 };
 
 const getSegments = (text: string): TextSegment[] => {

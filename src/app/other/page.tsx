@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useRouter } from 'next/navigation';
-import { addDays, differenceInCalendarDays, format, parseISO, startOfYear } from 'date-fns';
+import { addDays, differenceInCalendarDays, format, parseISO, startOfYear, subMonths } from 'date-fns';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import type { Entry, Idea, Note, Wisdom, WisdomType } from '@/types';
@@ -33,6 +33,10 @@ import {
   faCheck,
   faCalendar,
   faCheckCircle,
+  faTree,
+  faCopy,
+  faShareNodes,
+  faPlay,
 } from '@fortawesome/free-solid-svg-icons';
 
 type ModuleTab = 'dreams' | 'highlights' | 'tags' | 'people' | 'notes' | 'wisdom' | 'ideas';
@@ -42,6 +46,14 @@ type TabConfig = { id: ModuleTab; label: string; icon: IconDefinition; count: nu
 const moduleTabs: ModuleTab[] = ['dreams', 'highlights', 'tags', 'people', 'notes', 'wisdom', 'ideas'];
 const dreamColor = '#FF9933';
 const dreamSoftColor = '#FFF4E6';
+
+const SHARE_GRADIENTS = [
+  { name: 'Aurora Sunset', class: 'bg-gradient-to-tr from-[#9B51E0] via-[#E040FB] to-[#FF4081]', from: '#9B51E0', to: '#FF4081' },
+  { name: 'Cosmic Nebula', class: 'bg-gradient-to-tr from-[#00c6ff] to-[#0072ff]', from: '#00c6ff', to: '#0072ff' },
+  { name: 'Vibrant Sunshine', class: 'bg-gradient-to-tr from-[#F2994A] via-[#F2C94C] to-[#FF5E62]', from: '#F2994A', to: '#FF5E62' },
+  { name: 'Forest Emerald', class: 'bg-gradient-to-tr from-[#11998e] to-[#38ef7d]', from: '#11998e', to: '#38ef7d' },
+  { name: 'Midnight Mystique', class: 'bg-gradient-to-tr from-[#0F2027] via-[#203A43] to-[#2C5364]', from: '#0F2027', to: '#2C5364' },
+];
 
 const wisdomTypeMeta: Record<WisdomType, { label: string; icon: IconDefinition; color: string; bg: string }> = {
   thought: { label: 'thoughts', icon: faBolt, color: '#8B00D4', bg: '#F0D6FF' },
@@ -78,7 +90,7 @@ const renderParsedWisdom = (text: string, isQuote: boolean = false) => {
         }
         if (trimmed.startsWith('--')) {
           return (
-            <span key={idx} className="block mt-1 text-xs text-[#6F7476] font-normal leading-normal select-text">
+            <span key={idx} className="block mt-1 text-[10px] text-[#A3A7A8] font-light leading-normal select-text">
               {line}
             </span>
           );
@@ -92,6 +104,33 @@ const renderParsedWisdom = (text: string, isQuote: boolean = false) => {
       })}
     </span>
   );
+};
+
+const parseWisdom = (fullContent: string) => {
+  const lines = fullContent.split('\n');
+  let author = '';
+  let source = '';
+  let context = '';
+  const contentLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (trimmed.startsWith('--')) {
+      author = trimmed.substring(2).trim();
+    } else if (trimmed.toLowerCase().startsWith('source :') || trimmed.toLowerCase().startsWith('source:')) {
+      const colonIdx = line.indexOf(':');
+      source = line.substring(colonIdx + 1).trim();
+    } else if (trimmed.toLowerCase().startsWith('context :') || trimmed.toLowerCase().startsWith('context:')) {
+      const colonIdx = line.indexOf(':');
+      context = line.substring(colonIdx + 1).trim();
+    } else {
+      contentLines.push(line);
+    }
+  }
+
+  const content = contentLines.join('\n').trim();
+  return { content, author, source, context };
 };
 
 const dateKeyFromDate = (date: Date) => format(date, 'yyyy-MM-dd');
@@ -113,8 +152,14 @@ const getScopeRange = (dateKeys: string[], scope: CollectionScope, selectedYear:
   }
 
   const sortedDates = dateKeys.map(dateKey => parseISO(dateKey)).sort((a, b) => a.getTime() - b.getTime());
+  let start = sortedDates[0] || subMonths(now, 3);
+  const minStartDate = subMonths(now, 3);
+  if (start.getTime() > minStartDate.getTime()) {
+    start = minStartDate;
+  }
+
   return {
-    start: sortedDates[0] || startOfYear(now),
+    start,
     end: now,
   };
 };
@@ -156,6 +201,20 @@ export default function OtherPage() {
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editWisdomType, setEditWisdomType] = useState<WisdomType>('thought');
+  const [editIdeaStatus, setEditIdeaStatus] = useState<'cooking' | 'grinding' | 'slayed'>('cooking');
+  const [editWisdomAuthor, setEditWisdomAuthor] = useState('');
+  const [editWisdomSource, setEditWisdomSource] = useState('');
+  const [editWisdomContext, setEditWisdomContext] = useState('');
+  const [shareItem, setShareItem] = useState<{
+    type: 'wisdom' | 'note' | 'idea';
+    title?: string;
+    content: string;
+    date: Date | string;
+    wisdomType?: WisdomType;
+    status?: 'cooking' | 'grinding' | 'slayed';
+  } | null>(null);
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [selectedGradientIndex, setSelectedGradientIndex] = useState(0);
   const [wisdomFilter, setWisdomFilter] = useState<WisdomType | 'all'>('all');
   const [dreamSearchOpen, setDreamSearchOpen] = useState(false);
   const [dreamSearch, setDreamSearch] = useState('');
@@ -164,6 +223,9 @@ export default function OtherPage() {
   const [showAddWisdom, setShowAddWisdom] = useState(false);
   const [newWisdomType, setNewWisdomType] = useState<WisdomType>('thought');
   const [newWisdomContent, setNewWisdomContent] = useState('');
+  const [newWisdomAuthor, setNewWisdomAuthor] = useState('');
+  const [newWisdomSource, setNewWisdomSource] = useState('');
+  const [newWisdomContext, setNewWisdomContext] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'dream' | 'note' | 'wisdom' | 'idea'; id: string; entry?: Entry } | null>(null);
   const [tagsSubTab, setTagsSubTab] = useState<'all' | 'groups'>('all');
   const [peopleSubTab, setPeopleSubTab] = useState<'all' | 'groups'>('all');
@@ -292,11 +354,11 @@ export default function OtherPage() {
 
   const collectionTabs: TabConfig[] = [
     { id: 'dreams', label: 'Dreams', icon: faMoon, count: dreamEntries.length },
-    { id: 'highlights', label: 'Highlights', icon: faStar, count: scopedHighlights.length },
+    { id: 'highlights', label: 'Stars', icon: faStar, count: scopedHighlights.length },
     { id: 'tags', label: 'Tags', icon: faTag, count: scopedTags.length },
     { id: 'people', label: 'People', icon: faAt, count: scopedPeople.length },
     { id: 'notes', label: 'Notes', icon: faBook, count: scopedNotes.length },
-    { id: 'wisdom', label: 'Wisdom', icon: faWandMagicSparkles, count: scopedWisdoms.length },
+    { id: 'wisdom', label: 'Wisdom', icon: faTree, count: scopedWisdoms.length },
     { id: 'ideas', label: 'Ideas', icon: faLightbulb, count: scopedIdeas.length },
   ];
 
@@ -305,6 +367,9 @@ export default function OtherPage() {
     setEditTitle('');
     setEditContent('');
     setEditWisdomType('thought');
+    setEditWisdomAuthor('');
+    setEditWisdomSource('');
+    setEditWisdomContext('');
   };
 
   const startEditDream = (entry: Entry) => {
@@ -322,13 +387,18 @@ export default function OtherPage() {
   const startEditWisdom = (wisdom: Wisdom) => {
     setEditingItem({ type: 'wisdom', id: wisdom.id });
     setEditWisdomType(wisdom.type);
-    setEditContent(wisdom.content);
+    const parsed = parseWisdom(wisdom.content);
+    setEditContent(parsed.content);
+    setEditWisdomAuthor(parsed.author);
+    setEditWisdomSource(parsed.source);
+    setEditWisdomContext(parsed.context);
   };
 
   const startEditIdea = (idea: Idea) => {
     setEditingItem({ type: 'ideas', id: idea.id });
     setEditTitle('');
     setEditContent(idea.content);
+    setEditIdeaStatus(idea.status || 'cooking');
   };
 
   const saveCollectionEdit = async () => {
@@ -347,11 +417,29 @@ export default function OtherPage() {
     }
 
     if (editingItem.type === 'wisdom') {
-      await updateWisdom(editingItem.id, { type: editWisdomType, content });
+      let finalContent = content;
+      if (editWisdomType === 'quote') {
+        const author = editWisdomAuthor.trim();
+        finalContent = content + (author ? `\n\n-- ${author}` : '');
+      } else if (editWisdomType === 'fact') {
+        const source = editWisdomSource.trim();
+        finalContent = content + (source ? `\n\nsource : ${source}` : '');
+      } else if (editWisdomType === 'excerpt') {
+        const author = editWisdomAuthor.trim();
+        const source = editWisdomSource.trim();
+        const metaParts = [];
+        if (author) metaParts.push(`-- ${author}`);
+        if (source) metaParts.push(`source : ${source}`);
+        finalContent = content + (metaParts.length > 0 ? `\n\n${metaParts.join('\n')}` : '');
+      } else if (editWisdomType === 'lesson') {
+        const context = editWisdomContext.trim();
+        finalContent = content + (context ? `\n\ncontext : ${context}` : '');
+      }
+      await updateWisdom(editingItem.id, { type: editWisdomType, content: finalContent });
     }
 
     if (editingItem.type === 'ideas') {
-      await updateIdea(editingItem.id, { content });
+      await updateIdea(editingItem.id, { content, status: editIdeaStatus });
     }
 
     showSaved();
@@ -387,8 +475,31 @@ export default function OtherPage() {
   const handleAddWisdomFromCollection = async () => {
     const content = newWisdomContent.trim();
     if (!content) return;
-    await addWisdom(newWisdomType, content);
+    
+    let finalContent = content;
+    if (newWisdomType === 'quote') {
+      const author = newWisdomAuthor.trim();
+      finalContent = content + (author ? `\n\n-- ${author}` : '');
+    } else if (newWisdomType === 'fact') {
+      const source = newWisdomSource.trim();
+      finalContent = content + (source ? `\n\nsource : ${source}` : '');
+    } else if (newWisdomType === 'excerpt') {
+      const author = newWisdomAuthor.trim();
+      const source = newWisdomSource.trim();
+      const metaParts = [];
+      if (author) metaParts.push(`-- ${author}`);
+      if (source) metaParts.push(`source : ${source}`);
+      finalContent = content + (metaParts.length > 0 ? `\n\n${metaParts.join('\n')}` : '');
+    } else if (newWisdomType === 'lesson') {
+      const context = newWisdomContext.trim();
+      finalContent = content + (context ? `\n\ncontext : ${context}` : '');
+    }
+    
+    await addWisdom(newWisdomType, finalContent);
     setNewWisdomContent('');
+    setNewWisdomAuthor('');
+    setNewWisdomSource('');
+    setNewWisdomContext('');
     setNewWisdomType('thought');
     setShowAddWisdom(false);
   };
@@ -705,7 +816,7 @@ export default function OtherPage() {
                   return (
                     <button
                       key={tag.id}
-                      onClick={() => router.push(`/tags/${encodeURIComponent(tag.name.toLowerCase())}`)}
+                      onClick={() => router.push(`/tags?name=${encodeURIComponent(tag.name.toLowerCase())}`)}
                       className={`flex w-full items-center justify-between rounded-xl p-4 text-left transition-colors ${isFocused ? 'bg-[#EAD8FF] ring-2 ring-[#C494FF]/40' : 'bg-white border border-[#CCD0CF] shadow-sm hover:border-[#C494FF]/50'}`}
                     >
                       <div className="flex items-center gap-2">
@@ -770,7 +881,7 @@ export default function OtherPage() {
                   return (
                     <button
                       key={p.id}
-                      onClick={() => router.push(`/people/${encodeURIComponent(p.name.toLowerCase())}`)}
+                      onClick={() => router.push(`/people?name=${encodeURIComponent(p.name.toLowerCase())}`)}
                       className={`flex w-full items-center justify-between rounded-xl p-4 text-left transition-colors ${isFocused ? 'bg-[#FFEEAA] ring-2 ring-[#FFCC33]/40' : 'bg-white border border-[#CCD0CF] shadow-sm hover:border-[#FFCC33]/60'}`}
                     >
                       <div className="flex items-center gap-2">
@@ -828,9 +939,16 @@ export default function OtherPage() {
                   </button>
                   {activeMenu === `note:${note.id}` && (
                     <div
-                      className="absolute right-0 top-9 z-30 min-w-[120px] rounded-2xl bg-white py-1.5 shadow-xl ring-1 ring-[#EEF0EF]"
+                      className="absolute right-0 top-9 z-30 min-w-[140px] rounded-2xl bg-white py-1.5 shadow-xl ring-1 ring-[#EEF0EF]"
                       onClick={e => e.stopPropagation()}
                     >
+                      <button
+                        onClick={() => { closeMenu(); setSelectedGradientIndex(3); setShareItem({ type: 'note', title: note.title, content: note.content, date: note.createdAt }); }}
+                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-[#2F3331] hover:bg-[#F7F8F7] transition-colors"
+                      >
+                        <FontAwesomeIcon icon={faShareNodes} className="w-3.5 h-3.5 text-[#6F7476]" />
+                        Share Card
+                      </button>
                       <button
                         onClick={() => { closeMenu(); startEditNote(note); }}
                         className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-[#2F3331] hover:bg-[#F7F8F7] transition-colors"
@@ -968,6 +1086,35 @@ export default function OtherPage() {
                   className="w-full resize-none bg-transparent py-1 text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none"
                   autoFocus
                 />
+                <div className="mt-2 space-y-2">
+                  {(newWisdomType === 'quote' || newWisdomType === 'excerpt') && (
+                    <input
+                      type="text"
+                      value={newWisdomAuthor}
+                      onChange={(e) => setNewWisdomAuthor(e.target.value)}
+                      placeholder="Author..."
+                      className="w-full rounded-xl border border-[#CCD0CF] bg-white px-4 py-2 text-sm text-[#2F3331] placeholder-[#A3A7A8] focus:border-[#00DC7D] focus:outline-none"
+                    />
+                  )}
+                  {(newWisdomType === 'fact' || newWisdomType === 'excerpt') && (
+                    <input
+                      type="text"
+                      value={newWisdomSource}
+                      onChange={(e) => setNewWisdomSource(e.target.value)}
+                      placeholder="Source..."
+                      className="w-full rounded-xl border border-[#CCD0CF] bg-white px-4 py-2 text-sm text-[#2F3331] placeholder-[#A3A7A8] focus:border-[#00DC7D] focus:outline-none"
+                    />
+                  )}
+                  {newWisdomType === 'lesson' && (
+                    <input
+                      type="text"
+                      value={newWisdomContext}
+                      onChange={(e) => setNewWisdomContext(e.target.value)}
+                      placeholder="Context..."
+                      className="w-full rounded-xl border border-[#CCD0CF] bg-white px-4 py-2 text-sm text-[#2F3331] placeholder-[#A3A7A8] focus:border-[#00DC7D] focus:outline-none"
+                    />
+                  )}
+                </div>
               </div>
             )}
 
@@ -1013,13 +1160,9 @@ export default function OtherPage() {
                 const meta = wisdomTypeMeta[w.type];
                 const isQuote = w.type === 'quote';
                 const isFocused = focusedItem === w.id;
-                const metadata = w.type === 'fact'
-                  ? `Source: ${w.linkedEntryId || 'unknown'}`
-                  : w.type === 'lesson'
-                    ? `Context: ${w.linkedEntryId || 'unknown'}`
-                    : w.type === 'excerpt'
-                      ? `Source: ${w.linkedEntryId || 'unknown'}`
-                      : '';
+                const linkedEntryDate = w.linkedEntryId
+                  ? `Linked entry: ${w.linkedEntryId}`
+                  : '';
 
                 return (
                   <div key={w.id} className={`flex items-start gap-3 rounded-lg transition-colors ${isFocused ? 'bg-[#F7EFFF] p-3 ring-2 ring-[#C494FF]/30' : ''}`}>
@@ -1046,9 +1189,16 @@ export default function OtherPage() {
                         </button>
                         {activeMenu === `wisdom:${w.id}` && (
                           <div
-                            className="absolute right-0 top-9 z-30 min-w-[120px] rounded-2xl bg-white py-1.5 shadow-xl ring-1 ring-[#EEF0EF]"
+                            className="absolute right-0 top-9 z-30 min-w-[140px] rounded-2xl bg-white py-1.5 shadow-xl ring-1 ring-[#EEF0EF]"
                             onClick={e => e.stopPropagation()}
                           >
+                            <button
+                              onClick={() => { closeMenu(); setSelectedGradientIndex(0); setShareItem({ type: 'wisdom', content: w.content, date: w.createdAt, wisdomType: w.type }); }}
+                              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-[#2F3331] hover:bg-[#F7F8F7] transition-colors"
+                            >
+                              <FontAwesomeIcon icon={faShareNodes} className="w-3.5 h-3.5 text-[#6F7476]" />
+                              Share Card
+                            </button>
                             <button
                               onClick={() => { closeMenu(); startEditWisdom(w); }}
                               className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-[#2F3331] hover:bg-[#F7F8F7] transition-colors"
@@ -1087,8 +1237,38 @@ export default function OtherPage() {
                             onChange={(e) => setEditContent(e.target.value)}
                             rows={4}
                             className="w-full resize-none border-t border-dashed border-[#D7DBDA] bg-transparent py-3 text-[#2F3331] focus:outline-none"
+                            placeholder="Wisdom content..."
                           />
-                          <div className="flex gap-2">
+                          <div className="mt-2 space-y-2">
+                            {(editWisdomType === 'quote' || editWisdomType === 'excerpt') && (
+                              <input
+                                type="text"
+                                value={editWisdomAuthor}
+                                onChange={(e) => setEditWisdomAuthor(e.target.value)}
+                                placeholder="Author..."
+                                className="w-full rounded-xl border border-[#CCD0CF] bg-white px-4 py-2 text-sm text-[#2F3331] placeholder-[#A3A7A8] focus:border-[#00DC7D] focus:outline-none"
+                              />
+                            )}
+                            {(editWisdomType === 'fact' || editWisdomType === 'excerpt') && (
+                              <input
+                                type="text"
+                                value={editWisdomSource}
+                                onChange={(e) => setEditWisdomSource(e.target.value)}
+                                placeholder="Source..."
+                                className="w-full rounded-xl border border-[#CCD0CF] bg-white px-4 py-2 text-sm text-[#2F3331] placeholder-[#A3A7A8] focus:border-[#00DC7D] focus:outline-none"
+                              />
+                            )}
+                            {editWisdomType === 'lesson' && (
+                              <input
+                                type="text"
+                                value={editWisdomContext}
+                                onChange={(e) => setEditWisdomContext(e.target.value)}
+                                placeholder="Context..."
+                                className="w-full rounded-xl border border-[#CCD0CF] bg-white px-4 py-2 text-sm text-[#2F3331] placeholder-[#A3A7A8] focus:border-[#00DC7D] focus:outline-none"
+                              />
+                            )}
+                          </div>
+                          <div className="flex gap-2 mt-3">
                             <button onClick={stopEditing} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F3] text-[#6F7476] hover:bg-[#E8E9EA] hover:text-[#2F3331]" title="cancel">
                               <FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />
                             </button>
@@ -1102,8 +1282,8 @@ export default function OtherPage() {
                           <div className={`whitespace-pre-line leading-6 ${isQuote ? 'italic text-[#4D5652]' : 'text-[#2F3331]'} font-light`}>
                             {renderParsedWisdom(w.content, isQuote)}
                           </div>
-                          {metadata && (
-                            <p className="mt-1 text-xs text-[#A3A7A8]">{metadata}</p>
+                          {linkedEntryDate && (
+                            <p className="mt-1 text-xs text-[#A3A7A8]">{linkedEntryDate}</p>
                           )}
                           <p className="mt-1 text-xs text-[#A3A7A8]">{format(w.createdAt, 'MMM d, yyyy')}</p>
                         </>
@@ -1148,9 +1328,16 @@ export default function OtherPage() {
                   </button>
                   {activeMenu === `idea:${idea.id}` && (
                     <div
-                      className="absolute right-0 top-9 z-30 min-w-[120px] rounded-2xl bg-white py-1.5 shadow-xl ring-1 ring-[#EEF0EF]"
+                      className="absolute right-0 top-9 z-30 min-w-[140px] rounded-2xl bg-white py-1.5 shadow-xl ring-1 ring-[#EEF0EF]"
                       onClick={e => e.stopPropagation()}
                     >
+                      <button
+                        onClick={() => { closeMenu(); setSelectedGradientIndex(2); setShareItem({ type: 'idea', content: idea.content, date: idea.createdAt, status: idea.status }); }}
+                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-[#2F3331] hover:bg-[#F7F8F7] transition-colors"
+                      >
+                        <FontAwesomeIcon icon={faShareNodes} className="w-3.5 h-3.5 text-[#6F7476]" />
+                        Share Card
+                      </button>
                       <button
                         onClick={() => { closeMenu(); startEditIdea(idea); }}
                         className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-[#2F3331] hover:bg-[#F7F8F7] transition-colors"
@@ -1181,6 +1368,27 @@ export default function OtherPage() {
                         </button>
                       </div>
                     </div>
+                    {/* Status selector */}
+                    <div className="mb-3 flex gap-2">
+                      {(['cooking', 'grinding', 'slayed'] as const).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setEditIdeaStatus(s)}
+                          className={`rounded-full px-3 py-1 text-xs font-bold transition-all border ${
+                            editIdeaStatus === s
+                              ? s === 'cooking' ? 'bg-[#FFE4B5] text-[#B45309] border-[#B45309]/30 scale-105 shadow-sm' :
+                                s === 'grinding' ? 'bg-[#D6E4FF] text-[#1A56C4] border-[#1A56C4]/30 scale-105 shadow-sm' :
+                                'bg-[#C8F7E4] text-[#00875A] border-[#00875A]/30 scale-105 shadow-sm'
+                              : 'bg-white text-[#6F7476] border-[#EEF0EF] hover:bg-[#F2F2F3]'
+                          }`}
+                        >
+                          {s === 'cooking' ? 'cooking 🍳' :
+                           s === 'grinding' ? 'grinding ⚡️' :
+                           'slayed 💅'}
+                        </button>
+                      ))}
+                    </div>
                     <textarea
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
@@ -1190,9 +1398,24 @@ export default function OtherPage() {
                     />
                   </div>
                 ) : (
-                  <p className="text-[#2F3331] font-light">{idea.content}</p>
+                  <>
+                    <p className="text-[#2F3331] font-light">{idea.content}</p>
+                  </>
                 )}
-                <p className="text-xs text-[#A3A7A8]">{format(idea.createdAt, 'MMM d, yyyy')}</p>
+                <div className="mt-2.5 flex items-center justify-between">
+                  <p className="text-xs text-[#A3A7A8]">{format(idea.createdAt, 'MMM d, yyyy')}</p>
+                  {idea.status && (
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                      idea.status === 'cooking' ? 'bg-[#FFE4B5]/40 text-[#B45309]' :
+                      idea.status === 'grinding' ? 'bg-[#D6E4FF]/40 text-[#1A56C4]' :
+                      'bg-[#C8F7E4]/40 text-[#00875A]'
+                    }`}>
+                      {idea.status === 'cooking' ? 'cooking 🍳' :
+                       idea.status === 'grinding' ? 'grinding ⚡️' :
+                       'slayed 💅'}
+                    </span>
+                  )}
+                </div>
               </div>
               );
             })}
@@ -1214,6 +1437,161 @@ export default function OtherPage() {
         title={`Delete ${confirmDelete?.type || 'item'}`}
         message="Are you sure you want to delete this? This action cannot be undone."
       />
+
+      {shareItem && (
+        <div className="fixed inset-0 bg-black/85 sm:bg-black/75 backdrop-blur-md z-[100] flex flex-col items-center justify-center sm:p-4 animate-in fade-in duration-200">
+          {/* Vertical 9:16 Card */}
+          <div
+            className={`w-full h-full sm:h-auto sm:aspect-[9/16] sm:max-w-[420px] rounded-none sm:rounded-[32px] p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden text-white border-0 sm:border sm:border-white/15 select-none animate-gradient bg-[length:400%_400%] ${
+              SHARE_GRADIENTS[selectedGradientIndex].class
+            }`}
+          >
+            {/* Top controls: Left is Gradient selector, Right is Close button */}
+            <div className="absolute top-5 left-5 right-5 flex items-center justify-between z-20">
+              {/* Gradient Dots Picker */}
+              <div className="flex gap-1.5 bg-black/20 backdrop-blur-md px-2.5 py-1.5 rounded-full ring-1 ring-white/10">
+                {SHARE_GRADIENTS.map((grad, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setSelectedGradientIndex(idx)}
+                    className={`w-4 h-4 rounded-full border transition-all hover:scale-110 active:scale-95 ${
+                      selectedGradientIndex === idx ? 'border-white scale-105 shadow' : 'border-transparent opacity-60 hover:opacity-100'
+                    }`}
+                    style={{
+                      background: `linear-gradient(135deg, ${grad.from}, ${grad.to})`
+                    }}
+                    title={grad.name}
+                    aria-label={`Select ${grad.name} gradient`}
+                  />
+                ))}
+              </div>
+
+              {/* Close Button */}
+              <button
+                onClick={() => { setShareItem(null); setCopySuccess(false); }}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 hover:bg-white/25 text-white transition-colors"
+                title="Close"
+                aria-label="Close"
+              >
+                <FontAwesomeIcon icon={faXmark} className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Top Header */}
+            <div className="flex items-center justify-between opacity-85 mt-10 sm:mt-12">
+              <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.2em] uppercase font-sans">
+                <FontAwesomeIcon icon={faPlay} className="h-2 w-2 text-white rotate-270" style={{ transform: 'rotate(-90deg)' }} />
+                ASA JOURNEY
+              </span>
+              <span className="text-[10px] font-bold tracking-wider font-sans">
+                {format(typeof shareItem.date === 'string' ? parseISO(shareItem.date) : shareItem.date, 'MMM d, yyyy')}
+              </span>
+            </div>
+
+            {/* Middle Content */}
+            <div className="flex-1 flex flex-col justify-center relative my-6">
+              {/* Quotation Mark */}
+              <span className="font-serif text-8xl opacity-20 absolute -top-10 -left-4 select-none leading-none">“</span>
+              
+              {/* Main Content Text */}
+              <div className="font-serif italic text-xl sm:text-2xl leading-relaxed font-semibold tracking-wide text-white/95 relative z-10 select-text overflow-y-auto max-h-[280px] sm:max-h-[300px] pr-2 scrollbar-thin scrollbar-thumb-white/25">
+                {shareItem.type === 'note' && shareItem.title && (
+                  <h4 className="font-sans not-italic text-sm uppercase tracking-wider font-bold mb-3 text-white/80">
+                    {shareItem.title}
+                  </h4>
+                )}
+                {shareItem.type === 'wisdom' ? (
+                  <>
+                    <p className="leading-relaxed whitespace-pre-wrap">{parseWisdom(shareItem.content).content}</p>
+                    {parseWisdom(shareItem.content).author && (
+                      <p className="mt-4 text-right text-xs font-sans tracking-wide not-italic text-white/70">
+                        — {parseWisdom(shareItem.content).author}
+                      </p>
+                    )}
+                    {parseWisdom(shareItem.content).source && (
+                      <p className="mt-1 text-right text-[10px] font-sans tracking-wide not-italic text-white/50">
+                        source: {parseWisdom(shareItem.content).source}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="leading-relaxed whitespace-pre-wrap">{shareItem.content}</p>
+                )}
+              </div>
+
+              {/* Status Badge for Ideas */}
+              {shareItem.type === 'idea' && shareItem.status && (
+                <div className="mt-4 z-10">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-0.5 text-[10px] font-bold tracking-wide uppercase backdrop-blur-sm">
+                    {shareItem.status === 'cooking' ? 'cooking 🍳' :
+                     shareItem.status === 'grinding' ? 'grinding ⚡️' :
+                     'slayed 💅'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Footer & Action Panel */}
+            <div className="flex flex-col gap-4 border-t border-white/10 pt-4">
+              <div className="flex items-end justify-between opacity-80">
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-widest font-sans text-white/60">type</p>
+                  <p className="text-xs font-semibold font-sans mt-0.5">
+                    {shareItem.type === 'wisdom' ? `wisdom (${shareItem.wisdomType || 'gem'})` : shareItem.type}
+                  </p>
+                </div>
+                <span className="text-[10px] font-medium font-serif italic text-white/60">
+                  — reflection
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      let shareText = '';
+                      if (shareItem.type === 'note' && shareItem.title) {
+                        shareText += `**${shareItem.title}**\n`;
+                      }
+                      
+                      if (shareItem.type === 'wisdom') {
+                        const parsed = parseWisdom(shareItem.content);
+                        shareText += `"${parsed.content}"`;
+                        if (parsed.author) {
+                          shareText += `\n-- ${parsed.author}`;
+                        }
+                        if (parsed.source) {
+                          shareText += `\nsource: ${parsed.source}`;
+                        }
+                        if (parsed.context) {
+                          shareText += `\ncontext: ${parsed.context}`;
+                        }
+                      } else {
+                        shareText += `"${shareItem.content}"`;
+                      }
+                      
+                      await navigator.clipboard.writeText(shareText);
+                      setCopySuccess(true);
+                      setTimeout(() => setCopySuccess(false), 2000);
+                    } catch (err) {
+                      console.error('Failed to copy', err);
+                    }
+                  }}
+                  className="w-full inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-xs font-bold text-[#2F3331] shadow-md transition-transform active:scale-95 cursor-pointer hover:bg-[#FAFAFA]"
+                >
+                  <FontAwesomeIcon icon={faCopy} className="h-3.5 w-3.5" />
+                  <span>{copySuccess ? 'Copied! ✓' : 'Copy Text'}</span>
+                </button>
+                <p className="text-[10px] text-white/60 font-medium">
+                  📸 Screenshot this to share on social!
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

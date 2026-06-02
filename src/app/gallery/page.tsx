@@ -232,7 +232,7 @@ export default function GalleryPage() {
   const currentMediaItem = lightboxIndex !== null ? filteredMedia[lightboxIndex] : null;
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] pb-28 font-sans">
+    <div className="min-h-screen bg-background pb-28 font-sans">
       <div className="max-w-[600px] mx-auto px-6 pt-8 pb-6">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
@@ -351,7 +351,7 @@ export default function GalleryPage() {
           <div className="space-y-8">
             {Object.entries(groupedMedia).map(([monthYear, items]) => (
               <div key={monthYear} className="space-y-3">
-                <h2 className="sticky top-0 bg-[#FAFAFA]/95 py-2 z-10 text-xs font-bold uppercase tracking-wider text-[#6F7476] font-sans border-b border-[#E4E7E6]">
+                <h2 className="sticky top-0 bg-background py-2 z-10 text-xs font-bold uppercase tracking-wider text-[#6F7476] font-sans border-b border-border">
                   {monthYear}
                 </h2>
                 <div className="grid grid-cols-3 gap-2">

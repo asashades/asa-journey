@@ -35,13 +35,15 @@ import {
   faListCheck,
   faCalendar,
   faClock,
+  faTree,
 } from '@fortawesome/free-solid-svg-icons';
 import { playGoalJingle } from '@/lib/audio';
 import ImageUpload from '@/components/ui/ImageUpload';
 import { HighlightedText } from '@/components/ui/HighlightedText';
 import { MentionTextarea } from '@/components/ui/MentionTextarea';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
-import { getEntryNumberForDate } from '@/lib/entryUtils';
+import SuggestedTagChips from '@/components/ai/SuggestedTagChips';
+import { getEntryNumberForDate, sortBullets } from '@/lib/entryUtils';
 import { Bullet, Entry, LocationItem, MediaItem } from '@/types';
 
 type FormatDateInput = Date | string | { toDate: () => Date } | undefined;
@@ -83,7 +85,7 @@ const renderParsedWisdom = (text: string, isQuote: boolean = false, tagMetaMap?:
         }
         if (trimmed.startsWith('--')) {
           return (
-            <span key={idx} className="block mt-1 text-xs text-[#6F7476] font-normal leading-normal select-text">
+            <span key={idx} className="block mt-1 text-[10px] text-[#A3A7A8] font-light leading-normal select-text">
               {line}
             </span>
           );
@@ -136,13 +138,22 @@ const BulletItem = ({
   onUpdateText: (id: string, text: string) => void;
   onUpdateStyle: (id: string, style: 'bullet' | 'star' | 'checklist') => void;
 }) => {
-  const { tags } = useData();
+  const { tags, wisdoms, notes, ideas, currentDate } = useData();
   const isCompleted = bullet.isCompleted;
-  const sourceMeta = bullet.source === 'wisdom'
+
+  const isSourceValid = !bullet.source || (
+    bullet.source === 'wisdom' ? wisdoms.some(w => w.id === bullet.sourceId || (w.linkedEntryId === currentDate && w.content === bullet.text)) :
+    bullet.source === 'note' ? notes.some(n => n.id === bullet.sourceId || ((n.linkedEntryId === currentDate || n.linkedDate === currentDate) && (n.content === bullet.text || (n.title && `${n.title}: ${n.content}` === bullet.text)))) :
+    bullet.source === 'idea' ? ideas.some(i => i.id === bullet.sourceId || (i.linkedEntries?.includes(currentDate) && i.content === bullet.text)) :
+    false
+  );
+  const hasValidSource = bullet.source && isSourceValid;
+
+  const sourceMeta = hasValidSource && bullet.source === 'wisdom'
     ? { label: bullet.sourceType || 'wisdom', text: 'text-[#8B00D4]', badge: 'bg-[#F0D6FF] text-[#8B00D4]', shell: 'border-[#C494FF]/30 bg-[#F8F0FF]' }
-    : bullet.source === 'note'
+    : hasValidSource && bullet.source === 'note'
       ? { label: 'note', text: 'text-[#00875A]', badge: 'bg-[#C8F7E4] text-[#00875A]', shell: 'border-[#00DC7D]/25 bg-[#F2FFF8]' }
-      : bullet.source === 'idea'
+      : hasValidSource && bullet.source === 'idea'
         ? { label: 'idea', text: 'text-[#B45309]', badge: 'bg-[#FFE4B5] text-[#B45309]', shell: 'border-[#FF9933]/30 bg-[#FFF8ED]' }
         : null;
 
@@ -234,7 +245,7 @@ const BulletItem = ({
             />
           ) : (
             <div className={`cursor-pointer leading-relaxed ${sourceMeta ? sourceMeta.text : 'text-[#2F3331]'} ${isCompleted ? 'line-through text-[#A3A7A8]' : ''} ${bullet.isHighlight ? 'font-semibold' : ''}`}>
-              {bullet.source === 'wisdom' ? (
+              {hasValidSource && bullet.source === 'wisdom' ? (
                 renderParsedWisdom(bullet.text, bullet.sourceType === 'quote', tagMetaMap)
               ) : (
                 <HighlightedText text={bullet.text} interactive tagMeta={tagMetaMap} />
@@ -636,14 +647,26 @@ export default function WritePage() {
     };
   }, []);
 
+  // Synchronize URL date parameter with currentDate state on initial mount
   useEffect(() => {
     const dateParam = new URLSearchParams(window.location.search).get('date');
-    if (!dateParam || dateParam === currentDate) return;
-    const parsedDate = toLocalDate(dateParam);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateParam) && isValid(parsedDate)) {
-      setCurrentDate(dateParam);
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      const parsedDate = toLocalDate(dateParam);
+      if (isValid(parsedDate) && dateParam !== currentDate) {
+        setCurrentDate(dateParam);
+      }
     }
-  }, [currentDate, setCurrentDate]);
+  }, []); // Run strictly once on mount
+
+  // Sync state to URL parameter when currentDate changes
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const dateParam = url.searchParams.get('date');
+    if (currentDate && dateParam !== currentDate) {
+      url.searchParams.set('date', currentDate);
+      window.history.replaceState(null, '', url.pathname + url.search);
+    }
+  }, [currentDate]);
 
   const selectedDate = useMemo(() => {
     const parsedDate = toLocalDate(currentDate);
@@ -1222,60 +1245,60 @@ export default function WritePage() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setShowFabActions(current => !current)}
-                className={`inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#00DC7D] text-white shadow-sm transition-all hover:bg-[#00B866] ${showFabActions ? 'rotate-45' : ''}`}
+                className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#00DC7D] text-white shadow-sm fab-trigger-transition hover:bg-[#00B866] active:scale-95 ${showFabActions ? 'rotate-135' : ''}`}
                 title="add"
               >
                 <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
               </button>
 
-              {showFabActions && (
-                <>
-                  <button
-                    onClick={() => openInlinePanel('wisdom')}
-                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${activeInlinePanel === 'wisdom' ? 'bg-[#F0D6FF] text-[#8B00D4]' : 'bg-[#F2F2F3] text-[#2F3331] hover:bg-[#E8E9EA]'}`}
-                    title="add wisdom"
-                  >
-                    <FontAwesomeIcon icon={faWandMagicSparkles} className="w-4 h-4" />
-                    wisdom
-                  </button>
-                  <button
-                    onClick={() => openInlinePanel('note')}
-                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${activeInlinePanel === 'note' ? 'bg-[#C8F7E4] text-[#00875A]' : 'bg-[#F2F2F3] text-[#2F3331] hover:bg-[#E8E9EA]'}`}
-                    title="add note"
-                  >
-                    <FontAwesomeIcon icon={faBook} className="w-4 h-4" />
-                    note
-                  </button>
-                  <button
-                    onClick={() => openInlinePanel('idea')}
-                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${activeInlinePanel === 'idea' ? 'bg-[#FFE4B5] text-[#B45309]' : 'bg-[#F2F2F3] text-[#2F3331] hover:bg-[#E8E9EA]'}`}
-                    title="add idea"
-                  >
-                    <FontAwesomeIcon icon={faLightbulb} className="w-4 h-4" />
-                    idea
-                  </button>
-                  <button
-                    onClick={() => openInlinePanel('image')}
-                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${activeInlinePanel === 'image' ? 'bg-[#D6E4FF] text-[#1A56C4]' : 'bg-[#F2F2F3] text-[#2F3331] hover:bg-[#E8E9EA]'}`}
-                    title="add image"
-                  >
-                    <FontAwesomeIcon icon={faImage} className="w-4 h-4" />
-                    image
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowFabActions(false);
-                      handleAddLocation();
-                    }}
-                    disabled={isLocating}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[#F2F2F3] px-3 py-2 text-sm font-semibold text-[#2F3331] transition-colors hover:bg-[#E8E9EA] disabled:cursor-wait disabled:text-[#A3A7A8]"
-                    title="add current location"
-                  >
-                    <FontAwesomeIcon icon={isLocating ? faSpinner : faLocationDot} className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
-                    location
-                  </button>
-                </>
-              )}
+              <div className={`flex flex-wrap sm:flex-nowrap items-center gap-2 overflow-hidden whitespace-normal sm:whitespace-nowrap fab-actions-transition origin-left ${
+                showFabActions ? 'max-w-[500px] max-h-[200px] opacity-100 scale-100 translate-x-0' : 'max-w-0 max-h-0 opacity-0 scale-75 -translate-x-4 pointer-events-none'
+              }`}>
+                <button
+                  onClick={() => openInlinePanel('wisdom')}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${activeInlinePanel === 'wisdom' ? 'bg-[#F0D6FF] text-[#8B00D4]' : 'bg-[#F2F2F3] text-[#2F3331] hover:bg-[#E8E9EA]'}`}
+                  title="add wisdom"
+                >
+                  <FontAwesomeIcon icon={faTree} className="w-4 h-4" />
+                  wisdom
+                </button>
+                <button
+                  onClick={() => openInlinePanel('note')}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${activeInlinePanel === 'note' ? 'bg-[#C8F7E4] text-[#00875A]' : 'bg-[#F2F2F3] text-[#2F3331] hover:bg-[#E8E9EA]'}`}
+                  title="add note"
+                >
+                  <FontAwesomeIcon icon={faBook} className="w-4 h-4" />
+                  note
+                </button>
+                <button
+                  onClick={() => openInlinePanel('idea')}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${activeInlinePanel === 'idea' ? 'bg-[#FFE4B5] text-[#B45309]' : 'bg-[#F2F2F3] text-[#2F3331] hover:bg-[#E8E9EA]'}`}
+                  title="add idea"
+                >
+                  <FontAwesomeIcon icon={faLightbulb} className="w-4 h-4" />
+                  idea
+                </button>
+                <button
+                  onClick={() => openInlinePanel('image')}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${activeInlinePanel === 'image' ? 'bg-[#D6E4FF] text-[#1A56C4]' : 'bg-[#F2F2F3] text-[#2F3331] hover:bg-[#E8E9EA]'}`}
+                  title="add image"
+                >
+                  <FontAwesomeIcon icon={faImage} className="w-4 h-4" />
+                  image
+                </button>
+                <button
+                  onClick={() => {
+                    setShowFabActions(false);
+                    handleAddLocation();
+                  }}
+                  disabled={isLocating}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#F2F2F3] px-3 py-2 text-sm font-semibold text-[#2F3331] transition-all duration-200 hover:bg-[#E8E9EA] active:scale-95 disabled:cursor-wait disabled:text-[#A3A7A8]"
+                  title="add current location"
+                >
+                  <FontAwesomeIcon icon={isLocating ? faSpinner : faLocationDot} className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
+                  location
+                </button>
+              </div>
             </div>
 
             {currentEntry?.location && (
@@ -1326,17 +1349,22 @@ export default function WritePage() {
                   </div>
                 </div>
                 <div className="mb-3 flex flex-wrap gap-2">
-                  {wisdomCategories.map(({ type, icon, label, color, bg }) => (
-                    <button
-                      key={type}
-                      onClick={() => setSelectedWisdomType(type)}
-                      className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${selectedWisdomType === type ? 'ring-2 ring-[#2F3331]/10' : ''}`}
-                      style={{ backgroundColor: bg, color }}
-                    >
-                      <FontAwesomeIcon icon={icon} className="w-3.5 h-3.5" />
-                      {label}
-                    </button>
-                  ))}
+                  {wisdomCategories.map(({ type, icon, label, color, bg }) => {
+                    const isSelected = selectedWisdomType === type;
+                    return (
+                      <button
+                        key={type}
+                        onClick={() => setSelectedWisdomType(type)}
+                        className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all duration-200 hover:scale-105 active:scale-95 border ${
+                          isSelected ? 'border-transparent shadow-sm' : 'border-[#EEF0EF] bg-[#F2F2F3] text-[#8E9392] hover:bg-[#E8E9EA] hover:text-[#2F3331]'
+                        }`}
+                        style={isSelected ? { backgroundColor: bg, color } : undefined}
+                      >
+                        <FontAwesomeIcon icon={icon} className="w-3.5 h-3.5" />
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
                 <div className="mb-3 border-t border-dashed border-[#D7DBDA] pt-3" />
                 
@@ -1366,7 +1394,7 @@ export default function WritePage() {
                       value={wisdomAuthor}
                       onChange={(e) => setWisdomAuthor(e.target.value)}
                       placeholder="Author..."
-                      className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-xs text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#8B00D4]/30"
+                      className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-[10px] text-[#A3A7A8] placeholder-[#C5C8C7] focus:outline-none focus:border-[#8B00D4]/30"
                     />
                   </div>
                 )}
@@ -1386,7 +1414,7 @@ export default function WritePage() {
                       value={wisdomSource}
                       onChange={(e) => setWisdomSource(e.target.value)}
                       placeholder="Source..."
-                      className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-xs text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#8B00D4]/30"
+                      className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-[10px] text-[#A3A7A8] placeholder-[#C5C8C7] focus:outline-none focus:border-[#8B00D4]/30"
                     />
                   </div>
                 )}
@@ -1407,14 +1435,14 @@ export default function WritePage() {
                         value={wisdomAuthor}
                         onChange={(e) => setWisdomAuthor(e.target.value)}
                         placeholder="Author..."
-                        className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-xs text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#8B00D4]/30"
+                        className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-[10px] text-[#A3A7A8] placeholder-[#C5C8C7] focus:outline-none focus:border-[#8B00D4]/30"
                       />
                       <input
                         type="text"
                         value={wisdomSource}
                         onChange={(e) => setWisdomSource(e.target.value)}
                         placeholder="Source..."
-                        className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-xs text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#8B00D4]/30"
+                        className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-[10px] text-[#A3A7A8] placeholder-[#C5C8C7] focus:outline-none focus:border-[#8B00D4]/30"
                       />
                     </div>
                   </div>
@@ -1435,7 +1463,7 @@ export default function WritePage() {
                       value={wisdomContext}
                       onChange={(e) => setWisdomContext(e.target.value)}
                       placeholder="How did you learn this"
-                      className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-xs text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#8B00D4]/30"
+                      className="w-full bg-transparent py-1 border-b border-[#EEF0EF] text-[10px] text-[#A3A7A8] placeholder-[#C5C8C7] focus:outline-none focus:border-[#8B00D4]/30"
                     />
                   </div>
                 )}
@@ -1642,7 +1670,7 @@ export default function WritePage() {
         </div>
 
         <div>
-          {currentEntry?.bullets.map((bullet) => (
+          {sortBullets(currentEntry?.bullets || []).map((bullet) => (
             <BulletItem
               key={bullet.id}
               bullet={bullet}
@@ -1678,6 +1706,20 @@ export default function WritePage() {
               />
             </div>
           </div>
+
+          {/* AI Suggested Tags */}
+          {bulletInput.trim().length > 3 && (
+            <div className="mt-2 mb-4">
+              <SuggestedTagChips
+                content={bulletInput}
+                userId={userProfile?.uid || ''}
+                onAcceptTag={(tag) => setBulletInput(prev => prev.trim() ? `${prev.trim()} #${tag}` : `#${tag}`)}
+                onAcceptPerson={(person) => setBulletInput(prev => prev.trim() ? `${prev.trim()} @${person}` : `@${person}`)}
+                existingTags={currentEntry?.bullets.flatMap(b => b.tags) || []}
+                existingPeople={currentEntry?.bullets.flatMap(b => b.mentions) || []}
+              />
+            </div>
+          )}
 
           {entryMedia.length > 0 && (
             <div className="mt-4 border-t border-dashed border-[#CCD0CF] pt-4">

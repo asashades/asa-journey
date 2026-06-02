@@ -58,7 +58,7 @@ interface DataContextType {
   tags: Tag[];
   tagGroups: TagGroup[];
   updateTag: (tagName: string, data: Partial<Tag>) => Promise<void>;
-  createTagGroup: (name: string, tagNames: string[]) => Promise<void>;
+  createTagGroup: (name: string, tagNames: string[], color?: string) => Promise<void>;
   updateTagGroup: (groupId: string, data: Partial<TagGroup>) => Promise<void>;
   deleteTagGroup: (groupId: string) => Promise<void>;
   people: Person[];
@@ -610,6 +610,41 @@ export function DataProvider({ children }: { children: ReactNode }) {
     syncTokenCollections(entries).catch(() => undefined);
   }, [entries, loading, syncTokenCollections, user]);
 
+  useEffect(() => {
+    if (loading) return;
+    const extractedHighlights: Highlight[] = [];
+    entries.forEach(entry => {
+      entry.bullets.forEach(bullet => {
+        if (bullet.isHighlight) {
+          extractedHighlights.push({
+            id: bullet.id,
+            bulletId: bullet.id,
+            entryId: entry.id,
+            entryDate: entry.date,
+            content: bullet.text,
+            createdAt: bullet.createdAt || entry.createdAt || new Date(),
+          });
+        }
+      });
+    });
+
+    const currentBulletIds = new Set(highlights.map(h => h.bulletId));
+    const extractedBulletIds = new Set(extractedHighlights.map(h => h.bulletId));
+    
+    const isDifferent = 
+      currentBulletIds.size !== extractedBulletIds.size ||
+      [...extractedBulletIds].some(id => !currentBulletIds.has(id)) ||
+      extractedHighlights.some(eh => {
+        const found = highlights.find(h => h.bulletId === eh.bulletId);
+        return found ? found.content !== eh.content : true;
+      });
+
+    if (isDifferent) {
+      setHighlights(extractedHighlights);
+      updateLocalCache({ highlights: extractedHighlights });
+    }
+  }, [entries, loading, highlights, updateLocalCache]);
+
   const getEntriesForDateRange = async (startDate: string, endDate: string): Promise<Entry[]> => {
     if (!user) return [];
     const entriesRef = collection(db, 'users', user.uid, 'entries');
@@ -622,14 +657,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const addBullet = async (text: string, style: Bullet['style'] = 'bullet', data: BulletDraftOptions = {}): Promise<Bullet> => {
-    // Run NLP Parser!
-    const { cleanText, parsedDate, hasCustomDate, hasCustomTime } = parseAndStripNLP(text, currentDate);
+    // Run NLP Parser only for checklists!
+    const isChecklist = style === 'checklist';
+    const { cleanText, parsedDate, hasCustomDate, hasCustomTime } = isChecklist
+      ? parseAndStripNLP(text, currentDate)
+      : { cleanText: text, parsedDate: undefined, hasCustomDate: false, hasCustomTime: false };
 
     // Creation timestamp always remains the exact log entry creation date/time
     const bulletCreatedAt = data.createdAt || new Date();
     
     // Parsed date/time from NLP goes strictly into scheduledAt (as task deadline)
-    const bulletScheduledAt = (hasCustomDate || hasCustomTime) ? parsedDate : undefined;
+    const bulletScheduledAt = (isChecklist && (hasCustomDate || hasCustomTime)) ? parsedDate : undefined;
 
     const bullet: Bullet = {
       id: uuidv4(),
@@ -682,22 +720,37 @@ export function DataProvider({ children }: { children: ReactNode }) {
     
     // Create copy of updates
     const updates = { ...data };
+    const targetStyle = updates.style ?? originalBullet.style;
+    const isChecklist = targetStyle === 'checklist';
 
-    if (data.text) {
-      // Parse NLP on the text!
-      const { cleanText, parsedDate, hasCustomDate, hasCustomTime } = parseAndStripNLP(data.text, targetEntry.date);
-      updates.text = cleanText;
-      updates.tags = extractTagNames(cleanText);
-      updates.mentions = extractMentionNames(cleanText);
-      updates.isHighlight = cleanText.includes('*');
-      
-      // If NLP matched, update the scheduledAt field (leaving createdAt alone!)
-      if (hasCustomDate || hasCustomTime) {
-        updates.scheduledAt = parsedDate;
+    // If text is updated, OR if style changed to checklist (meaning they might want to parse the existing text)
+    const textToParse = data.text !== undefined ? data.text : (updates.style === 'checklist' && originalBullet.style !== 'checklist' ? originalBullet.text : null);
+
+    if (textToParse !== null) {
+      if (isChecklist) {
+        // Parse NLP on the text!
+        const { cleanText, parsedDate, hasCustomDate, hasCustomTime } = parseAndStripNLP(textToParse, targetEntry.date);
+        updates.text = cleanText;
+        updates.tags = extractTagNames(cleanText);
+        updates.mentions = extractMentionNames(cleanText);
+        updates.isHighlight = cleanText.includes('*');
+        
+        // If NLP matched, update the scheduledAt field (leaving createdAt alone!)
+        if (hasCustomDate || hasCustomTime) {
+          updates.scheduledAt = parsedDate;
+        }
+      } else {
+        updates.text = textToParse;
+        updates.tags = extractTagNames(textToParse);
+        updates.mentions = extractMentionNames(textToParse);
+        updates.isHighlight = textToParse.includes('*');
       }
     }
 
     const updatedBullet = { ...originalBullet, ...updates, updatedAt: new Date() };
+    if (!isChecklist) {
+      delete updatedBullet.scheduledAt;
+    }
     const updatedBullets = [...targetEntry.bullets];
     updatedBullets[bulletIndex] = updatedBullet;
 
@@ -1310,12 +1363,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await setDoc(doc(db, 'users', user.uid, 'tags', tagName), cleanData, { merge: true });
   };
 
-  const createTagGroup = async (name: string, tagNames: string[]) => {
+  const createTagGroup = async (name: string, tagNames: string[], color?: string) => {
     if (!user) return;
     const group: TagGroup = {
       id: uuidv4(),
       name,
       tags: tagNames,
+      color,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

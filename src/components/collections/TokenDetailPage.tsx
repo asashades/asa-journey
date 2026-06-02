@@ -153,14 +153,14 @@ export default function TokenDetailPage({ kind, name }: TokenDetailPageProps) {
       await updatePerson(target.name, {
         aliases: Array.from(new Set([...(target.aliases || []), normalizedName])),
       });
-      router.push(`/people/${encodeURIComponent(target.name.toLowerCase())}`);
+      router.push(`/people?name=${encodeURIComponent(target.name.toLowerCase())}`);
     } else {
       const target = tags.find(tag => tag.name.toLowerCase() === targetName);
       if (!target) return;
       await updateTag(target.name, {
         aliases: Array.from(new Set([...(target.aliases || []), normalizedName])),
       });
-      router.push(`/tags/${encodeURIComponent(target.name.toLowerCase())}`);
+      router.push(`/tags?name=${encodeURIComponent(target.name.toLowerCase())}`);
     }
   };
 
@@ -271,7 +271,7 @@ export default function TokenDetailPage({ kind, name }: TokenDetailPageProps) {
       <main className="mx-auto max-w-[680px] px-6 py-8">
         <button
           onClick={() => router.push(`/collections?tab=${isPerson ? 'people' : 'tags'}&focus=${encodeURIComponent(normalizedName)}`)}
-          className="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-[#6F7476] transition-colors hover:text-[#2F3331]"
+          className="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-secondary transition-colors hover:text-primary"
         >
           <FontAwesomeIcon icon={faArrowLeft} className="h-3.5 w-3.5" />
           Collections
@@ -285,7 +285,7 @@ export default function TokenDetailPage({ kind, name }: TokenDetailPageProps) {
             >
               <FontAwesomeIcon icon={accent.icon} className="h-5 w-5" />
             </span>
-            <h1 className="font-sans text-5xl font-bold tracking-normal text-[#151719]">
+            <h1 className="font-sans text-5xl font-bold tracking-normal text-primary">
               {token}
             </h1>
           </div>
@@ -327,7 +327,7 @@ export default function TokenDetailPage({ kind, name }: TokenDetailPageProps) {
                   onClick={() => router.push(`/write?date=${group.date}`)}
                   className="block w-full text-left"
                 >
-                  <h2 className="font-sans text-2xl font-bold tracking-normal text-[#151719]">
+                  <h2 className="font-sans text-2xl font-bold tracking-normal text-primary">
                     {format(parseISO(group.date), 'MMM d, yyyy')}
                   </h2>
                   <p className="mt-0.5 text-sm font-light text-[#A3A7A8]">

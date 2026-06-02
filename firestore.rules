@@ -60,6 +60,30 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow write: if isOwner(userId);
       }
+
+      // User's AI Insights
+      match /aiInsights/{insightId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+
+      // User's AI usage tracking
+      match /usage/{usageId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+
+      // User's tag groups
+      match /tagGroups/{groupId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+
+      // User's person groups
+      match /personGroups/{groupId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
     }
   }
 }
