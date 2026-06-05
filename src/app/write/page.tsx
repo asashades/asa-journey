@@ -1970,8 +1970,8 @@ export default function WritePage() {
 
                   {/* Mood Section */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-bold text-[#6F7476] uppercase tracking-wider font-mono">Manual Mood</label>
-                    <div className="grid grid-cols-7 gap-1">
+                    <label className="text-xs font-bold text-[#6F7476] uppercase tracking-wider">Manual Mood</label>
+                    <div className="flex flex-wrap gap-1.5">
                       {([
                         { key: 'stressed', icon: faBolt, color: 'text-red-500 bg-red-50/50 border-red-200' },
                         { key: 'anxious', icon: faWind, color: 'text-purple-500 bg-purple-50/50 border-purple-200' },
@@ -1987,15 +1987,15 @@ export default function WritePage() {
                             key={moodObj.key}
                             onClick={() => setMoodInput(moodObj.key)}
                             type="button"
-                            className={`flex flex-col items-center justify-center py-2.5 rounded-xl border transition-all ${
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[10px] transition-all duration-200 active:scale-95 ${
                               isSel
-                                ? `bg-white border-[#00DC7D] shadow-sm scale-105 ${moodObj.color.split(' ')[0]} font-bold`
+                                ? `bg-white border-[#00DC7D] shadow-sm scale-105 ${moodObj.color.split(' ')[0]} font-extrabold`
                                 : 'bg-white border-[#EEF0EF] hover:bg-gray-50 text-[#A3A7A8]'
                             }`}
                             title={moodObj.key}
                           >
-                            <FontAwesomeIcon icon={moodObj.icon} className={`h-4 w-4 ${isSel ? '' : 'text-gray-400'}`} />
-                            <span className="text-[8px] font-bold mt-1 truncate max-w-full px-0.5">{moodObj.key}</span>
+                            <FontAwesomeIcon icon={moodObj.icon} className={`h-3.5 w-3.5 ${isSel ? '' : 'text-gray-400'}`} />
+                            <span>{moodObj.key}</span>
                           </button>
                         );
                       })}
