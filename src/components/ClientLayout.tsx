@@ -3,12 +3,13 @@
 import { useAuth, AuthProvider } from '@/contexts/AuthContext';
 import { DataProvider } from '@/contexts/DataContext';
 import BottomNav from '@/components/layout/BottomNav';
-import { usePathname, redirect } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 function AuthGuard({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const isAuthPage = pathname.startsWith('/auth');
   const isOnboardingPage = pathname.startsWith('/onboarding');
 
@@ -16,15 +17,15 @@ function AuthGuard({ children }: { children: ReactNode }) {
     if (!loading) {
       if (!user) {
         if (!isAuthPage && !isOnboardingPage) {
-          redirect('/onboarding');
+          router.replace('/onboarding');
         }
       } else {
         if (isAuthPage || isOnboardingPage) {
-          redirect('/write');
+          router.replace('/write');
         }
       }
     }
-  }, [loading, user, isAuthPage, isOnboardingPage]);
+  }, [loading, user, isAuthPage, isOnboardingPage, router]);
 
   if (loading) {
     return (
