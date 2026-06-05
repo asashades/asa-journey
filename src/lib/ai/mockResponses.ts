@@ -52,7 +52,8 @@ export function getMockWeeklyInsight(userId: string, weekStart: string, weekEnd:
         priority: 'high',
         focusMode: 'hyperfocus',
         suggestedGoalArea: 'work',
-        canBecomeGoal: true
+        canBecomeGoal: true,
+        suggestedDeadline: '2 hari'
       },
       {
         id: 'act_mock_2',
@@ -63,7 +64,8 @@ export function getMockWeeklyInsight(userId: string, weekStart: string, weekEnd:
         priority: 'medium',
         focusMode: 'top3',
         suggestedGoalArea: 'health',
-        canBecomeGoal: true
+        canBecomeGoal: true,
+        suggestedDeadline: 'Setiap hari'
       },
       {
         id: 'act_mock_3',
@@ -74,21 +76,26 @@ export function getMockWeeklyInsight(userId: string, weekStart: string, weekEnd:
         priority: 'low',
         focusMode: 'pareto',
         suggestedGoalArea: 'work',
-        canBecomeGoal: false
+        canBecomeGoal: false,
+        suggestedDeadline: '1 minggu'
       }
     ],
     suggestedGoals: [
       {
         id: 'sgoal_mock_1',
         title: 'Integrasikan Quiet Insight MVP',
-        reason: 'Ini adalah fitur utama yang menjadi jembatan antara refleksi mingguan dan aksi nyata di ASA Journey.',
-        goalType: 'top3'
+        reason: 'Fitur utama penghubung refleksi mingguan dan aksi nyata.',
+        goalType: 'top3',
+        category: 'Work',
+        priority: 'high'
       },
       {
         id: 'sgoal_mock_2',
-        title: 'Optimalkan Kualitas Istirahat Mingguan',
-        reason: 'Meningkatkan ritme tidur secara konsisten berdasarkan catatan kelelahan Anda di pertengahan pekan.',
-        goalType: 'hyperfocus'
+        title: 'Optimalkan Istirahat Mingguan',
+        reason: 'Meningkatkan ritme tidur berdasarkan tingkat kelelahan pekan ini.',
+        goalType: 'hyperfocus',
+        category: 'Self-Care',
+        priority: 'medium'
       }
     ],
     suggestedTags: ['work', 'design', 'self-growth', 'sleep'],

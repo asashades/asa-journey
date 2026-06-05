@@ -35,18 +35,42 @@ function SuggestedGoalCard({ goal, insightId, userId, onGoalCreated }: Suggested
     id: goal.id,
     text: goal.title,
     title: goal.title,
-    category: 'Self-Care',
-    priority: 'medium' as const,
+    category: goal.category || 'Self-Care',
+    priority: (goal.priority || 'medium') as 'low' | 'medium' | 'high',
     focusMode: goal.goalType,
     canBecomeGoal: true
   };
 
+  // Styles for suggested goal categories
+  const categoryStyles: Record<string, string> = {
+    Health: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    Work: 'bg-blue-50 text-blue-700 border-blue-100',
+    Creative: 'bg-purple-50 text-purple-700 border-purple-100',
+    Relationship: 'bg-rose-50 text-rose-700 border-rose-100',
+    'Self-Care': 'bg-amber-50 text-amber-700 border-amber-100',
+    Learning: 'bg-indigo-50 text-indigo-700 border-indigo-100',
+    Finance: 'bg-teal-50 text-teal-700 border-teal-100'
+  };
+
+  const priorityStyles = {
+    low: 'bg-gray-100 text-gray-600',
+    medium: 'bg-yellow-100 text-yellow-800',
+    high: 'bg-red-100 text-red-700'
+  };
+
+  const catStyle = categoryStyles[goal.category || ''] || 'bg-slate-50 text-slate-700 border-slate-100';
+  const prioStyle = priorityStyles[goal.priority || 'medium'];
+
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-[#EEF0EF] bg-[#FAFAFA] p-5 shadow-sm transition-all hover:shadow-md">
-      <div className="flex items-center gap-2">
-        <span className="flex items-center gap-1 rounded-full bg-pink-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-pink-700">
-          <FontAwesomeIcon icon={faBullseye} className="h-2.5 w-2.5" />
-          {goal.goalType === 'hyperfocus' ? 'Hyperfocus' : goal.goalType === 'pareto' ? 'Pareto' : 'Top 3'}
+      <div className="flex flex-wrap items-center gap-2">
+        {goal.category && (
+          <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${catStyle}`}>
+            {goal.category}
+          </span>
+        )}
+        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${prioStyle}`}>
+          {goal.priority || 'medium'}
         </span>
       </div>
 
@@ -173,7 +197,7 @@ ${insight.actionItems.map((item, idx) => `${idx + 1}. [${item.category}] ${item.
             <FontAwesomeIcon icon={faHeart} className="h-4 w-4 text-[#FF6B6B]" />
             <span>Emotional & Energy Patterns</span>
           </div>
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-6 grid-cols-1">
             {insight.emotionalPatterns.map((pattern, index) => {
               const confidencePercent = Math.round((pattern.confidence || 0.7) * 100);
               return (
@@ -213,7 +237,7 @@ ${insight.actionItems.map((item, idx) => `${idx + 1}. [${item.category}] ${item.
                 <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#FFEEAA] text-xs font-bold text-[#B86B00]">
                   {index + 1}
                 </span>
-                <p className="text-base font-light leading-7 text-[#2F3331]">{theme}</p>
+                <p className="text-sm font-light leading-relaxed text-[#2F3331]">{theme}</p>
               </div>
             ))}
           </div>
@@ -231,7 +255,7 @@ ${insight.actionItems.map((item, idx) => `${idx + 1}. [${item.category}] ${item.
                 <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#EDD6FF] text-xs font-bold text-[#6B21A8]">
                   {index + 1}
                 </span>
-                <p className="text-base font-light leading-7 text-[#2F3331]">{lesson}</p>
+                <p className="text-sm font-light leading-relaxed text-[#2F3331]">{lesson}</p>
               </div>
             ))}
           </div>
@@ -246,7 +270,7 @@ ${insight.actionItems.map((item, idx) => `${idx + 1}. [${item.category}] ${item.
             <span>Suggested Focus Goals</span>
           </div>
           
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 grid-cols-1">
             {insight.suggestedGoals.map((goal) => (
               <SuggestedGoalCard
                 key={goal.id}
@@ -267,7 +291,7 @@ ${insight.actionItems.map((item, idx) => `${idx + 1}. [${item.category}] ${item.
           <span>Recommended Action Items</span>
         </div>
         
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 grid-cols-1">
           {insight.actionItems.map((item) => (
             <ActionItemCard
               key={item.id}

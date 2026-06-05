@@ -17,11 +17,14 @@ Core Requirements:
    - "priority" ("low", "medium", "high")
    - "suggestedGoalArea" ("personal", "work", "health", "relationship", "learning", "other")
    - "canBecomeGoal" (boolean, true if it represents a good long-term objective)
+   - "suggestedDeadline" (string, short suggestion for when this should be completed, e.g. "within 2 days", "by Sunday", "next week")
 7. Formulate 1-2 high-level suggested goals ("suggestedGoals"). Each suggested goal must consist of:
    - "id" (unique string, e.g. "suggested_goal_1")
    - "title" (string, name of the goal)
-   - "reason" (string, brief explanation of why this was suggested based on this week's writing and metrics)
+   - "reason" (string, brief explanation of why this was suggested. MUST BE EXTREMELY COMPACT AND CONCISE. Max 10-12 words in a single sentence)
    - "goalType" ("hyperfocus" for 1 major task, "top3" for key tasks, "pareto" for 80/20 leverage)
+   - "category" (string, category, e.g. "Work", "Self-Care", "Health", "Relationship", "Learning", "Finance", "Other")
+   - "priority" ("low", "medium", "high")
 8. Extract and suggest up to 5 relevant tags ("suggestedTags") and up to 3 people mentioned ("suggestedPeople") from across the weekly entries, formatted without # or @ prefixes.
 
 CRITICAL SAFETY & TONE RULES:

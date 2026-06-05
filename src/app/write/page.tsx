@@ -51,6 +51,8 @@ import { HighlightedText } from '@/components/ui/HighlightedText';
 import { MentionTextarea } from '@/components/ui/MentionTextarea';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import SuggestedTagChips from '@/components/ai/SuggestedTagChips';
+import { generateStructuredAI } from '@/lib/ai/aiClient';
+import { DAILY_INSIGHT_PROMPT } from '@/lib/ai/prompts';
 import { getEntryNumberForDate, sortBullets } from '@/lib/entryUtils';
 import { Bullet, Entry, LocationItem, MediaItem } from '@/types';
 
@@ -1136,34 +1138,75 @@ export default function WritePage() {
     setIsGeneratingDailyInsight(true);
 
     try {
-      const res = await fetch('/api/ai/daily-insight', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: userProfile?.uid,
+      let dailyInsight: any = null;
+      let generateSuccess = false;
+
+      // 1. Coba panggil API route (yang berfungsi di mode dev / server-side hosting)
+      try {
+        const res = await fetch('/api/ai/daily-insight', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userProfile?.uid,
+            date: currentDate,
+            bullets: currentEntry.bullets,
+            dream: currentEntry.dream,
+            weather: currentEntry.weather || null,
+            condition: currentEntry.condition || null
+          })
+        });
+
+        const text = await res.text();
+        if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html') || res.status === 404) {
+          throw new Error('API route returned HTML or 404. Running client-side fallback.');
+        }
+
+        const data = JSON.parse(text);
+        if (data.success && data.dailyInsight) {
+          dailyInsight = data.dailyInsight;
+          generateSuccess = true;
+        } else {
+          throw new Error(data.message || 'Gagal menganalisis hari ini.');
+        }
+      } catch (apiErr) {
+        console.warn('[handleGenerateDailyInsight] API route unavailable, running client-side fallback:', apiErr);
+        
+        // 2. Client-side fallback menggunakan SDK langsung
+        const bulletsList = Array.isArray(currentEntry.bullets) ? currentEntry.bullets.map((b: any) => b.text || b) : [];
+        const aiPayload = {
           date: currentDate,
-          bullets: currentEntry.bullets,
-          dream: currentEntry.dream,
+          bullets: bulletsList,
+          dream: currentEntry.dream || '',
           weather: currentEntry.weather || null,
           condition: currentEntry.condition || null
-        })
-      });
+        };
 
-      if (!res.ok) {
-        throw new Error('Gagal menghubungi server untuk menganalisis hari ini.');
+        const aiResult = await generateStructuredAI({
+          userId: userProfile?.uid || 'anonymous',
+          systemPrompt: DAILY_INSIGHT_PROMPT,
+          userPayload: aiPayload,
+          feature: 'daily-insight'
+        });
+
+        dailyInsight = {
+          text: aiResult.insightText || 'Analisis harian selesai.',
+          moodScore: typeof aiResult.moodScore === 'number' ? aiResult.moodScore : 7,
+          sentiment: aiResult.sentiment || 'neutral',
+          generatedAt: new Date().toISOString()
+        };
+        generateSuccess = true;
       }
 
-      const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.message || 'Gagal menganalisis hari ini.');
+      if (generateSuccess && dailyInsight) {
+        const entry = getEntryDraft();
+        await saveEntry({
+          ...entry,
+          dailyInsight,
+          updatedAt: new Date()
+        });
+      } else {
+        throw new Error('Gagal menganalisis hari ini.');
       }
-
-      const entry = getEntryDraft();
-      await saveEntry({
-        ...entry,
-        dailyInsight: data.dailyInsight,
-        updatedAt: new Date()
-      });
     } catch (err: any) {
       console.error(err);
       setDailyInsightError(err.message || 'Terjadi kesalahan saat memproses analisis harian Anda.');

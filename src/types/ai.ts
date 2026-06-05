@@ -10,6 +10,7 @@ export interface AIActionItem {
   canBecomeGoal: boolean;
   goalId?: string;
   bulletId?: string;
+  suggestedDeadline?: string;
 }
 
 export interface AISuggestedGoal {
@@ -18,6 +19,8 @@ export interface AISuggestedGoal {
   reason: string;
   goalType: 'hyperfocus' | 'top3' | 'pareto';
   createdGoalId?: string;
+  category?: string;
+  priority?: 'low' | 'medium' | 'high';
 }
 
 export interface AIEmotionalPattern {

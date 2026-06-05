@@ -70,7 +70,8 @@ export function parseAndValidateWeeklyInsight(rawText: string, defaultInsight: a
           canBecomeGoal: typeof item.canBecomeGoal === 'boolean' ? item.canBecomeGoal : true,
           priority: ['low', 'medium', 'high'].includes(item.priority) ? item.priority : 'medium',
           focusMode: ['hyperfocus', 'top3', 'pareto'].includes(item.focusMode) ? item.focusMode : 'top3',
-          goalId: item.goalId || undefined
+          goalId: item.goalId || undefined,
+          suggestedDeadline: item.suggestedDeadline || 'Dalam 1 minggu'
         };
       });
     }
@@ -84,7 +85,9 @@ export function parseAndValidateWeeklyInsight(rawText: string, defaultInsight: a
         title: g.title || 'Tujuan yang disarankan',
         reason: g.reason || 'Saran berdasarkan tulisan minggu ini.',
         goalType: ['hyperfocus', 'top3', 'pareto'].includes(g.goalType) ? g.goalType : 'top3',
-        createdGoalId: g.createdGoalId || undefined
+        createdGoalId: g.createdGoalId || undefined,
+        category: g.category || 'Self-Care',
+        priority: ['low', 'medium', 'high'].includes(g.priority) ? g.priority : 'medium'
       }));
     }
 
