@@ -39,54 +39,79 @@ export async function generateStructuredAI(input: GenerateStructuredAIInput): Pr
 
   console.log(`[AI Client] Dispatching server request to ${config.provider} using model ${config.model}`);
 
-  // 2. Integrasi Riil dengan Google Gemini API (Default)
+  // 2. Integrasi Riil dengan Google Gemini API (Default) dengan Autoretry Fallback
   if (config.provider === 'gemini') {
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  { text: input.systemPrompt },
-                  { text: `Berikut adalah payload datanya:\n\n${payloadString}` }
-                ]
+    // List model fallback yang akan dicoba berurutan jika model utama gagal
+    const candidateModels = [
+      config.model,
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-flash-8b',
+      'gemini-2.5-pro',
+      'gemini-1.5-pro'
+    ];
+    
+    // Hilangkan duplikasi dan filter model kosong
+    const modelsToTry = Array.from(new Set(candidateModels.filter(Boolean)));
+    let lastError = null;
+
+    for (const modelName of modelsToTry) {
+      try {
+        console.log(`[AI Client] Attempting Gemini request using model: ${modelName}`);
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${config.apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [
+                {
+                  role: 'user',
+                  parts: [
+                    { text: input.systemPrompt },
+                    { text: `Berikut adalah payload datanya:\n\n${payloadString}` }
+                  ]
+                }
+              ],
+              generationConfig: {
+                responseMimeType: 'application/json'
               }
-            ],
-            generationConfig: {
-              responseMimeType: 'application/json'
-            }
-          })
+            })
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Gemini API returned status code ${response.status}`);
         }
-      );
 
-      if (!response.ok) {
-        throw new Error(`Gemini API returned status code ${response.status}`);
+        const data = await response.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!rawText) {
+          throw new Error('Gemini API returned empty text candidates.');
+        }
+
+        console.log(`[AI Client] Gemini call succeeded using model: ${modelName}`);
+
+        if (input.feature === 'weekly-insight') {
+          return parseAndValidateWeeklyInsight(rawText, getMockWeeklyInsight(input.userId, input.fallbackParams?.weekStart || '', input.fallbackParams?.weekEnd || ''));
+        } else if (input.feature === 'daily-insight') {
+          return parseAndValidateDailyInsight(rawText, getMockDailyInsight(input.userId));
+        } else {
+          return parseAndValidateTagSuggestions(rawText, getMockSuggestedTags(input.fallbackParams?.content || ''));
+        }
+
+      } catch (err: any) {
+        console.warn(`[AI Client] Gemini call failed for model ${modelName}:`, err.message || err);
+        lastError = err;
+        // Lanjut ke model berikutnya di iterasi loop
       }
-
-      const data = await response.json();
-      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!rawText) {
-        throw new Error('Gemini API returned empty text candidates.');
-      }
-
-      if (input.feature === 'weekly-insight') {
-        return parseAndValidateWeeklyInsight(rawText, getMockWeeklyInsight(input.userId, input.fallbackParams?.weekStart || '', input.fallbackParams?.weekEnd || ''));
-      } else if (input.feature === 'daily-insight') {
-        return parseAndValidateDailyInsight(rawText, getMockDailyInsight(input.userId));
-      } else {
-        return parseAndValidateTagSuggestions(rawText, getMockSuggestedTags(input.fallbackParams?.content || ''));
-      }
-
-    } catch (err: any) {
-      console.error('[AI Client] Gemini call failed:', err);
-      throw new Error(`Gemini API Call Failed: ${err.message || err}`);
     }
+    
+    // Jika semua model gagal
+    console.error('[AI Client] All Gemini fallback models exhausted.');
+    throw new Error(`Gemini API Call Failed: ${lastError?.message || lastError}`);
   }
 
   // 3. Integrasi Riil dengan OpenAI API
