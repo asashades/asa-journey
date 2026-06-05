@@ -110,7 +110,10 @@ export default function QuietInsightCard() {
         bullets: bulletsList,
         highlights: highlightsList,
         tags: Array.from(new Set(tagsList)),
-        people: Array.from(new Set(peopleList))
+        people: Array.from(new Set(peopleList)),
+        weather: (e as any).weather || null,
+        condition: (e as any).condition || null,
+        dailyInsight: (e as any).dailyInsight || null
       };
     });
 

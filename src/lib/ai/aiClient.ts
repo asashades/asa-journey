@@ -1,12 +1,12 @@
 import { resolveAIConfig } from './providerResolver';
-import { getMockWeeklyInsight, getMockSuggestedTags } from './mockResponses';
-import { parseAndValidateWeeklyInsight, parseAndValidateTagSuggestions } from './validateAIResponse';
+import { getMockWeeklyInsight, getMockSuggestedTags, getMockDailyInsight } from './mockResponses';
+import { parseAndValidateWeeklyInsight, parseAndValidateTagSuggestions, parseAndValidateDailyInsight } from './validateAIResponse';
 
 export interface GenerateStructuredAIInput {
   userId: string;
   systemPrompt: string;
   userPayload: unknown;
-  feature: 'weekly-insight' | 'suggest-tags';
+  feature: 'weekly-insight' | 'suggest-tags' | 'daily-insight';
   // Fallbacks for mock mode
   fallbackParams?: {
     weekStart?: string;
@@ -25,6 +25,8 @@ export async function generateStructuredAI(input: GenerateStructuredAIInput): Pr
       const start = input.fallbackParams?.weekStart || new Date().toISOString().split('T')[0];
       const end = input.fallbackParams?.weekEnd || new Date().toISOString().split('T')[0];
       return getMockWeeklyInsight(input.userId, start, end);
+    } else if (input.feature === 'daily-insight') {
+      return getMockDailyInsight(input.userId);
     } else {
       const content = input.fallbackParams?.content || '';
       return getMockSuggestedTags(content);
@@ -73,9 +75,13 @@ export async function generateStructuredAI(input: GenerateStructuredAIInput): Pr
         throw new Error('Gemini API returned empty text candidates.');
       }
 
-      return input.feature === 'weekly-insight'
-        ? parseAndValidateWeeklyInsight(rawText, getMockWeeklyInsight(input.userId, input.fallbackParams?.weekStart || '', input.fallbackParams?.weekEnd || ''))
-        : parseAndValidateTagSuggestions(rawText, getMockSuggestedTags(input.fallbackParams?.content || ''));
+      if (input.feature === 'weekly-insight') {
+        return parseAndValidateWeeklyInsight(rawText, getMockWeeklyInsight(input.userId, input.fallbackParams?.weekStart || '', input.fallbackParams?.weekEnd || ''));
+      } else if (input.feature === 'daily-insight') {
+        return parseAndValidateDailyInsight(rawText, getMockDailyInsight(input.userId));
+      } else {
+        return parseAndValidateTagSuggestions(rawText, getMockSuggestedTags(input.fallbackParams?.content || ''));
+      }
 
     } catch (err: any) {
       console.error('[AI Client] Gemini call failed:', err);
@@ -113,9 +119,13 @@ export async function generateStructuredAI(input: GenerateStructuredAIInput): Pr
         throw new Error('OpenAI API returned empty message content.');
       }
 
-      return input.feature === 'weekly-insight'
-        ? parseAndValidateWeeklyInsight(rawText, getMockWeeklyInsight(input.userId, input.fallbackParams?.weekStart || '', input.fallbackParams?.weekEnd || ''))
-        : parseAndValidateTagSuggestions(rawText, getMockSuggestedTags(input.fallbackParams?.content || ''));
+      if (input.feature === 'weekly-insight') {
+        return parseAndValidateWeeklyInsight(rawText, getMockWeeklyInsight(input.userId, input.fallbackParams?.weekStart || '', input.fallbackParams?.weekEnd || ''));
+      } else if (input.feature === 'daily-insight') {
+        return parseAndValidateDailyInsight(rawText, getMockDailyInsight(input.userId));
+      } else {
+        return parseAndValidateTagSuggestions(rawText, getMockSuggestedTags(input.fallbackParams?.content || ''));
+      }
 
     } catch (err: any) {
       console.error('[AI Client] OpenAI call failed:', err);
@@ -124,7 +134,11 @@ export async function generateStructuredAI(input: GenerateStructuredAIInput): Pr
   }
 
   // Fallback umum jika tidak ada provider cocok
-  return input.feature === 'weekly-insight'
-    ? getMockWeeklyInsight(input.userId, input.fallbackParams?.weekStart || '', input.fallbackParams?.weekEnd || '')
-    : getMockSuggestedTags(input.fallbackParams?.content || '');
+  if (input.feature === 'weekly-insight') {
+    return getMockWeeklyInsight(input.userId, input.fallbackParams?.weekStart || '', input.fallbackParams?.weekEnd || '');
+  } else if (input.feature === 'daily-insight') {
+    return getMockDailyInsight(input.userId);
+  } else {
+    return getMockSuggestedTags(input.fallbackParams?.content || '');
+  }
 }

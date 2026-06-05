@@ -16,6 +16,7 @@ import {
   faBook,
   faWandMagicSparkles,
   faBolt,
+  faBrain,
   faCircleInfo,
   faQuoteLeft,
   faBookmark,
@@ -32,10 +33,17 @@ import {
   faChevronLeft,
   faChevronRight,
   faPen,
-  faListCheck,
   faCalendar,
   faClock,
   faTree,
+  faListCheck,
+  faHeartPulse,
+  faSun,
+  faCloud,
+  faCloudRain,
+  faWind,
+  faSnowflake,
+  faBed,
 } from '@fortawesome/free-solid-svg-icons';
 import { playGoalJingle } from '@/lib/audio';
 import ImageUpload from '@/components/ui/ImageUpload';
@@ -47,6 +55,19 @@ import { getEntryNumberForDate, sortBullets } from '@/lib/entryUtils';
 import { Bullet, Entry, LocationItem, MediaItem } from '@/types';
 
 type FormatDateInput = Date | string | { toDate: () => Date } | undefined;
+
+// Custom AI Sparkles Icon (Gemini-style)
+const AISparklesIcon = ({ className = "h-3.5 w-3.5" }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M9 6Q9 13 16 13Q9 13 9 20Q9 13 2 13Q9 13 9 6Z" />
+    <path d="M17 3Q17 7 21 7Q17 7 17 11Q17 7 13 7Q17 7 17 3Z" />
+  </svg>
+);
 
 const safeFormat = (date: FormatDateInput, fmt: string): string => {
   if (!date) return '';
@@ -347,7 +368,7 @@ const wisdomCategories = [
   { type: 'lesson' as const, icon: faBookOpen, label: 'lesson', bg: '#EDD6FF', color: '#6B21A8' },
 ];
 
-type InlinePanel = 'wisdom' | 'note' | 'idea' | 'image' | null;
+type InlinePanel = 'wisdom' | 'note' | 'idea' | 'image' | 'orbit' | null;
 
 type ReverseGeocodeResponse = {
   display_name?: string;
@@ -448,6 +469,14 @@ export default function WritePage() {
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
   const [ideaContent, setIdeaContent] = useState('');
+  const [sleepScoreInput, setSleepScoreInput] = useState<number | ''>('');
+  const [energyLevelInput, setEnergyLevelInput] = useState<number>(3);
+  const [weatherConditionInput, setWeatherConditionInput] = useState<'sunny' | 'cloudy' | 'rainy' | 'windy' | 'snowy'>('sunny');
+  const [weatherTemperatureInput, setWeatherTemperatureInput] = useState<number | ''>('');
+  const [moodInput, setMoodInput] = useState<'happy' | 'neutral' | 'sad' | 'anxious' | 'tired' | 'stressed' | 'joyful'>('neutral');
+  const [isFetchingWeather, setIsFetchingWeather] = useState(false);
+  const [isGeneratingDailyInsight, setIsGeneratingDailyInsight] = useState(false);
+  const [dailyInsightError, setDailyInsightError] = useState('');
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState('');
   const [dreamInputDate, setDreamInputDate] = useState('');
@@ -464,6 +493,22 @@ export default function WritePage() {
   useEffect(() => {
     isUserTypingRef.current = false;
   }, [currentDate]);
+
+  useEffect(() => {
+    if (currentEntry) {
+      setSleepScoreInput(currentEntry.condition?.sleepScore ?? '');
+      setEnergyLevelInput(currentEntry.condition?.energyLevel ?? 3);
+      setWeatherConditionInput(currentEntry.weather?.condition ?? 'sunny');
+      setWeatherTemperatureInput(currentEntry.weather?.temperature ?? '');
+      setMoodInput(currentEntry.condition?.mood ?? 'neutral');
+    } else {
+      setSleepScoreInput('');
+      setEnergyLevelInput(3);
+      setWeatherConditionInput('sunny');
+      setWeatherTemperatureInput('');
+      setMoodInput('neutral');
+    }
+  }, [currentEntry, currentDate]);
   const [widgetsCollapsed, setWidgetsCollapsed] = useState(false);
   const [showTodoDrawer, setShowTodoDrawer] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -935,6 +980,81 @@ export default function WritePage() {
     await saveEntry(updatedEntry);
   };
 
+  const fetchOpenMeteo = async (lat: number, lon: number) => {
+    try {
+      const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const weathercode = data.current_weather?.weathercode;
+      const temp = data.current_weather?.temperature;
+
+      let condition: 'sunny' | 'cloudy' | 'rainy' | 'windy' | 'snowy' = 'sunny';
+      if (weathercode === 0) {
+        condition = 'sunny';
+      } else if ([1, 2, 3, 45, 48].includes(weathercode)) {
+        condition = 'cloudy';
+      } else if ([51, 52, 53, 54, 55, 61, 62, 63, 64, 65, 80, 81, 82, 95, 96, 99].includes(weathercode)) {
+        condition = 'rainy';
+      } else if ([71, 72, 73, 74, 75, 77, 85, 86].includes(weathercode)) {
+        condition = 'snowy';
+      }
+      return { condition, temperature: temp };
+    } catch (e) {
+      console.error('Error fetching from Open-Meteo:', e);
+      return null;
+    }
+  };
+
+  const fetchWeatherFromCoords = async (lat: number, lon: number) => {
+    try {
+      const key = process.env.NEXT_PUBLIC_WEATHER_API_KEY;
+      if (key) {
+        const res = await fetch(`https://api.weatherapi.com/v1/current.json?key=${key}&q=${lat},${lon}`);
+        if (!res.ok) {
+          console.warn('WeatherAPI call failed, falling back to Open-Meteo');
+          return fetchOpenMeteo(lat, lon);
+        }
+        const data = await res.json();
+        const weathercode = data.current?.condition?.code;
+        const temp = data.current?.temp_c;
+        const windKph = data.current?.wind_kph;
+
+        let condition: 'sunny' | 'cloudy' | 'rainy' | 'windy' | 'snowy' = 'sunny';
+        const condText = (data.current?.condition?.text || '').toLowerCase();
+
+        if (windKph && windKph > 30) {
+          condition = 'windy';
+        } else if (weathercode === 1000) {
+          condition = 'sunny';
+        } else if ([1003, 1006, 1009, 1030, 1135, 1147].includes(weathercode)) {
+          condition = 'cloudy';
+        } else if ([1063, 1150, 1153, 1168, 1171, 1180, 1183, 1186, 1189, 1192, 1195, 1198, 1201, 1240, 1243, 1246, 1087, 1273, 1276].includes(weathercode)) {
+          condition = 'rainy';
+        } else if ([1066, 1069, 1072, 1114, 1117, 1204, 1207, 1210, 1213, 1216, 1219, 1222, 1225, 1237, 1249, 1252, 1255, 1258, 1261, 1264, 1279, 1282].includes(weathercode)) {
+          condition = 'snowy';
+        } else {
+          if (condText.includes('rain') || condText.includes('drizzle') || condText.includes('shower') || condText.includes('thunder')) {
+            condition = 'rainy';
+          } else if (condText.includes('snow') || condText.includes('sleet') || condText.includes('ice') || condText.includes('hail') || condText.includes('blizzard')) {
+            condition = 'snowy';
+          } else if (condText.includes('cloud') || condText.includes('overcast') || condText.includes('fog') || condText.includes('mist')) {
+            condition = 'cloudy';
+          } else if (condText.includes('wind') || condText.includes('gale')) {
+            condition = 'windy';
+          } else {
+            condition = 'sunny';
+          }
+        }
+        return { condition, temperature: temp };
+      } else {
+        return fetchOpenMeteo(lat, lon);
+      }
+    } catch (e) {
+      console.error('Error fetching weather:', e);
+      return fetchOpenMeteo(lat, lon);
+    }
+  };
+
   const handleAddLocation = async () => {
     setLocationError('');
 
@@ -964,16 +1084,124 @@ export default function WritePage() {
         capturedAt: new Date(),
       };
 
+      const weatherData = await fetchWeatherFromCoords(latitude, longitude);
+
       const entry = getEntryDraft();
       await saveEntry({
         ...entry,
         location,
+        ...(weatherData ? { weather: weatherData } : {}),
         updatedAt: new Date(),
       });
     } catch (error) {
       setLocationError(getLocationErrorMessage(error));
     } finally {
       setIsLocating(false);
+    }
+  };
+
+  const handleSaveOrbit = async () => {
+    const entry = getEntryDraft();
+    const sleepScore = typeof sleepScoreInput === 'number' ? sleepScoreInput : undefined;
+    const temperature = typeof weatherTemperatureInput === 'number' ? weatherTemperatureInput : undefined;
+
+    const updatedEntry: Entry = {
+      ...entry,
+      weather: {
+        condition: weatherConditionInput,
+        ...(temperature !== undefined ? { temperature } : {}),
+      },
+      condition: {
+        energyLevel: energyLevelInput,
+        mood: moodInput,
+        ...(sleepScore !== undefined ? { sleepScore } : {}),
+      },
+      updatedAt: new Date(),
+    };
+
+    await saveEntry(updatedEntry);
+    setActiveInlinePanel(null);
+    setShowFabActions(false);
+  };
+
+  const handleAutoDetectWeather = async () => {
+    let lat = currentEntry?.location?.latitude;
+    let lon = currentEntry?.location?.longitude;
+
+    if (!lat || !lon) {
+      if (!navigator.geolocation) {
+        setLocationError('gps not supported');
+        return;
+      }
+      setIsFetchingWeather(true);
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+        });
+        lat = position.coords.latitude;
+        lon = position.coords.longitude;
+      } catch (err) {
+        console.error('Geolocation failed:', err);
+        setIsFetchingWeather(false);
+        return;
+      }
+    }
+
+    setIsFetchingWeather(true);
+    try {
+      const weatherData = await fetchWeatherFromCoords(lat, lon);
+      if (weatherData) {
+        setWeatherConditionInput(weatherData.condition);
+        if (weatherData.temperature !== undefined) {
+          setWeatherTemperatureInput(weatherData.temperature);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsFetchingWeather(false);
+    }
+  };
+
+  const handleGenerateDailyInsight = async () => {
+    if (!currentEntry) return;
+    setDailyInsightError('');
+    setIsGeneratingDailyInsight(true);
+
+    try {
+      const res = await fetch('/api/ai/daily-insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userProfile?.uid,
+          date: currentDate,
+          bullets: currentEntry.bullets,
+          dream: currentEntry.dream,
+          weather: currentEntry.weather || null,
+          condition: currentEntry.condition || null
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error('Gagal menghubungi server untuk menganalisis hari ini.');
+      }
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || 'Gagal menganalisis hari ini.');
+      }
+
+      const entry = getEntryDraft();
+      await saveEntry({
+        ...entry,
+        dailyInsight: data.dailyInsight,
+        updatedAt: new Date()
+      });
+    } catch (err: any) {
+      console.error(err);
+      setDailyInsightError(err.message || 'Terjadi kesalahan saat memproses analisis harian Anda.');
+    } finally {
+      setIsGeneratingDailyInsight(false);
     }
   };
 
@@ -1241,6 +1469,72 @@ export default function WritePage() {
             <span className="font-bold text-[#2F3331]">#{entryNumber}</span> / <span className="text-[#FF9933] font-semibold">{isToday ? 'Today' : currentDate}</span>
           </p>
 
+          {/* BIO Sensor bar */}
+          {(currentEntry?.weather || currentEntry?.condition) && (
+            <div className="mt-2.5 flex items-center gap-3.5 text-xs text-[#6F7476] select-none">
+              {currentEntry.condition?.sleepScore !== undefined && (
+                <div className="flex items-center gap-1" title={`Sleep score: ${currentEntry.condition.sleepScore}`}>
+                  <FontAwesomeIcon icon={faBed} className="w-3.5 h-3.5 text-[#5D8AFF]" />
+                  <span className="font-bold font-mono text-[#2F3331]">{currentEntry.condition.sleepScore}</span>
+                </div>
+              )}
+              {currentEntry.condition?.energyLevel !== undefined && (
+                <div className="flex items-center gap-1" title={`Energy level: ${currentEntry.condition.energyLevel}/5`}>
+                  <FontAwesomeIcon icon={faHeartPulse} className="w-3.5 h-3.5 text-[#00DC7D]" />
+                  <span className="font-bold text-[#2F3331] text-[10px] bg-gray-50 border border-[#EEF0EF] px-1.5 py-0.5 rounded uppercase tracking-wider font-mono">
+                    Energy: {currentEntry.condition.energyLevel}/5
+                  </span>
+                </div>
+              )}
+              {currentEntry.condition?.mood !== undefined && (
+                <div className="flex items-center gap-1.5" title={`Mood: ${currentEntry.condition.mood}`}>
+                  {(() => {
+                    const mood = currentEntry.condition.mood;
+                    let icon = faTree;
+                    let iconColor = 'text-[#00DC7D]';
+                    if (mood === 'stressed') { icon = faBolt; iconColor = 'text-red-500'; }
+                    else if (mood === 'anxious') { icon = faWind; iconColor = 'text-purple-500'; }
+                    else if (mood === 'sad') { icon = faCloudRain; iconColor = 'text-blue-500'; }
+                    else if (mood === 'tired') { icon = faMoon; iconColor = 'text-gray-500'; }
+                    else if (mood === 'neutral') { icon = faTree; iconColor = 'text-emerald-500'; }
+                    else if (mood === 'happy') { icon = faSun; iconColor = 'text-amber-500'; }
+                    else if (mood === 'joyful') { icon = faStar; iconColor = 'text-pink-500'; }
+
+                    return (
+                      <>
+                        <FontAwesomeIcon icon={icon} className={`w-3.5 h-3.5 ${iconColor}`} />
+                        <span className="font-bold text-[#2F3331] text-[10px] bg-gray-50 border border-[#EEF0EF] px-1.5 py-0.5 rounded uppercase tracking-wider font-mono">
+                          {mood}
+                        </span>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+              {currentEntry.weather?.condition !== undefined && (
+                <div className="flex items-center gap-1" title={`Weather: ${currentEntry.weather.condition}`}>
+                  <FontAwesomeIcon
+                    icon={
+                      currentEntry.weather.condition === 'sunny'
+                        ? faSun
+                        : currentEntry.weather.condition === 'cloudy'
+                        ? faCloud
+                        : currentEntry.weather.condition === 'rainy'
+                        ? faCloudRain
+                        : currentEntry.weather.condition === 'windy'
+                        ? faWind
+                        : faSnowflake
+                    }
+                    className="w-3.5 h-3.5 text-[#FFB95C]"
+                  />
+                  {currentEntry.weather.temperature !== undefined && (
+                    <span className="font-bold font-mono text-[#2F3331]">{Math.round(currentEntry.weather.temperature)}°C</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="mt-5 space-y-4">
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -1297,6 +1591,14 @@ export default function WritePage() {
                 >
                   <FontAwesomeIcon icon={isLocating ? faSpinner : faLocationDot} className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
                   location
+                </button>
+                <button
+                  onClick={() => openInlinePanel('orbit')}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${activeInlinePanel === 'orbit' ? 'bg-[#E9FFF4] text-[#00DC7D]' : 'bg-[#F2F2F3] text-[#2F3331] hover:bg-[#E8E9EA]'}`}
+                  title="daily vibe status"
+                >
+                  <FontAwesomeIcon icon={faHeartPulse} className="w-4 h-4 text-[#00DC7D] animate-pulse" />
+                  status
                 </button>
               </div>
             </div>
@@ -1553,6 +1855,201 @@ export default function WritePage() {
               </div>
             )}
 
+            {activeInlinePanel === 'orbit' && (
+              <div className="py-4 border border-[#EEF0EF] bg-[#FAFAFA] rounded-2xl p-5 shadow-sm space-y-5 animate-in fade-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between border-b border-[#EEF0EF] pb-2">
+                  <div className="flex items-center gap-2">
+                    <FontAwesomeIcon icon={faHeartPulse} className="h-5 w-5 text-[#00DC7D] animate-pulse" />
+                    <h3 className="text-base font-bold text-[#2F3331]">Mind-Body Orbit</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setActiveInlinePanel(null)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-white border border-[#CCD0CF] text-[#6F7476] transition-colors hover:bg-[#F2F2F3] hover:text-[#2F3331]"
+                      title="cancel"
+                    >
+                      <FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={handleSaveOrbit}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00DC7D] text-white transition-colors hover:bg-[#00B866] shadow-sm"
+                      title="save"
+                    >
+                      <FontAwesomeIcon icon={faCheck} className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Weather Section */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-[#6F7476] uppercase tracking-wider">Weather & Temp</label>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {(['sunny', 'cloudy', 'rainy', 'windy', 'snowy'] as const).map((cond) => {
+                        const icon = cond === 'sunny' ? faSun : cond === 'cloudy' ? faCloud : cond === 'rainy' ? faCloudRain : cond === 'windy' ? faWind : faSnowflake;
+                        const isSel = weatherConditionInput === cond;
+                        return (
+                          <button
+                            key={cond}
+                            onClick={() => setWeatherConditionInput(cond)}
+                            type="button"
+                            className={`flex h-9 w-9 items-center justify-center rounded-lg border text-sm transition-all ${
+                              isSel
+                                ? 'bg-white border-[#00DC7D] text-[#00DC7D] shadow-sm scale-105'
+                                : 'bg-white border-[#EEF0EF] text-[#6F7476] hover:bg-gray-50'
+                            }`}
+                            title={cond}
+                          >
+                            <FontAwesomeIcon icon={icon} className="h-4 w-4" />
+                          </button>
+                        );
+                      })}
+                      <button
+                        onClick={handleAutoDetectWeather}
+                        disabled={isFetchingWeather}
+                        type="button"
+                        className="flex items-center justify-center h-9 px-2.5 rounded-lg bg-white border border-[#CCD0CF] text-xs font-semibold text-[#2F3331] hover:bg-gray-50 active:scale-95 disabled:opacity-50"
+                        title="Auto-detect weather using GPS"
+                      >
+                        <FontAwesomeIcon icon={isFetchingWeather ? faSpinner : faLocationDot} className={`h-3 w-3 mr-1 ${isFetchingWeather ? 'animate-spin' : ''}`} />
+                        GPS
+                      </button>
+                    </div>
+                    {/* Temperature Input */}
+                    <div className="relative max-w-[120px] mt-1">
+                      <input
+                        type="number"
+                        placeholder="Temp"
+                        value={weatherTemperatureInput}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? '' : Math.round(parseFloat(e.target.value) * 10) / 10;
+                          setWeatherTemperatureInput(val);
+                        }}
+                        className="w-full bg-white border border-[#EEF0EF] rounded-xl pl-3 pr-8 py-2 text-xs text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#00DC7D]/50 focus:ring-1 focus:ring-[#00DC7D]/50 font-mono font-bold"
+                      />
+                      <span className="absolute right-3 top-2 text-[10px] text-[#A3A7A8] font-bold">°C</span>
+                    </div>
+                  </div>
+
+                  {/* Sleep Score Section */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-[#6F7476] uppercase tracking-wider">Smartwatch Sleep Score</label>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          placeholder="e.g. 85"
+                          value={sleepScoreInput}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? '' : Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                            setSleepScoreInput(val);
+                          }}
+                          className="w-full bg-white border border-[#EEF0EF] rounded-xl px-3 py-2 text-sm text-[#2F3331] placeholder-[#A3A7A8] focus:outline-none focus:border-[#00DC7D]/50 focus:ring-1 focus:ring-[#00DC7D]/50"
+                        />
+                        <span className="absolute right-3 top-2.5 text-xs text-[#A3A7A8] font-bold">/ 100</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Energy Level Section */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-[#6F7476] uppercase tracking-wider">Energy Level</label>
+                    <div className="relative pt-2 pb-6 px-1">
+                      {/* Custom Track Container */}
+                      <div className="relative h-3.5 w-full rounded-full bg-[#EEF0EF] overflow-hidden shadow-inner">
+                        {/* Active track with energetic progress animation */}
+                        <div
+                          className="absolute top-0 left-0 h-full rounded-full energetic-progress-pulsing transition-all duration-300"
+                          style={{ width: `calc(10px + ${((energyLevelInput - 1) / 4)} * (100% - 20px))` }}
+                        />
+                        
+                        {/* 5 discrete tick marks / dots inside track */}
+                        <div className="absolute top-0 left-0 w-full h-full flex justify-between items-center px-2 pointer-events-none">
+                          {[1, 2, 3, 4, 5].map((lvl) => {
+                            const isActive = lvl <= energyLevelInput;
+                            return (
+                              <div
+                                key={lvl}
+                                className={`w-1.5 h-1.5 rounded-full transition-colors duration-300 ${
+                                  isActive ? 'bg-white shadow-sm' : 'bg-gray-400'
+                                }`}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Real range input overlayed and styled transparently to capture drag/click */}
+                      <input
+                        type="range"
+                        min="1"
+                        max="5"
+                        step="1"
+                        value={energyLevelInput}
+                        onChange={(e) => setEnergyLevelInput(parseInt(e.target.value))}
+                        className="absolute top-2 left-0 w-full h-3.5 opacity-0 cursor-pointer z-10"
+                      />
+
+                      {/* Floating Slider Thumb overlay */}
+                      <div
+                        className="absolute top-1.5 w-5 h-5 rounded-full bg-white border-2 border-[#00DC7D] shadow-md flex items-center justify-center transition-all duration-300 pointer-events-none"
+                        style={{
+                          left: `calc(${((energyLevelInput - 1) / 4)} * (100% - 20px))`,
+                        }}
+                      >
+                        <span className="text-[10px] font-extrabold text-[#00DC7D]">{energyLevelInput}</span>
+                      </div>
+
+                      {/* Tick labels */}
+                      <div className="flex justify-between text-[8px] font-extrabold text-[#A3A7A8] mt-2 select-none uppercase tracking-wider">
+                        <span>Exhausted (1)</span>
+                        <span>Tired (2)</span>
+                        <span>Normal (3)</span>
+                        <span>Focused (4)</span>
+                        <span>Energetic (5)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mood Section */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-[#6F7476] uppercase tracking-wider font-mono">Manual Mood</label>
+                    <div className="grid grid-cols-7 gap-1">
+                      {([
+                        { key: 'stressed', icon: faBolt, color: 'text-red-500 bg-red-50/50 border-red-200' },
+                        { key: 'anxious', icon: faWind, color: 'text-purple-500 bg-purple-50/50 border-purple-200' },
+                        { key: 'sad', icon: faCloudRain, color: 'text-blue-500 bg-blue-50/50 border-blue-200' },
+                        { key: 'tired', icon: faMoon, color: 'text-gray-500 bg-gray-50/50 border-gray-200' },
+                        { key: 'neutral', icon: faTree, color: 'text-emerald-500 bg-emerald-50/50 border-emerald-200' },
+                        { key: 'happy', icon: faSun, color: 'text-amber-500 bg-amber-50/50 border-amber-200' },
+                        { key: 'joyful', icon: faStar, color: 'text-pink-500 bg-pink-50/50 border-pink-200' }
+                      ] as const).map((moodObj) => {
+                        const isSel = moodInput === moodObj.key;
+                        return (
+                          <button
+                            key={moodObj.key}
+                            onClick={() => setMoodInput(moodObj.key)}
+                            type="button"
+                            className={`flex flex-col items-center justify-center py-2.5 rounded-xl border transition-all ${
+                              isSel
+                                ? `bg-white border-[#00DC7D] shadow-sm scale-105 ${moodObj.color.split(' ')[0]} font-bold`
+                                : 'bg-white border-[#EEF0EF] hover:bg-gray-50 text-[#A3A7A8]'
+                            }`}
+                            title={moodObj.key}
+                          >
+                            <FontAwesomeIcon icon={moodObj.icon} className={`h-4 w-4 ${isSel ? '' : 'text-gray-400'}`} />
+                            <span className="text-[8px] font-bold mt-1 truncate max-w-full px-0.5">{moodObj.key}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {selectedImageIndex !== null && isImageGalleryOpen && (
               <div
                 className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm animate-in fade-in duration-300"
@@ -1759,6 +2256,73 @@ export default function WritePage() {
               <p className="mt-1 text-xs text-[#A3A7A8]">{entryMedia.length} {entryMedia.length === 1 ? 'photo' : 'photos'}</p>
             </div>
           )}
+
+          {/* Daily Insight Section */}
+          <div className="mt-8 border-t border-[#EEF0EF] pt-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FontAwesomeIcon icon={faSun} className="h-4 w-4 text-[#00DC7D]" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-[#6F7476] font-mono">Daily Insight</h4>
+              </div>
+              
+              <button
+                onClick={handleGenerateDailyInsight}
+                disabled={isGeneratingDailyInsight || (!currentEntry?.dream && (!currentEntry?.bullets || currentEntry.bullets.length === 0))}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-white border border-[#CCD0CF] px-3.5 py-1.5 text-xs font-semibold text-[#2F3331] shadow-sm hover:bg-[#F2F2F3] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+              >
+                {isGeneratingDailyInsight ? (
+                  <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin text-[#2F3331]" />
+                ) : (
+                  <AISparklesIcon className="h-3.5 w-3.5 text-[#2F3331]" />
+                )}
+                {currentEntry?.dailyInsight ? 'Analyze Again' : 'Analyze Day'}
+              </button>
+            </div>
+
+            {dailyInsightError && (
+              <p className="text-xs font-medium text-[#FF453A]">{dailyInsightError}</p>
+            )}
+
+            {isGeneratingDailyInsight && (
+              <div className="rounded-2xl border border-[#EEF0EF] bg-[#FAFAFA] p-8 flex flex-col items-center justify-center text-center shadow-sm">
+                <div className="relative mb-4 flex h-14 w-14 items-center justify-center">
+                  <span className="absolute h-full w-full rounded-full border-2 border-[#00DC7D]/10" />
+                  <span className="absolute h-full w-full animate-spin rounded-full border-2 border-t-[#00DC7D] border-r-transparent border-b-transparent border-l-transparent" />
+                  <div className="h-2.5 w-2.5 animate-ping rounded-full bg-[#00DC7D] opacity-75" />
+                </div>
+                <h4 className="font-serif text-sm font-bold text-[#2F3331]">Recalling your day's vibes...</h4>
+                <p className="mt-1 text-xs text-[#A3A7A8] font-mono animate-pulse">Analyzing your energy, weather, and reflections...</p>
+              </div>
+            )}
+
+            {!isGeneratingDailyInsight && currentEntry?.dailyInsight && (
+              <div className="rounded-2xl border border-[#EEF0EF] bg-[#FAFAFA] p-5 space-y-3 shadow-sm transition-all hover:shadow-md animate-in fade-in duration-300">
+                <div className="flex items-center justify-between border-b border-[#EEF0EF] pb-2 text-xs">
+                  <div className="flex items-center gap-2 font-mono">
+                    <span className="flex items-center gap-1 rounded-full bg-pink-50 px-2 py-0.5 font-bold uppercase tracking-wider text-pink-700">
+                      Mood: {currentEntry.dailyInsight.moodScore || 7}/10
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 font-bold uppercase tracking-wider ${
+                      currentEntry.dailyInsight.sentiment === 'positive'
+                        ? 'bg-green-50 text-green-700'
+                        : currentEntry.dailyInsight.sentiment === 'negative'
+                        ? 'bg-red-50 text-red-700'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {currentEntry.dailyInsight.sentiment}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-[#A3A7A8] font-mono">
+                    Updated: {new Date(currentEntry.dailyInsight.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                
+                <p className="font-serif text-sm font-light leading-relaxed text-[#2F3331] italic">
+                  " {currentEntry.dailyInsight.text} "
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

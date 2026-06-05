@@ -36,11 +36,17 @@ import {
   faChartLine,
   faClock,
   faSun,
+  faHeartPulse,
+  faBed,
+  faCloud,
+  faCloudRain,
+  faWind,
+  faSnowflake,
 } from '@fortawesome/free-solid-svg-icons';
 import { Entry, WisdomType } from '@/types';
 import { ActivityHeatmap } from '@/components/ui/ActivityHeatmap';
 
-type InsightTab = 'journal' | 'dreams' | 'stars' | 'tags' | 'people' | 'wisdom' | 'ideas';
+type InsightTab = 'journal' | 'dreams' | 'stars' | 'tags' | 'people' | 'wisdom' | 'ideas' | 'orbit';
 type InsightScope = 'year' | 'alltime';
 type ActivityRecord = {
   id: string;
@@ -64,6 +70,7 @@ const tabs: { id: InsightTab; label: string; icon: IconDefinition }[] = [
   { id: 'people', label: 'People', icon: faAt },
   { id: 'wisdom', label: 'Wisdom', icon: faTree },
   { id: 'ideas', label: 'Ideas', icon: faLightbulb },
+  { id: 'orbit', label: 'Orbit', icon: faHeartPulse },
 ];
 
 const wisdomTypeMeta: Record<WisdomType, { label: string; icon: IconDefinition; color: string; bg: string }> = {
@@ -1039,6 +1046,650 @@ export default function InsightsPage() {
             />
           </div>
         )}
+
+        {activeTab === 'orbit' && (
+          <OrbitTabContent scopedEntries={scopedEntries} heatmapTitle={heatmapTitle} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+function OrbitTabContent({
+  scopedEntries,
+  heatmapTitle,
+}: {
+  scopedEntries: Entry[];
+  heatmapTitle: string;
+}) {
+  const [selectedMonth, setSelectedMonth] = useState<number | 'all'>('all');
+
+  const monthsList: { value: number | 'all'; label: string }[] = [
+    { value: 'all', label: 'All Months' },
+    { value: 0, label: 'Jan' },
+    { value: 1, label: 'Feb' },
+    { value: 2, label: 'Mar' },
+    { value: 3, label: 'Apr' },
+    { value: 4, label: 'May' },
+    { value: 5, label: 'Jun' },
+    { value: 6, label: 'Jul' },
+    { value: 7, label: 'Aug' },
+    { value: 8, label: 'Sep' },
+    { value: 9, label: 'Oct' },
+    { value: 10, label: 'Nov' },
+    { value: 11, label: 'Dec' },
+  ];
+
+  const orbitData = useMemo(() => {
+    let sleepTotal = 0;
+    let sleepCount = 0;
+    let energyTotal = 0;
+    let energyCount = 0;
+    const moodCounts: Record<string, number> = {};
+    const weatherCounts: Record<string, number> = {};
+    const dailyValues: Array<{ date: string; sleepScore?: number; energyLevel?: number; mood?: string }> = [];
+
+    // Filter scoped entries first if a specific month is selected
+    const monthFilteredEntries = scopedEntries.filter((entry) => {
+      if (selectedMonth === 'all') return true;
+      const parsedDate = parseISO(entry.date);
+      return parsedDate.getMonth() === selectedMonth;
+    });
+
+    monthFilteredEntries.forEach((entry) => {
+      const condition = entry.condition;
+      const weather = entry.weather;
+
+      if (condition) {
+        if (typeof condition.sleepScore === 'number' && condition.sleepScore > 0) {
+          sleepTotal += condition.sleepScore;
+          sleepCount++;
+        }
+        if (typeof condition.energyLevel === 'number' && condition.energyLevel > 0) {
+          energyTotal += condition.energyLevel;
+          energyCount++;
+        }
+        if (condition.mood) {
+          moodCounts[condition.mood] = (moodCounts[condition.mood] || 0) + 1;
+        }
+      }
+
+      if (weather && weather.condition) {
+        weatherCounts[weather.condition] = (weatherCounts[weather.condition] || 0) + 1;
+      }
+
+      if (
+        (condition && (condition.sleepScore !== undefined || condition.energyLevel !== undefined || condition.mood)) ||
+        (weather && weather.condition)
+      ) {
+        dailyValues.push({
+          date: entry.date,
+          sleepScore: condition?.sleepScore,
+          energyLevel: condition?.energyLevel,
+          mood: condition?.mood,
+        });
+      }
+    });
+
+    const avgSleep = sleepCount > 0 ? Math.round(sleepTotal / sleepCount) : null;
+    const avgEnergy = energyCount > 0 ? (energyTotal / energyCount).toFixed(1) : null;
+
+    let mostCommonMood = '-';
+    let maxMoodCount = 0;
+    Object.entries(moodCounts).forEach(([mood, count]) => {
+      if (count > maxMoodCount) {
+        maxMoodCount = count;
+        mostCommonMood = mood;
+      }
+    });
+
+    let mostCommonWeather = '-';
+    let maxWeatherCount = 0;
+    Object.entries(weatherCounts).forEach(([weather, count]) => {
+      if (count > maxWeatherCount) {
+        maxWeatherCount = count;
+        mostCommonWeather = weather;
+      }
+    });
+
+    // Create activity records for the heatmap (days with any orbit logs)
+    const orbitActivityRecords = dailyValues.map((v) => ({ id: v.date, date: v.date }));
+
+    return {
+      avgSleep,
+      avgEnergy,
+      mostCommonMood,
+      mostCommonWeather,
+      moodCounts,
+      weatherCounts,
+      orbitActivityRecords,
+      dailyValues: dailyValues.sort((a, b) => a.date.localeCompare(b.date)),
+    };
+  }, [scopedEntries, selectedMonth]);
+
+  // Construct chart data based on whether selectedMonth is 'all' (Monthly Aggregation) or a specific month (Daily Trend)
+  const chartData = useMemo(() => {
+    if (selectedMonth === 'all') {
+      // Monthly Aggregation for the selected year
+      return Array.from({ length: 12 }, (_, monthIdx) => {
+        let sleepSum = 0;
+        let sleepCount = 0;
+        let energySum = 0;
+        let energyCount = 0;
+
+        scopedEntries.forEach((entry) => {
+          const parsedDate = parseISO(entry.date);
+          if (parsedDate.getMonth() === monthIdx) {
+            const condition = entry.condition;
+            if (condition) {
+              if (typeof condition.sleepScore === 'number' && condition.sleepScore > 0) {
+                sleepSum += condition.sleepScore;
+                sleepCount++;
+              }
+              if (typeof condition.energyLevel === 'number' && condition.energyLevel > 0) {
+                energySum += condition.energyLevel;
+                energyCount++;
+              }
+            }
+          }
+        });
+
+        return {
+          label: monthsList[monthIdx + 1].label,
+          sleepScore: sleepCount > 0 ? Math.round(sleepSum / sleepCount) : 0,
+          energyLevel: energyCount > 0 ? Math.round((energySum / energyCount) * 20) : 0,
+          rawEnergy: sleepSum > 0 || energySum > 0 ? (energyCount > 0 ? (energySum / energyCount).toFixed(1) : '0') : '-',
+        };
+      }).filter((item) => item.sleepScore > 0 || item.energyLevel > 0);
+    } else {
+      // Daily Trend for the selected month
+      const filtered = scopedEntries.filter((entry) => {
+        const parsedDate = parseISO(entry.date);
+        return parsedDate.getMonth() === selectedMonth;
+      });
+
+      const sorted = [...filtered].sort((a, b) => a.date.localeCompare(b.date));
+
+      return sorted.map((entry) => {
+        const parsedDate = parseISO(entry.date);
+        const dayLabel = format(parsedDate, 'd');
+        const condition = entry.condition;
+
+        return {
+          label: dayLabel,
+          dateStr: format(parsedDate, 'MMM d'),
+          sleepScore: condition?.sleepScore && condition.sleepScore > 0 ? condition.sleepScore : 0,
+          energyLevel: condition?.energyLevel && condition.energyLevel > 0 ? condition.energyLevel * 20 : 0,
+          rawEnergy: condition?.energyLevel && condition.energyLevel > 0 ? condition.energyLevel : '-',
+        };
+      }).filter((item) => item.sleepScore > 0 || item.energyLevel > 0);
+    }
+  }, [scopedEntries, selectedMonth]);
+
+  const chartTitle = selectedMonth === 'all'
+    ? 'Monthly Sleep & Energy Aggregation'
+    : `Daily Sleep & Energy Trend (${monthsList[selectedMonth + 1].label})`;
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* Scrollable Month Selection Tabs */}
+      <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin select-none">
+        {monthsList.map((m) => {
+          const isActive = selectedMonth === m.value;
+          return (
+            <button
+              key={m.label}
+              onClick={() => setSelectedMonth(m.value)}
+              type="button"
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-full transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+                isActive
+                  ? 'bg-[#00DC7D] text-white shadow-sm'
+                  : 'bg-white border border-[#EEF0EF] text-[#6F7476] hover:bg-gray-50'
+              }`}
+            >
+              {m.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Metric Chips */}
+      <MetricChips
+        items={[
+          { label: 'Avg Sleep', value: orbitData.avgSleep !== null ? `${orbitData.avgSleep}` : '-', color: '#5D8AFF' },
+          { label: 'Avg Energy', value: orbitData.avgEnergy !== null ? `${orbitData.avgEnergy}` : '-', color: '#00DC7D' },
+          { label: 'Common Mood', value: orbitData.mostCommonMood, color: '#FF9933' },
+          { label: 'Common Weather', value: orbitData.mostCommonWeather, color: '#FFB95C' },
+        ]}
+      />
+
+      {/* Activity Heatmap for Orbit */}
+      <ActivityHeatmap
+        title={heatmapTitle}
+        data={useMemo(() => {
+          const recordsMap = new Set(orbitData.orbitActivityRecords.map((r) => r.date));
+          const years = scopedEntries.map((e) => parseISO(e.date).getFullYear());
+          const year = years.length > 0 ? years[0] : new Date().getFullYear();
+          const start = startOfYear(new Date(year, 0, 1));
+          const end = new Date(year, 11, 31);
+          const totalDays = differenceInCalendarDays(end, start) + 1;
+
+          return Array.from({ length: totalDays }, (_, index) => {
+            const date = addDays(start, index);
+            const dateKey = format(date, 'yyyy-MM-dd');
+            return {
+              date,
+              dateKey,
+              count: recordsMap.has(dateKey) ? 1 : 0,
+            };
+          });
+        }, [orbitData.orbitActivityRecords, scopedEntries])}
+        color="#00DC7D"
+      />
+
+      {/* Sleep & Energy Line Chart */}
+      <OrbitLineChart data={chartData} title={chartTitle} />
+
+      {/* Mood Distribution */}
+      <MoodBreakdownChart moodCounts={orbitData.moodCounts} />
+
+      {/* Weather Distribution */}
+      <WeatherBreakdownChart weatherCounts={orbitData.weatherCounts} />
+    </div>
+  );
+}
+
+function OrbitLineChart({
+  data,
+  title,
+}: {
+  data: Array<{ label: string; dateStr?: string; sleepScore: number; energyLevel: number; rawEnergy: string | number }>;
+  title: string;
+}) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  const width = 500;
+  const height = 220;
+  const paddingLeft = 40;
+  const paddingRight = 20;
+  const paddingTop = 25;
+  const paddingBottom = 35;
+  const chartWidth = width - paddingLeft - paddingRight;
+  const chartHeight = height - paddingTop - paddingBottom;
+
+  // Compute coordinates for Sleep Score (filter out unlogged <= 0)
+  const sleepPoints = data
+    .map((item, i) => {
+      const x = paddingLeft + (data.length > 1 ? (i / (data.length - 1)) * chartWidth : chartWidth / 2);
+      const y = paddingTop + chartHeight - (item.sleepScore / 100) * chartHeight;
+      return { x, y, val: item.sleepScore, label: item.label, dateStr: item.dateStr, originalIdx: i };
+    })
+    .filter((p) => p.val > 0);
+
+  // Compute coordinates for Energy Level (filter out unlogged <= 0)
+  const energyPoints = data
+    .map((item, i) => {
+      const x = paddingLeft + (data.length > 1 ? (i / (data.length - 1)) * chartWidth : chartWidth / 2);
+      const y = paddingTop + chartHeight - (item.energyLevel / 100) * chartHeight;
+      return { x, y, val: item.energyLevel, rawVal: item.rawEnergy, label: item.label, dateStr: item.dateStr, originalIdx: i };
+    })
+    .filter((p) => p.val > 0);
+
+  // Generate the smooth line path using bezier curves
+  const getBezierPath = (pts: Array<{ x: number; y: number }>) => {
+    if (pts.length === 0) return '';
+    if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+
+    let path = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i];
+      const p1 = pts[i + 1];
+      const cpX1 = p0.x + (p1.x - p0.x) / 3;
+      const cpY1 = p0.y;
+      const cpX2 = p1.x - (p1.x - p0.x) / 3;
+      const cpY2 = p1.y;
+      path += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${p1.x} ${p1.y}`;
+    }
+    return path;
+  };
+
+  const sleepLinePath = getBezierPath(sleepPoints);
+  const energyLinePath = getBezierPath(energyPoints);
+
+  // Generate the closed area paths for gradients
+  const sleepAreaPath = sleepPoints.length > 0
+    ? `${sleepLinePath} L ${sleepPoints[sleepPoints.length - 1].x} ${paddingTop + chartHeight} L ${sleepPoints[0].x} ${paddingTop + chartHeight} Z`
+    : '';
+
+  const energyAreaPath = energyPoints.length > 0
+    ? `${energyLinePath} L ${energyPoints[energyPoints.length - 1].x} ${paddingTop + chartHeight} L ${energyPoints[0].x} ${paddingTop + chartHeight} Z`
+    : '';
+
+  return (
+    <div className="bg-white dark:bg-[#1E2022] rounded-3xl p-5 border border-[#CCD0CF] dark:border-[#2E3133] shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-[#2F3331] dark:text-[#FAFAFA] text-sm flex items-center gap-2">
+          <FontAwesomeIcon icon={faChartLine} className="text-[#00DC7D]" />
+          <span>{title}</span>
+        </h3>
+        {/* Legends */}
+        <div className="flex items-center gap-3 text-[9px] font-bold">
+          <span className="flex items-center gap-1 text-[#3B82F6]">
+            <span className="w-2 h-2 rounded-full bg-[#3B82F6] inline-block"></span>
+            Sleep Score
+          </span>
+          <span className="flex items-center gap-1 text-[#00DC7D]">
+            <span className="w-2 h-2 rounded-full bg-[#00DC7D] inline-block"></span>
+            Energy Level
+          </span>
+        </div>
+      </div>
+
+      {data.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <p className="text-xs text-[#A3A7A8] dark:text-[#6F7476]">No data logged for this period</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto pb-2 scrollbar-thin">
+          <div style={{ width: '100%', minWidth: '440px' }} className="relative h-[220px]">
+            <svg
+              viewBox={`0 0 ${width} ${height}`}
+              className="w-full h-full select-none"
+              onMouseLeave={() => setHoveredIdx(null)}
+            >
+              <defs>
+                <linearGradient id="sleepAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.00" />
+                </linearGradient>
+                <linearGradient id="energyAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#00DC7D" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#00DC7D" stopOpacity="0.00" />
+                </linearGradient>
+              </defs>
+
+              {/* Horizontal gridlines */}
+              {[0, 20, 40, 60, 80, 100].map((gridVal) => {
+                const ratio = gridVal / 100;
+                const y = paddingTop + chartHeight - ratio * chartHeight;
+                const energyLabel = gridVal === 0 ? '0' : `${gridVal / 20}`;
+                return (
+                  <g key={gridVal}>
+                    <line
+                      x1={paddingLeft}
+                      y1={y}
+                      x2={width - paddingRight}
+                      y2={y}
+                      stroke="#EEF0EF"
+                      className="stroke-[#EEF0EF] dark:stroke-[#2E3133]"
+                      strokeDasharray="4 4"
+                    />
+                    <text
+                      x={paddingLeft - 8}
+                      y={y + 3}
+                      textAnchor="end"
+                      className="text-[8px] font-bold fill-gray-400 dark:fill-[#6F7476]"
+                    >
+                      {gridVal} ({energyLabel})
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Hover vertical highlight bar */}
+              {hoveredIdx !== null && (() => {
+                const x = paddingLeft + (data.length > 1 ? (hoveredIdx / (data.length - 1)) * chartWidth : chartWidth / 2);
+                return (
+                  <rect
+                    x={x - 12}
+                    y={paddingTop}
+                    width="24"
+                    height={chartHeight}
+                    className="fill-gray-200/50 dark:fill-gray-700/30"
+                    opacity="0.4"
+                    rx="4"
+                    pointerEvents="none"
+                  />
+                );
+              })()}
+
+              {/* Closed area gradients */}
+              {sleepAreaPath && (
+                <path d={sleepAreaPath} fill="url(#sleepAreaGradient)" />
+              )}
+              {energyAreaPath && (
+                <path d={energyAreaPath} fill="url(#energyAreaGradient)" />
+              )}
+
+              {/* Sleep Score Line */}
+              {sleepLinePath && (
+                <path
+                  d={sleepLinePath}
+                  fill="none"
+                  stroke="#3B82F6"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+
+              {/* Energy Level Line */}
+              {energyLinePath && (
+                <path
+                  d={energyLinePath}
+                  fill="none"
+                  stroke="#00DC7D"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+
+              {/* Sleep Dots and Hover Values */}
+              {sleepPoints.map((item, i) => {
+                const isHovered = hoveredIdx === item.originalIdx;
+                return (
+                  <g key={`sleep-${i}`}>
+                    <circle
+                      cx={item.x}
+                      cy={item.y}
+                      r={isHovered ? 6.5 : 4.5}
+                      className="fill-white dark:fill-[#1E2022] transition-all duration-150"
+                      stroke="#3B82F6"
+                      strokeWidth={isHovered ? 2.5 : 1.5}
+                    />
+                    <circle
+                      cx={item.x}
+                      cy={item.y}
+                      r={isHovered ? 2.5 : 1.5}
+                      fill="#3B82F6"
+                      className="transition-all duration-150"
+                    />
+                    {isHovered && (
+                      <g className="animate-in fade-in zoom-in-95 duration-100">
+                        <rect
+                          x={item.x - 16}
+                          y={item.y - 25}
+                          width="32"
+                          height="15"
+                          rx="4"
+                          fill="#3B82F6"
+                          className="shadow-sm"
+                        />
+                        <text
+                          x={item.x}
+                          y={item.y - 15}
+                          textAnchor="middle"
+                          className="text-[8px] font-extrabold fill-white font-mono"
+                        >
+                          {item.val}
+                        </text>
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
+
+              {/* Energy Dots and Hover Values */}
+              {energyPoints.map((item, i) => {
+                const isHovered = hoveredIdx === item.originalIdx;
+                return (
+                  <g key={`energy-${i}`}>
+                    <circle
+                      cx={item.x}
+                      cy={item.y}
+                      r={isHovered ? 6.5 : 4.5}
+                      className="fill-white dark:fill-[#1E2022] transition-all duration-150"
+                      stroke="#00DC7D"
+                      strokeWidth={isHovered ? 2.5 : 1.5}
+                    />
+                    <circle
+                      cx={item.x}
+                      cy={item.y}
+                      r={isHovered ? 2.5 : 1.5}
+                      fill="#00DC7D"
+                      className="transition-all duration-150"
+                    />
+                    {isHovered && (
+                      <g className="animate-in fade-in zoom-in-95 duration-100">
+                        <rect
+                          x={item.x - 16}
+                          y={item.y + 10}
+                          width="32"
+                          height="15"
+                          rx="4"
+                          fill="#00DC7D"
+                          className="shadow-sm"
+                        />
+                        <text
+                          x={item.x}
+                          y={item.y + 20}
+                          textAnchor="middle"
+                          className="text-[8px] font-extrabold fill-white font-mono"
+                        >
+                          {item.rawVal}
+                        </text>
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
+
+              {/* X Axis Labels */}
+              {data.map((item, i) => (
+                <text
+                  key={`lbl-${i}`}
+                  x={paddingLeft + (data.length > 1 ? (i / (data.length - 1)) * chartWidth : chartWidth / 2)}
+                  y={paddingTop + chartHeight + 15}
+                  textAnchor="middle"
+                  className="text-[8px] font-bold fill-gray-400 dark:fill-[#A3A7A8]"
+                >
+                  {item.label}
+                </text>
+              ))}
+
+              {/* Hover detection overlay columns */}
+              {data.map((item, i) => {
+                const x = paddingLeft + (data.length > 1 ? (i / (data.length - 1)) * chartWidth : chartWidth / 2);
+                const colWidth = data.length > 1 ? chartWidth / (data.length - 1) : chartWidth;
+                const rectX = data.length > 1 ? x - colWidth / 2 : paddingLeft;
+                const rectW = data.length > 1 ? colWidth : chartWidth;
+                return (
+                  <rect
+                    key={`hover-detect-${i}`}
+                    x={rectX}
+                    y={paddingTop}
+                    width={rectW}
+                    height={chartHeight}
+                    fill="transparent"
+                    className="cursor-pointer"
+                    onMouseEnter={() => setHoveredIdx(i)}
+                    onMouseMove={() => setHoveredIdx(i)}
+                  />
+                );
+              })}
+            </svg>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MoodBreakdownChart({ moodCounts }: { moodCounts: Record<string, number> }) {
+  const moods = ['stressed', 'anxious', 'sad', 'tired', 'neutral', 'happy', 'joyful'];
+  const maxVal = Math.max(1, ...Object.values(moodCounts));
+
+  return (
+    <div className="bg-white dark:bg-[#1E2022] rounded-3xl p-5 border border-[#CCD0CF] dark:border-[#2E3133] shadow-sm">
+      <h3 className="font-bold text-[#2F3331] dark:text-[#FAFAFA] text-sm mb-4 flex items-center gap-2">
+        <FontAwesomeIcon icon={faStar} className="text-[#00DC7D]" />
+        <span>mood distribution</span>
+      </h3>
+      <div className="space-y-3">
+        {moods.map((mood) => {
+          const count = moodCounts[mood] || 0;
+          let barColor = 'bg-emerald-500';
+          if (mood === 'stressed') barColor = 'bg-red-500';
+          else if (mood === 'anxious') barColor = 'bg-purple-500';
+          else if (mood === 'sad') barColor = 'bg-blue-500';
+          else if (mood === 'tired') barColor = 'bg-gray-500';
+          else if (mood === 'neutral') barColor = 'bg-emerald-500';
+          else if (mood === 'happy') barColor = 'bg-amber-500';
+          else if (mood === 'joyful') barColor = 'bg-pink-500';
+
+          return (
+            <div key={mood} className="flex items-center gap-3">
+              <span className="w-16 text-xs font-semibold text-[#6F7476] dark:text-[#A3A7A8] capitalize">{mood}</span>
+              <div className="h-2 flex-1 rounded-full bg-[#EEF0EF] dark:bg-[#2E3133] overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                  style={{ width: `${(count / maxVal) * 100}%` }}
+                />
+              </div>
+              <span className="w-7 text-right text-xs font-semibold text-[#2F3331] dark:text-[#FAFAFA]">{count}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function WeatherBreakdownChart({ weatherCounts }: { weatherCounts: Record<string, number> }) {
+  const conditions = ['sunny', 'cloudy', 'rainy', 'windy', 'snowy'];
+  const maxVal = Math.max(1, ...Object.values(weatherCounts));
+
+  return (
+    <div className="bg-white dark:bg-[#1E2022] rounded-3xl p-5 border border-[#CCD0CF] dark:border-[#2E3133] shadow-sm">
+      <h3 className="font-bold text-[#2F3331] dark:text-[#FAFAFA] text-sm mb-4 flex items-center gap-2">
+        <FontAwesomeIcon icon={faSun} className="text-[#00DC7D]" />
+        <span>weather distribution</span>
+      </h3>
+      <div className="space-y-3">
+        {conditions.map((cond) => {
+          const count = weatherCounts[cond] || 0;
+          let barColor = 'bg-amber-500';
+          if (cond === 'sunny') barColor = 'bg-amber-500';
+          else if (cond === 'cloudy') barColor = 'bg-sky-400';
+          else if (cond === 'rainy') barColor = 'bg-blue-500';
+          else if (cond === 'windy') barColor = 'bg-teal-500';
+          else if (cond === 'snowy') barColor = 'bg-blue-200';
+
+          return (
+            <div key={cond} className="flex items-center gap-3">
+              <span className="w-16 text-xs font-semibold text-[#6F7476] dark:text-[#A3A7A8] capitalize">{cond}</span>
+              <div className="h-2 flex-1 rounded-full bg-[#EEF0EF] dark:bg-[#2E3133] overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                  style={{ width: `${(count / maxVal) * 100}%` }}
+                />
+              </div>
+              <span className="w-7 text-right text-xs font-semibold text-[#2F3331] dark:text-[#FAFAFA]">{count}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -1320,8 +1971,25 @@ function WordCountTimelineChart({
     return { ...item, x, y };
   });
   
-  // Generate the line path
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  // Generate the smooth line path using bezier curves
+  const getBezierPath = (pts: Array<{ x: number; y: number }>) => {
+    if (pts.length === 0) return '';
+    if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+    
+    let path = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i];
+      const p1 = pts[i + 1];
+      const cpX1 = p0.x + (p1.x - p0.x) / 3;
+      const cpY1 = p0.y;
+      const cpX2 = p1.x - (p1.x - p0.x) / 3;
+      const cpY2 = p1.y;
+      path += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${p1.x} ${p1.y}`;
+    }
+    return path;
+  };
+
+  const linePath = getBezierPath(points);
   
   // Generate the closed area path
   const areaPath = points.length > 0

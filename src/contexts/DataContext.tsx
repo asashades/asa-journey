@@ -188,6 +188,9 @@ const entryFromDoc = (id: string, data: Record<string, unknown>): Entry => {
     bullets: Array.isArray(revived.bullets) ? revived.bullets : [],
     ...(Array.isArray(revived.media) ? { media: revived.media } : {}),
     ...(revived.location ? { location: revived.location } : {}),
+    ...(revived.weather ? { weather: revived.weather } : {}),
+    ...(revived.condition ? { condition: revived.condition } : {}),
+    ...(revived.dailyInsight ? { dailyInsight: revived.dailyInsight } : {}),
     createdAt: revived.createdAt instanceof Date ? revived.createdAt : new Date(),
     updatedAt: revived.updatedAt instanceof Date ? revived.updatedAt : new Date(),
   };
@@ -591,6 +594,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       ...(removeUndefinedFields(entry) as Entry),
       ...(!entry.media || entry.media.length === 0 ? { media: deleteField() } : {}),
       ...(!entry.location ? { location: deleteField() } : {}),
+      ...(!entry.weather ? { weather: deleteField() } : {}),
+      ...(!entry.condition ? { condition: deleteField() } : {}),
+      ...(!entry.dailyInsight ? { dailyInsight: deleteField() } : {}),
       updatedAt: serverTimestamp(),
     }, { merge: true });
     await syncTokenCollections(nextEntries).catch(() => undefined);

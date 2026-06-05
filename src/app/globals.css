@@ -597,6 +597,17 @@ input, textarea {
   animation: progress-shimmer 3s infinite linear;
   box-shadow: 0 0 12px rgba(0, 220, 125, 0.55), 0 0 4px rgba(0, 255, 204, 0.3);
 }
+@keyframes pulse-opacity {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+
+.energetic-progress-pulsing {
+  background: linear-gradient(90deg, #00DC7D 0%, #3bf7ab 35%, #00FFCC 50%, #3bf7ab 65%, #00B866 100%);
+  background-size: 200% 100%;
+  animation: progress-shimmer 3s infinite linear, pulse-opacity 1.5s infinite ease-in-out;
+  box-shadow: 0 0 14px rgba(0, 220, 125, 0.65), 0 0 6px rgba(0, 255, 204, 0.4);
+}
 
 .hyperfocus-progress {
   background: linear-gradient(90deg, #8B00D4 0%, #b152ee 35%, #C494FF 50%, #b152ee 65%, #7000B3 100%);

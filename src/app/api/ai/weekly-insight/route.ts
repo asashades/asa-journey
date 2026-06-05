@@ -100,7 +100,10 @@ export async function POST(req: NextRequest) {
         bullets: bulletsList,
         highlights: highlightsList,
         tags: Array.from(new Set(tagsList)),
-        people: Array.from(new Set(peopleList))
+        people: Array.from(new Set(peopleList)),
+        weather: e.weather || null,
+        condition: e.condition || null,
+        dailyInsight: e.dailyInsight || null
       };
     });
 

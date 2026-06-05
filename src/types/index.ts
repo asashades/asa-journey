@@ -38,6 +38,24 @@ export interface Bullet {
   scheduledAt?: Date;
 }
 
+export interface WeatherCondition {
+  condition: 'sunny' | 'cloudy' | 'rainy' | 'windy' | 'snowy';
+  temperature?: number;
+}
+
+export interface BodyCondition {
+  energyLevel?: number; // 1-5
+  mood?: 'happy' | 'neutral' | 'sad' | 'anxious' | 'tired' | 'stressed' | 'joyful';
+  sleepScore?: number; // 0-100 (Smartwatch)
+}
+
+export interface DailyInsight {
+  text: string;
+  moodScore?: number; // 1-10
+  sentiment?: 'positive' | 'neutral' | 'negative';
+  generatedAt: string;
+}
+
 export interface Entry {
   id: string;
   date: string; // YYYY-MM-DD format
@@ -45,6 +63,9 @@ export interface Entry {
   bullets: Bullet[];
   media?: MediaItem[];
   location?: LocationItem;
+  weather?: WeatherCondition;
+  condition?: BodyCondition;
+  dailyInsight?: DailyInsight;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -142,3 +142,11 @@ export function getMockSuggestedTags(content: string) {
     suggestedPeople: Array.from(new Set(suggestedPeople))
   };
 }
+
+export function getMockDailyInsight(userId: string) {
+  return {
+    moodScore: 8,
+    sentiment: 'positive',
+    insightText: 'Hari yang menyenangkan! Skor tidur Anda yang tinggi (85) tampaknya memberikan kontribusi langsung pada energi positif Anda dalam menyelesaikan proyek kreatif hari ini.'
+  };
+}

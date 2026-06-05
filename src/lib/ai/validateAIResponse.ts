@@ -119,3 +119,18 @@ export function parseAndValidateTagSuggestions(rawText: string, defaultTags: any
     return defaultTags;
   }
 }
+
+export function parseAndValidateDailyInsight(rawText: string, defaultInsight: any): any {
+  try {
+    const cleaned = cleanRawAIResponse(rawText);
+    const parsed = JSON.parse(cleaned);
+    return {
+      moodScore: typeof parsed.moodScore === 'number' ? parsed.moodScore : defaultInsight.moodScore,
+      sentiment: ['positive', 'neutral', 'negative'].includes(parsed.sentiment) ? parsed.sentiment : defaultInsight.sentiment,
+      insightText: typeof parsed.insightText === 'string' && parsed.insightText.trim().length > 0 ? parsed.insightText : defaultInsight.insightText,
+    };
+  } catch (error) {
+    console.error('Failed to parse Daily Insight, returning default:', error);
+    return defaultInsight;
+  }
+}
