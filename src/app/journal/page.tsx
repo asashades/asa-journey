@@ -75,13 +75,18 @@ export default function JournalPage() {
   const [calendarMonth, setCalendarMonth] = useState(todayDate);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [timeFilter, setTimeFilter] = useState<'all' | '30days' | 'month' | 'year'>('30days'); // default to 30 days for maximum speed!
+  const [timeFilter, setTimeFilter] = useState<'all' | '30days' | 'month' | 'year' | number>('30days'); // default to 30 days for maximum speed!
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const contentEntries = useMemo(
     () => entries.filter(hasEntryContent).sort((a, b) => a.date.localeCompare(b.date)),
     [entries]
   );
+  const availableYears = useMemo(() => {
+    const years = contentEntries.map(entry => parseISO(entry.date).getFullYear());
+    const uniqueYears = Array.from(new Set(years)).sort((a, b) => b - a);
+    return uniqueYears;
+  }, [contentEntries]);
   const entryNumberByDate = useMemo(() => getEntryNumberByDate(entries), [entries]);
   const searchTerm = searchQuery.trim().toLowerCase();
   const timelineEntries = useMemo(() => {
@@ -103,6 +108,8 @@ export default function JournalPage() {
     } else if (timeFilter === 'year') {
       const yearStart = new Date(now.getFullYear(), 0, 1);
       filtered = filtered.filter(entry => parseISO(entry.date) >= yearStart);
+    } else if (typeof timeFilter === 'number') {
+      filtered = filtered.filter(entry => parseISO(entry.date).getFullYear() === timeFilter);
     }
 
     return filtered;
@@ -433,12 +440,36 @@ export default function JournalPage() {
             >
               Month
             </button>
-            <button
-              onClick={() => setTimeFilter('year')}
-              className={`px-3 py-1 rounded-md transition-all cursor-pointer ${timeFilter === 'year' ? 'bg-white text-[#2F3331] shadow-sm font-bold' : 'text-[#6F7476] hover:text-[#2F3331]'}`}
-            >
-              Year
-            </button>
+            <div className="relative flex items-center">
+              <select
+                value={typeof timeFilter === 'number' ? timeFilter : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    setTimeFilter('year');
+                  } else {
+                    setTimeFilter(parseInt(val, 10));
+                  }
+                }}
+                className={`pl-3 pr-6 py-1 rounded-md transition-all cursor-pointer bg-transparent border-0 text-xs font-semibold focus:outline-none appearance-none ${
+                  timeFilter === 'year' || typeof timeFilter === 'number'
+                    ? 'bg-white text-[#2F3331] shadow-sm font-bold'
+                    : 'text-[#6F7476] hover:text-[#2F3331]'
+                }`}
+              >
+                <option value="" className="text-[#2F3331] bg-white">
+                  Year
+                </option>
+                {availableYears.map((yr) => (
+                  <option key={yr} value={yr} className="text-[#2F3331] bg-white">
+                    {yr}
+                  </option>
+                ))}
+              </select>
+              <span className={`absolute right-2 pointer-events-none text-[8px] ${timeFilter === 'year' || typeof timeFilter === 'number' ? 'text-[#2F3331]' : 'text-[#6F7476]'}`}>
+                ▼
+              </span>
+            </div>
             <button
               onClick={() => setTimeFilter('all')}
               className={`px-3 py-1 rounded-md transition-all cursor-pointer ${timeFilter === 'all' ? 'bg-white text-[#2F3331] shadow-sm font-bold' : 'text-[#6F7476] hover:text-[#2F3331]'}`}

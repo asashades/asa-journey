@@ -207,11 +207,20 @@ ${insight.actionItems.map((item, idx) => `${idx + 1}. [${item.category}] ${item.
                     <span className="text-[10px] font-bold text-[#FF6B6B] uppercase font-mono tracking-wider">{confidencePercent}% confidence</span>
                   </div>
                   {/* Progress bar */}
-                  <div className="h-1.5 w-full rounded-full bg-[#EEF0EF] overflow-hidden">
+                  <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-gray-200/40 p-[0.5px]">
                     <div
-                      className="h-1.5 rounded-full bg-[#FF6B6B] transition-all duration-500"
+                      className="h-full rounded-full transition-all duration-500 fiery-progress"
                       style={{ width: `${confidencePercent}%` }}
                     />
+                    {confidencePercent > 0 && confidencePercent < 100 && (
+                      <div 
+                        className="absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 -translate-x-1/2 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,1)] animate-ping"
+                        style={{ 
+                          left: `${confidencePercent}%`,
+                          backgroundColor: '#FF4500' 
+                        }}
+                      />
+                    )}
                   </div>
                   <p className="text-sm font-light text-[#6F7476] leading-relaxed mt-1">
                     {pattern.description}
@@ -224,7 +233,7 @@ ${insight.actionItems.map((item, idx) => `${idx + 1}. [${item.category}] ${item.
       )}
 
       {/* 3. Themes & Lessons Grid */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 grid-cols-1">
         {/* Themes */}
         <section className="rounded-3xl border border-[#EEF0EF] bg-white p-6 shadow-sm md:p-8">
           <div className="mb-5 flex items-center gap-2.5 text-sm font-bold text-[#FFB95C]">

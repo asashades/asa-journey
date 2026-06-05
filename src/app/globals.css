@@ -630,6 +630,13 @@ input, textarea {
   box-shadow: 0 0 12px rgba(255, 153, 51, 0.55), 0 0 4px rgba(255, 204, 102, 0.3);
 }
 
+.fiery-progress {
+  background: linear-gradient(90deg, #FF4500 0%, #FF8C00 35%, #FFD700 50%, #FF8C00 65%, #FF4500 100%);
+  background-size: 200% 100%;
+  animation: progress-shimmer 2s infinite linear;
+  box-shadow: 0 0 14px rgba(255, 69, 0, 0.65), 0 0 6px rgba(255, 215, 0, 0.45);
+}
+
 /* 3D Card Flip Animation */
 .flip-card {
   perspective: 1000px;
