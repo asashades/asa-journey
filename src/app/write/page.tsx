@@ -477,7 +477,6 @@ export default function WritePage() {
   const [isFetchingWeather, setIsFetchingWeather] = useState(false);
   const [isGeneratingDailyInsight, setIsGeneratingDailyInsight] = useState(false);
   const [dailyInsightError, setDailyInsightError] = useState('');
-  const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState('');
   const [dreamInputDate, setDreamInputDate] = useState('');
   const [showSavedToast, setShowSavedToast] = useState(false);
@@ -1055,7 +1054,31 @@ export default function WritePage() {
     }
   };
 
-  const handleAddLocation = async () => {
+  const handleSaveOrbit = async () => {
+    const entry = getEntryDraft();
+    const sleepScore = typeof sleepScoreInput === 'number' ? sleepScoreInput : undefined;
+    const temperature = typeof weatherTemperatureInput === 'number' ? weatherTemperatureInput : undefined;
+
+    const updatedEntry: Entry = {
+      ...entry,
+      weather: {
+        condition: weatherConditionInput,
+        ...(temperature !== undefined ? { temperature } : {}),
+      },
+      condition: {
+        energyLevel: energyLevelInput,
+        mood: moodInput,
+        ...(sleepScore !== undefined ? { sleepScore } : {}),
+      },
+      updatedAt: new Date(),
+    };
+
+    await saveEntry(updatedEntry);
+    setActiveInlinePanel(null);
+    setShowFabActions(false);
+  };
+
+  const handleAutoDetectWeather = async () => {
     setLocationError('');
 
     if (!navigator.geolocation) {
@@ -1063,7 +1086,7 @@ export default function WritePage() {
       return;
     }
 
-    setIsLocating(true);
+    setIsFetchingWeather(true);
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -1093,71 +1116,15 @@ export default function WritePage() {
         ...(weatherData ? { weather: weatherData } : {}),
         updatedAt: new Date(),
       });
-    } catch (error) {
-      setLocationError(getLocationErrorMessage(error));
-    } finally {
-      setIsLocating(false);
-    }
-  };
 
-  const handleSaveOrbit = async () => {
-    const entry = getEntryDraft();
-    const sleepScore = typeof sleepScoreInput === 'number' ? sleepScoreInput : undefined;
-    const temperature = typeof weatherTemperatureInput === 'number' ? weatherTemperatureInput : undefined;
-
-    const updatedEntry: Entry = {
-      ...entry,
-      weather: {
-        condition: weatherConditionInput,
-        ...(temperature !== undefined ? { temperature } : {}),
-      },
-      condition: {
-        energyLevel: energyLevelInput,
-        mood: moodInput,
-        ...(sleepScore !== undefined ? { sleepScore } : {}),
-      },
-      updatedAt: new Date(),
-    };
-
-    await saveEntry(updatedEntry);
-    setActiveInlinePanel(null);
-    setShowFabActions(false);
-  };
-
-  const handleAutoDetectWeather = async () => {
-    let lat = currentEntry?.location?.latitude;
-    let lon = currentEntry?.location?.longitude;
-
-    if (!lat || !lon) {
-      if (!navigator.geolocation) {
-        setLocationError('gps not supported');
-        return;
-      }
-      setIsFetchingWeather(true);
-      try {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
-        });
-        lat = position.coords.latitude;
-        lon = position.coords.longitude;
-      } catch (err) {
-        console.error('Geolocation failed:', err);
-        setIsFetchingWeather(false);
-        return;
-      }
-    }
-
-    setIsFetchingWeather(true);
-    try {
-      const weatherData = await fetchWeatherFromCoords(lat, lon);
       if (weatherData) {
         setWeatherConditionInput(weatherData.condition);
         if (weatherData.temperature !== undefined) {
           setWeatherTemperatureInput(weatherData.temperature);
         }
       }
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      setLocationError(getLocationErrorMessage(error));
     } finally {
       setIsFetchingWeather(false);
     }
@@ -1579,18 +1546,6 @@ export default function WritePage() {
                 >
                   <FontAwesomeIcon icon={faImage} className="w-4 h-4" />
                   image
-                </button>
-                <button
-                  onClick={() => {
-                    setShowFabActions(false);
-                    handleAddLocation();
-                  }}
-                  disabled={isLocating}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#F2F2F3] px-3 py-2 text-sm font-semibold text-[#2F3331] transition-all duration-200 hover:bg-[#E8E9EA] active:scale-95 disabled:cursor-wait disabled:text-[#A3A7A8]"
-                  title="add current location"
-                >
-                  <FontAwesomeIcon icon={isLocating ? faSpinner : faLocationDot} className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
-                  location
                 </button>
                 <button
                   onClick={() => openInlinePanel('orbit')}
