@@ -1546,7 +1546,7 @@ export default function WritePage() {
               </button>
 
               <div className={`flex flex-wrap sm:flex-nowrap items-center gap-2 overflow-hidden whitespace-normal sm:whitespace-nowrap fab-actions-transition origin-left ${
-                showFabActions ? 'max-w-[500px] max-h-[200px] opacity-100 scale-100 translate-x-0' : 'max-w-0 max-h-0 opacity-0 scale-75 -translate-x-4 pointer-events-none'
+                showFabActions ? 'max-w-[700px] max-h-[200px] opacity-100 scale-100 translate-x-0' : 'max-w-0 max-h-0 opacity-0 scale-75 -translate-x-4 pointer-events-none'
               }`}>
                 <button
                   onClick={() => openInlinePanel('wisdom')}

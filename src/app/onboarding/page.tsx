@@ -218,7 +218,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Slide Content Box */}
-      <div className="max-w-[540px] mx-auto w-full bg-white/90 backdrop-blur-md rounded-3xl p-6 border border-white/40 shadow-xl relative overflow-hidden flex flex-col justify-between h-[420px]">
+      <div className="max-w-[540px] mx-auto w-full bg-white/90 backdrop-blur-md rounded-3xl p-6 border border-white/40 shadow-xl relative overflow-hidden flex flex-col justify-between h-[500px]">
         <div>
           {/* Slide Icon */}
           <div
@@ -239,7 +239,7 @@ export default function OnboardingPage() {
             {activeSlide.subtitle}
           </h3>
 
-          <div className="h-[180px] overflow-y-auto pr-1 select-none">
+          <div className="h-[260px] overflow-y-auto pr-1 select-none">
             {activeSlide.content}
           </div>
         </div>
