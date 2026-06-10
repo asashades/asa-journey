@@ -14,6 +14,7 @@ import {
   faGear,
   faCrosshairs,
   faImages,
+  faNoteSticky,
 } from '@fortawesome/free-solid-svg-icons';
 
 const navItems = [
@@ -26,9 +27,10 @@ const navItems = [
 export default function BottomNav() {
   const pathname = usePathname();
   const [isSpeedDialOpen, setIsSpeedDialOpen] = useState(false);
-  const isMoreActive = pathname.startsWith('/collections') || pathname.startsWith('/settings') || pathname.startsWith('/other') || pathname.startsWith('/insights') || pathname.startsWith('/gallery');
+  const isMoreActive = pathname.startsWith('/collections') || pathname.startsWith('/settings') || pathname.startsWith('/other') || pathname.startsWith('/insights') || pathname.startsWith('/gallery') || pathname.startsWith('/notes');
   const speedDialItems = [
     { href: '/collections', label: 'Collections', icon: faLayerGroup },
+    { href: '/notes', label: 'Notes', icon: faNoteSticky },
     { href: '/gallery', label: 'Gallery', icon: faImages },
     { href: '/insights', label: 'Insights', icon: faChartSimple },
     { href: '/settings', label: 'Settings', icon: faGear },

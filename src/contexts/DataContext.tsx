@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Entry, Bullet, Wisdom, Note, Idea, Highlight, Tag, Person, FocusGoal, WeeklyData, TagGroup, PersonGroup } from '@/types';
+import { Entry, Bullet, Wisdom, Note, Idea, Highlight, Tag, Person, FocusGoal, WeeklyData, TagGroup, PersonGroup, Notebook } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { format, addDays, parseISO, differenceInDays } from 'date-fns';
 import { playChecklistJingle } from '@/lib/audio';
@@ -45,9 +45,14 @@ interface DataContextType {
   deleteWisdom: (wisdomId: string) => Promise<void>;
   getWisdomOfTheDay: () => Wisdom | null;
   notes: Note[];
-  addNote: (title: string, content: string, labels?: string[], linkedDate?: string) => Promise<Note | null>;
+  addNote: (title: string, content: string, labels?: string[], linkedDate?: string, additionalData?: Partial<Note>) => Promise<Note | null>;
   updateNote: (noteId: string, data: Partial<Note>) => Promise<void>;
   deleteNote: (noteId: string) => Promise<void>;
+  toggleNoteChecklist: (noteId: string, taskText: string) => Promise<void>;
+  notebooks: Notebook[];
+  addNotebook: (name: string, description?: string, color?: string, icon?: string) => Promise<Notebook | null>;
+  updateNotebook: (notebookId: string, data: Partial<Notebook>) => Promise<void>;
+  deleteNotebook: (notebookId: string) => Promise<void>;
   ideas: Idea[];
   addIdea: (content: string, linkedEntryId?: string) => Promise<Idea | null>;
   updateIdea: (ideaId: string, data: Partial<Idea>) => Promise<void>;
@@ -203,6 +208,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [wisdoms, setWisdoms] = useState<Wisdom[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -232,6 +238,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     entries: Entry[];
     wisdoms: Wisdom[];
     notes: Note[];
+    notebooks: Notebook[];
     ideas: Idea[];
     highlights: Highlight[];
     tags: Tag[];
@@ -303,6 +310,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           setEntries((revived.entries || []) as Entry[]);
           setWisdoms((revived.wisdoms || []) as Wisdom[]);
           setNotes((revived.notes || []) as Note[]);
+          setNotebooks((revived.notebooks || []) as Notebook[]);
           setIdeas((revived.ideas || []) as Idea[]);
           setHighlights((revived.highlights || []) as Highlight[]);
           setTags((revived.tags || []) as Tag[]);
@@ -351,6 +359,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
         })) as Note[];
         setNotes(notesData);
         updateLocalCache({ notes: notesData });
+      }
+    );
+
+    const notebooksRef = collection(db, 'users', user.uid, 'notebooks');
+    const unsubNotebooks = onSnapshot(
+      notebooksRef,
+      (snapshot) => {
+        const notebooksData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            sortOrder: data.sortOrder ?? 0,
+            createdAt: typeof data.createdAt?.toDate === 'function' ? data.createdAt.toDate() : new Date(data.createdAt || Date.now()),
+            updatedAt: typeof data.updatedAt?.toDate === 'function' ? data.updatedAt.toDate() : new Date(data.updatedAt || Date.now()),
+          };
+        }) as Notebook[];
+        notebooksData.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+        setNotebooks(notebooksData);
+        updateLocalCache({ notebooks: notebooksData });
       }
     );
 
@@ -453,6 +481,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       unsubEntries();
       unsubWisdoms();
       unsubNotes();
+      unsubNotebooks();
       unsubIdeas();
       unsubTagGroups();
       unsubTags();
@@ -996,37 +1025,89 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return wisdoms[Math.floor(Math.random() * wisdoms.length)];
   };
 
-  const addNote = async (title: string, content: string, labels: string[] = [], linkedDate?: string): Promise<Note | null> => {
+  const addNote = async (
+    title: string,
+    content: string,
+    labels: string[] = [],
+    linkedDate?: string,
+    additionalData?: Partial<Note>
+  ): Promise<Note | null> => {
     if (!user) return null;
+    const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
+    const characterCount = content.length;
     const note: Note = {
       id: uuidv4(),
       title,
       content,
+      contentMarkdown: additionalData?.contentMarkdown || content,
       labels,
-      ...(linkedDate ? { linkedDate, linkedEntryId: linkedDate } : {}),
+      tags: additionalData?.tags || labels,
+      mentions: additionalData?.mentions || [],
+      notebookId: additionalData?.notebookId,
+      notebookName: additionalData?.notebookName,
+      linkedJournalDate: additionalData?.linkedJournalDate || linkedDate,
+      linkedJournalEntryId: additionalData?.linkedJournalEntryId || linkedDate,
+      linkedJournalDates: additionalData?.linkedJournalDates || (linkedDate ? [linkedDate] : []),
+      linkedJournalEntryIds: additionalData?.linkedJournalEntryIds || (linkedDate ? [linkedDate] : []),
+      linkedDate: additionalData?.linkedDate || linkedDate,
+      linkedEntryId: additionalData?.linkedEntryId || linkedDate,
+      embeddedWisdomIds: additionalData?.embeddedWisdomIds || [],
+      embeddedIdeaIds: additionalData?.embeddedIdeaIds || [],
+      source: additionalData?.source || (linkedDate ? 'fab' : 'collection'),
+      status: additionalData?.status || 'saved',
+      pinned: additionalData?.pinned || false,
+      favorite: additionalData?.favorite || false,
+      wordCount,
+      characterCount,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     setNotes(prev => [note, ...prev]);
     const noteRef = doc(db, 'users', user.uid, 'notes', note.id);
     await setDoc(noteRef, removeUndefinedFields(note));
+
+    // Auto-tagging & Mentions extraction
+    if (note.contentMarkdown) {
+      await extractAndSaveTags(note.contentMarkdown);
+      await extractAndSavePeople(note.contentMarkdown);
+    }
+
     return note;
   };
 
   const updateNote = async (noteId: string, data: Partial<Note>) => {
     if (!user) return;
-    const cleanData = removeUndefinedFields({ ...data, updatedAt: new Date() }) as Partial<Note>;
+
+    let countUpdates: Partial<Note> = {};
+    if (data.contentMarkdown !== undefined) {
+      const text = data.contentMarkdown;
+      countUpdates.wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+      countUpdates.characterCount = text.length;
+      countUpdates.content = text; // Sync text content
+    } else if (data.content !== undefined) {
+      const text = data.content;
+      countUpdates.wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+      countUpdates.characterCount = text.length;
+    }
+
+    const cleanData = removeUndefinedFields({ ...data, ...countUpdates, updatedAt: new Date() }) as Partial<Note>;
     setNotes(prev => prev.map(n => n.id === noteId ? { ...n, ...cleanData } : n));
     const noteRef = doc(db, 'users', user.uid, 'notes', noteId);
     await setDoc(noteRef, cleanData, { merge: true });
 
+    // Save tags and mentions if markdown was updated
+    if (data.contentMarkdown) {
+      await extractAndSaveTags(data.contentMarkdown);
+      await extractAndSavePeople(data.contentMarkdown);
+    }
+
     // Sync content change to linked bullets across all entries
-    if ((data.title !== undefined || data.content !== undefined) && !isSyncingSourceRef.current) {
+    if ((data.title !== undefined || data.content !== undefined || countUpdates.content !== undefined) && !isSyncingSourceRef.current) {
       isSyncingSourceRef.current = true;
       try {
         const note = notes.find(n => n.id === noteId);
         const newTitle = data.title ?? note?.title ?? '';
-        const newContent = data.content ?? note?.content ?? '';
+        const newContent = data.content ?? countUpdates.content ?? note?.content ?? '';
         const bulletText = newContent ? (newTitle ? `${newTitle}: ${newContent}` : newContent) : newTitle;
 
         const updatedEntries = entries.map(entry => {
@@ -1056,6 +1137,79 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     setNotes(prev => prev.filter(n => n.id !== noteId));
     await deleteDoc(doc(db, 'users', user.uid, 'notes', noteId));
+  };
+
+  const toggleNoteChecklist = async (noteId: string, taskText: string) => {
+    if (!user) return;
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+
+    const lines = (note.contentMarkdown || '').split('\n');
+    let updated = false;
+
+    const updatedLines = lines.map(line => {
+      const match = line.match(/^(\s*[-*]\s+\[\s*([ xX]?)\s*\]\s+)(.+)$/);
+      if (match) {
+        const text = match[3].trim();
+        if (text === taskText.trim()) {
+          const currentStatus = match[2].toLowerCase() === 'x';
+          const newStatus = currentStatus ? ' ' : 'x';
+          updated = true;
+          const prefix = match[1].replace(/\[\s*[ xX]?\s*\]/, `[${newStatus}]`);
+          return `${prefix}${match[3]}`;
+        }
+      }
+      return line;
+    });
+
+    if (updated) {
+      const newMarkdown = updatedLines.join('\n');
+      await updateNote(noteId, {
+        contentMarkdown: newMarkdown,
+        content: newMarkdown
+      });
+    }
+  };
+
+  const addNotebook = async (name: string, description: string = '', color: string = '', icon: string = ''): Promise<Notebook | null> => {
+    if (!user) return null;
+    const maxSort = notebooks.reduce((max, n) => Math.max(max, n.sortOrder), 0);
+    const notebook: Notebook = {
+      id: uuidv4(),
+      userId: user.uid,
+      name,
+      description,
+      color,
+      icon,
+      sortOrder: maxSort + 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    setNotebooks(prev => [...prev, notebook]);
+    const notebookRef = doc(db, 'users', user.uid, 'notebooks', notebook.id);
+    await setDoc(notebookRef, removeUndefinedFields(notebook));
+    return notebook;
+  };
+
+  const updateNotebook = async (notebookId: string, data: Partial<Notebook>) => {
+    if (!user) return;
+    const cleanData = removeUndefinedFields({ ...data, updatedAt: new Date() }) as Partial<Notebook>;
+    setNotebooks(prev => prev.map(n => n.id === notebookId ? { ...n, ...cleanData } : n));
+    const notebookRef = doc(db, 'users', user.uid, 'notebooks', notebookId);
+    await setDoc(notebookRef, cleanData, { merge: true });
+  };
+
+  const deleteNotebook = async (notebookId: string) => {
+    if (!user) return;
+    
+    // Move all notes under this notebook to uncategorized (notebookId = undefined, notebookName = undefined)
+    const notesToUpdate = notes.filter(n => n.notebookId === notebookId);
+    for (const note of notesToUpdate) {
+      await updateNote(note.id, { notebookId: deleteField() as any, notebookName: deleteField() as any });
+    }
+
+    setNotebooks(prev => prev.filter(n => n.id !== notebookId));
+    await deleteDoc(doc(db, 'users', user.uid, 'notebooks', notebookId));
   };
 
   const addIdea = async (content: string, linkedEntryId?: string): Promise<Idea | null> => {
@@ -1312,17 +1466,40 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
     const weekEnd = format(addDays(start, 6), 'yyyy-MM-dd');
     data.wisdom = wisdoms.filter(w => {
-      const d = w.linkedEntryId || format(w.createdAt, 'yyyy-MM-dd');
-      return d >= weekStart && d <= weekEnd;
+      let d = w.linkedEntryId;
+      if (!d && w.createdAt) {
+        try {
+          const dateObj = w.createdAt instanceof Date ? w.createdAt : (typeof (w.createdAt as any).toDate === 'function' ? (w.createdAt as any).toDate() : new Date(w.createdAt));
+          d = isNaN(dateObj.getTime()) ? '' : format(dateObj, 'yyyy-MM-dd');
+        } catch {
+          d = '';
+        }
+      }
+      return d ? (d >= weekStart && d <= weekEnd) : false;
     }).length;
     data.notes = notes.filter(n => {
-      const d = n.linkedDate || n.linkedEntryId || format(n.createdAt, 'yyyy-MM-dd');
-      return d >= weekStart && d <= weekEnd;
+      let d = n.linkedJournalDate || n.linkedDate || n.linkedEntryId;
+      if (!d && n.createdAt) {
+        try {
+          const dateObj = n.createdAt instanceof Date ? n.createdAt : (typeof (n.createdAt as any).toDate === 'function' ? (n.createdAt as any).toDate() : new Date(n.createdAt));
+          d = isNaN(dateObj.getTime()) ? '' : format(dateObj, 'yyyy-MM-dd');
+        } catch {
+          d = '';
+        }
+      }
+      return d ? (d >= weekStart && d <= weekEnd) : false;
     }).length;
     data.ideas = ideas.filter(i => {
-      const linkedDate = i.linkedEntries?.find(d => d >= weekStart && d <= weekEnd);
-      const d = linkedDate || format(i.createdAt, 'yyyy-MM-dd');
-      return d >= weekStart && d <= weekEnd;
+      let d = i.linkedEntries?.find(d => d >= weekStart && d <= weekEnd);
+      if (!d && i.createdAt) {
+        try {
+          const dateObj = i.createdAt instanceof Date ? i.createdAt : (typeof (i.createdAt as any).toDate === 'function' ? (i.createdAt as any).toDate() : new Date(i.createdAt));
+          d = isNaN(dateObj.getTime()) ? '' : format(dateObj, 'yyyy-MM-dd');
+        } catch {
+          d = '';
+        }
+      }
+      return d ? (d >= weekStart && d <= weekEnd) : false;
     }).length;
     return data;
   };
@@ -1441,7 +1618,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       currentEntry, currentDate, setCurrentDate, entries, getEntryByDate, saveEntry, getEntriesForDateRange,
       addBullet, updateBullet, deleteBullet, toggleHighlight, toggleBulletComplete, updateDream,
       wisdoms, addWisdom, updateWisdom, deleteWisdom, getWisdomOfTheDay,
-      notes, addNote, updateNote, deleteNote,
+      notes, addNote, updateNote, deleteNote, toggleNoteChecklist,
+      notebooks, addNotebook, updateNotebook, deleteNotebook,
       ideas, addIdea, updateIdea, deleteIdea, getIdeaOfTheDay,
       highlights, getHighlightsForDateRange,
       tags, tagGroups, updateTag, createTagGroup, updateTagGroup, deleteTagGroup,

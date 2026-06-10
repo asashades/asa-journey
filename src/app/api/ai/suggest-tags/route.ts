@@ -8,7 +8,7 @@ import { resolveAIConfig } from '@/lib/ai/providerResolver';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { content, userId } = body;
+    const { content, userId, aiConfig } = body;
 
     if (!content || !content.trim()) {
       return NextResponse.json(
@@ -22,15 +22,16 @@ export async function POST(req: NextRequest) {
     console.log(`[Suggest Tags API] Extracting tags for user ${targetUserId}`);
 
     // 1. Cek konfigurasi dan status mock
-    const config = await resolveAIConfig(targetUserId);
+    const config = await resolveAIConfig(targetUserId, aiConfig);
 
-    // 2. Batasan Kuota Bulanan (hanya diperiksa jika bukan mode mock/simulasi)
+    // 2. Batasan Kuota Bulanan (hanya diperiksa jika bukan mode mock/simulasi dan bukan BYOK)
     const now = new Date();
     const yyyyMM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const usageDocId = `ai_${yyyyMM}`;
     const usageDocRef = doc(db, 'users', targetUserId, 'usage', usageDocId);
 
-    if (!config.enableMock && targetUserId !== 'anonymous_user') {
+    const isBYOK = config.mode === 'bring_your_own_key';
+    if (!isBYOK && !config.enableMock && targetUserId !== 'anonymous_user') {
       const usageSnap = await getDoc(usageDocRef);
       if (usageSnap.exists()) {
         const usageData = usageSnap.data();
@@ -55,11 +56,12 @@ export async function POST(req: NextRequest) {
       feature: 'suggest-tags',
       fallbackParams: {
         content
-      }
+      },
+      aiConfig: config
     });
 
-    // 4. Perbarui kuota bulanan pengguna jika bukan mode mock dan bukan anonymous
-    if (!config.enableMock && targetUserId !== 'anonymous_user') {
+    // 4. Perbarui kuota bulanan pengguna jika bukan mode mock, bukan anonymous, dan bukan BYOK
+    if (!isBYOK && !config.enableMock && targetUserId !== 'anonymous_user') {
       const usageSnap = await getDoc(usageDocRef);
       if (usageSnap.exists()) {
         const usageData = usageSnap.data();

@@ -75,6 +75,11 @@ export interface Wisdom {
   type: WisdomType;
   content: string;
   linkedEntryId?: string;
+  source?: 'manual' | 'journal' | 'note';
+  sourceNoteId?: string;
+  sourceBlockId?: string;
+  tags?: string[];
+  mentions?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -83,9 +88,41 @@ export interface Note {
   id: string;
   title: string;
   content: string;
+  contentMarkdown: string;
   labels: string[];
-  linkedEntryId?: string;
+  tags: string[];
+  mentions: string[];
+  notebookId?: string;
+  notebookName?: string;
+  linkedJournalDate?: string;
+  linkedJournalEntryId?: string;
+  linkedJournalDates?: string[];
+  linkedJournalEntryIds?: string[];
   linkedDate?: string;
+  linkedEntryId?: string;
+  embeddedWisdomIds?: string[];
+  embeddedIdeaIds?: string[];
+  source?: 'fab' | 'collection' | 'imported';
+  status: 'draft' | 'saved' | 'archived' | 'deleted';
+  pinned: boolean;
+  favorite: boolean;
+  wordCount: number;
+  characterCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  archivedAt?: Date;
+  deletedAt?: Date;
+}
+
+export interface Notebook {
+  id: string;
+  userId: string;
+  name: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+  sortOrder: number;
+  noteCount?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -96,6 +133,11 @@ export interface Idea {
   solutions?: string[];
   linkedEntries?: string[];
   status?: 'cooking' | 'grinding' | 'slayed';
+  source?: 'manual' | 'journal' | 'note';
+  sourceNoteId?: string;
+  sourceBlockId?: string;
+  tags?: string[];
+  mentions?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -195,7 +237,7 @@ export interface UserSettings {
   theme?: 'journalistic' | 'cosmic' | 'moss' | 'nocturne';
   aiConfig?: {
     mode: 'built_in' | 'bring_your_own_key';
-    provider?: 'gemini' | 'openai' | 'anthropic';
+    provider?: 'gemini' | 'openai' | 'anthropic' | 'deepseek';
     apiKey?: string;
     modelName?: string;
   };

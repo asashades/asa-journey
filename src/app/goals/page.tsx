@@ -91,6 +91,8 @@ export default function GoalsPage() {
     entries,
     toggleBulletComplete,
     setCurrentDate,
+    notes,
+    toggleNoteChecklist,
   } = useData();
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -114,10 +116,22 @@ export default function GoalsPage() {
   const [newSubGoalText, setNewSubGoalText] = useState<{ [goalId: string]: string }>({});
   const [flippedCardId, setFlippedCardId] = useState<string | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'goals' | 'inbox'>('goals');
+  const [isCompletedExpanded, setIsCompletedExpanded] = useState(false);
 
-  // Aggregate unresolved checklist bullets across all logs for full-page detailed view
+  // Aggregate unresolved checklist bullets across all logs and notes for full-page detailed view
   const pendingTasks = useMemo(() => {
-    const list: { id: string; text: string; date: string; createdAt: Date; scheduledAt?: Date; isCompleted?: boolean }[] = [];
+    const list: {
+      id: string;
+      text: string;
+      date: string;
+      createdAt: Date;
+      scheduledAt?: Date;
+      isCompleted?: boolean;
+      isFromNote?: boolean;
+      noteId?: string;
+    }[] = [];
+
+    // 1. Journal entries checklist items
     (entries || []).forEach(entry => {
       (entry.bullets || []).forEach(b => {
         if (b.style === 'checklist' && !b.isCompleted) {
@@ -132,8 +146,30 @@ export default function GoalsPage() {
         }
       });
     });
+
+    // 2. Saved notes checklist items
+    (notes || []).forEach(note => {
+      if (note.status !== 'saved') return; // Only scan active saved notes
+      const lines = (note.contentMarkdown || '').split('\n');
+      lines.forEach((line, index) => {
+        const match = line.match(/^(\s*[-*]\s+\[\s*\]\s+)(.+)$/);
+        if (match) {
+          const text = match[2].trim();
+          list.push({
+            id: `note_${note.id}_line_${index}`,
+            text: text,
+            date: format(note.createdAt instanceof Date ? note.createdAt : new Date(note.createdAt), 'yyyy-MM-dd'),
+            createdAt: note.createdAt instanceof Date ? note.createdAt : new Date(note.createdAt),
+            isCompleted: false,
+            isFromNote: true,
+            noteId: note.id
+          });
+        }
+      });
+    });
+
     return list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }, [entries]);
+  }, [entries, notes]);
 
   const activeGoals = useMemo(
     () => goals.filter(g => !g.isCompleted).sort((a, b) => a.priority - b.priority),
@@ -338,7 +374,7 @@ export default function GoalsPage() {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] pb-24 font-sans text-[#2F3331]">
-      <div className="mx-auto max-w-[600px] px-6 pt-8">
+      <div className="mx-auto max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] px-6 pt-8">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="font-sans text-4xl font-bold tracking-tight text-[#2F3331]">Goals</h1>
@@ -548,7 +584,7 @@ export default function GoalsPage() {
 
             {filteredGoals.length > 0 ? (
               /* Grid 2 Columns of Playing Cards with aspect-ratio 4:5 and reduced roundness (rounded-2xl) */
-              <div className="grid grid-cols-2 gap-5 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pt-2">
                 {filteredGoals.map((goal) => {
                   const deadlineInfo = goal.deadline ? getDaysUntil(goal.deadline) : null;
 
@@ -986,84 +1022,84 @@ export default function GoalsPage() {
           </section>
 
           {completedGoals.length > 0 && (
-            <section>
-              <h2 className="mb-4 font-sans text-xl font-bold text-[#2F3331]">
-                Completed
-                <span className="ml-2 text-sm font-normal text-[#6F7476]">({completedGoals.length})</span>
-              </h2>
+            <section className="bg-white dark:bg-[#1E2022] rounded-3xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setIsCompletedExpanded(!isCompletedExpanded)}
+                className="flex items-center justify-between w-full text-left focus:outline-none"
+              >
+                <h2 className="font-sans text-xl font-bold text-[#2F3331] dark:text-[#FAFAFA] flex items-center gap-2">
+                  <span>Completed Goals</span>
+                  <span className="text-sm font-normal text-[#6F7476] dark:text-[#A3A7A8]">({completedGoals.length})</span>
+                </h2>
+                <FontAwesomeIcon
+                  icon={isCompletedExpanded ? faChevronUp : faChevronDown}
+                  className="h-4 w-4 text-[#A3A7A8] transition-transform duration-200"
+                />
+              </button>
 
-              <div className="grid grid-cols-2 gap-5">
-                {completedGoals.slice(0, 10).map((goal) => {
-                  return (
-                    <div
-                      key={goal.id}
-                      className="group relative flex flex-col justify-between aspect-[4/5] w-full rounded-2xl border border-[#EEF0EF]/80 bg-[#FAFAFA]/70 shadow-sm transition-all hover:bg-white hover:shadow-[0_12px_35px_rgba(0,0,0,0.02)] px-6.5 py-5 pb-7.5"
-                    >
-                      <div className="flex justify-between items-center select-none w-full mb-1">
-                        <div className="flex flex-wrap gap-1 items-center max-w-[150px]">
-                          {/* Completed Category Badge with FontAwesome icon */}
-                          <span className="text-[9px] font-bold text-[#A3A7A8] uppercase tracking-wider bg-white/90 border border-[#EEF0EF]/70 px-2 py-0.5 rounded-md flex items-center gap-1.5 truncate">
-                            <FontAwesomeIcon icon={getCategoryIcon(goal.category || '')} className="text-gray-300 h-3 w-3" />
-                            <span>{goal.category || 'General'}</span>
-                          </span>
-                          {goal.priorityLevel && (
-                            <span className="text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md border bg-gray-50 text-gray-400 border-gray-100">
-                              {goal.priorityLevel}
-                            </span>
-                          )}
-                        </div>
-                        
-                        <div className="flex items-center gap-1.5">
+              {isCompletedExpanded && (
+                <div className="mt-4 divide-y divide-[#EEF0EF] dark:divide-[#2E3133]/50">
+                  {completedGoals.map((goal) => {
+                    return (
+                      <div
+                        key={goal.id}
+                        className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0 group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
                           <button
+                            type="button"
                             onClick={() => {
                               playClickSound();
                               toggleGoalComplete(goal.id);
                             }}
-                            className="h-4.5 w-4.5 rounded-full bg-[#E9FFF4] border border-[#00DC7D] text-[#00A963] flex items-center justify-center hover:scale-105 transition-transform cursor-pointer"
-                            title="mark incomplete"
+                            className="h-5 w-5 shrink-0 rounded-full bg-[#E9FFF4] border border-[#00DC7D] text-[#00A963] flex items-center justify-center hover:scale-105 transition-transform cursor-pointer"
+                            title="Mark incomplete"
                           >
-                            <FontAwesomeIcon icon={faCheck} className="h-2 w-2" />
+                            <FontAwesomeIcon icon={faCheck} className="h-2.5 w-2.5" />
                           </button>
-                          <button
-                            onClick={() => handleDeleteGoal(goal.id)}
-                            className="rounded-lg p-0.5 text-[#A3A7A8] opacity-0 group-hover:opacity-100 hover:text-[#FF453A] cursor-pointer transition-colors"
-                            title="delete"
-                          >
-                            <FontAwesomeIcon icon={faTrash} className="h-3 w-3" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex-1 flex flex-col justify-center my-2 text-center overflow-hidden w-full px-1">
-                        <p className="text-xs sm:text-sm font-bold text-[#8E9392] line-through decoration-[#CCD0CF] leading-snug line-clamp-3 select-text font-serif">
-                          {goal.content}
-                        </p>
-                      </div>
-
-                      {/* Completed Subgoals checklist inside Completed Goals card (read-only, compact) */}
-                      {goal.subGoals && goal.subGoals.length > 0 && (
-                        <div className="w-full border-t border-[#EEF0EF]/30 pt-2 select-none overflow-y-auto max-h-[85px] scrollbar-thin scrollbar-thumb-gray-200 mb-1">
-                          <div className="text-[8px] font-bold text-[#A3A7A8] uppercase tracking-widest mb-1 text-left">Steps Completed</div>
-                          <div className="space-y-1">
-                            {goal.subGoals.map((sub) => (
-                              <div key={sub.id} className="flex items-center gap-1.5 text-[9.5px] text-[#A3A7A8]">
-                                <FontAwesomeIcon icon={faCheck} className="h-2 w-2 text-[#00A963] shrink-0" />
-                                <span className="line-through decoration-[#CCD0CF]/70 truncate max-w-[160px] text-left">{sub.content}</span>
-                              </div>
-                            ))}
+                          
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-light text-[#8E9392] dark:text-[#A3A7A8] line-through decoration-[#CCD0CF]/70 truncate select-text">
+                              {goal.content}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[9px] font-bold text-[#6F7476] dark:text-[#A3A7A8] uppercase tracking-wider bg-[#FAFAFA] dark:bg-[#202324] border border-[#EEF0EF] dark:border-[#2E3133] px-1.5 py-0.2 rounded">
+                                {goal.category || 'General'}
+                              </span>
+                              {goal.priorityLevel && (
+                                <span className={`text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.2 rounded border ${
+                                  goal.priorityLevel === 'high'
+                                    ? 'bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border-red-100 dark:border-red-950/30'
+                                    : goal.priorityLevel === 'low'
+                                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-gray-700'
+                                    : 'bg-yellow-50 dark:bg-yellow-950/20 text-yellow-800 dark:text-yellow-400 border-yellow-200 dark:border-yellow-950/30'
+                                }`}>
+                                  {goal.priorityLevel}
+                                </span>
+                              )}
+                              {goal.subGoals && goal.subGoals.length > 0 && (
+                                <span className="text-[8.5px] font-semibold text-[#00A963]">
+                                  {goal.subGoals.filter(s => s.isCompleted).length}/{goal.subGoals.length} steps completed
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      )}
-
-                      {/* Bottom Overlapping Pill (Completed indicator) */}
-                      <div className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 bg-white rounded-full px-3.5 py-1 shadow-[0_3px_10px_rgba(0,0,0,0.03)] border border-[#EEF0EF] flex items-center gap-1 text-[8.5px] font-bold text-[#00A963] select-none z-20 whitespace-nowrap">
-                        <span className="text-[9px]">🏆</span>
-                        <span>100% Done</span>
+                        
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGoal(goal.id)}
+                          className="rounded-lg p-1 text-[#A3A7A8] opacity-0 group-hover:opacity-100 hover:text-[#FF453A] cursor-pointer transition-all shrink-0"
+                          title="Delete completed goal"
+                        >
+                          <FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />
+                        </button>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           )}
         </main>
@@ -1072,11 +1108,11 @@ export default function GoalsPage() {
       /* Inbox Tasks detailed view */
       <main className="mt-8 space-y-6">
         <div>
-          <h2 className="font-sans text-xl font-bold text-[#2F3331]">Pending Journal Tasks</h2>
-          <p className="mt-1 text-sm text-[#6F7476]">Checklist items captured dynamically from your daily journal logs. Tapping an item marks it completed.</p>
+          <h2 className="font-sans text-xl font-bold text-[#2F3331] dark:text-[#FAFAFA]">Pending Tasks</h2>
+          <p className="mt-1 text-sm text-[#6F7476] dark:text-[#A3A7A8]">Checklist items captured dynamically from your daily journals and notes. Tapping an item marks it completed.</p>
         </div>
 
-        <div className="relative border-l-2 border-[#E4E7E6]/75 ml-6 pl-8 py-2 space-y-6">
+        <div className="relative border-l-2 border-[#E4E7E6]/75 dark:border-[#2E3133]/40 ml-6 pl-8 py-2 space-y-6">
           {pendingTasks.map((task) => {
             const hasScheduled = Boolean(task.scheduledAt);
             const timeStr = hasScheduled
@@ -1091,11 +1127,15 @@ export default function GoalsPage() {
             return (
               <div key={task.id} className="relative flex items-center justify-between gap-4 select-none group py-0.5">
                 {/* Circular timeline bullet checkbox indicator */}
-                <div className="absolute -left-[42px] flex h-5 w-5 items-center justify-center rounded-full border border-[#CCD0CF] bg-[#FAFAFA] text-[#CCD0CF] hover:text-[#00DC7D] hover:border-[#00DC7D] transition-all cursor-pointer z-10 hover:scale-105 active:scale-90">
+                <div className="absolute -left-[42px] flex h-5 w-5 items-center justify-center rounded-full border border-[#CCD0CF] bg-[#FAFAFA] dark:bg-[#1E2022] text-[#CCD0CF] hover:text-[#00DC7D] hover:border-[#00DC7D] transition-all cursor-pointer z-10 hover:scale-105 active:scale-90">
                   <button
                     onClick={() => {
                       playClickSound();
-                      toggleBulletComplete(task.id);
+                      if (task.isFromNote && task.noteId) {
+                        toggleNoteChecklist(task.noteId, task.text);
+                      } else {
+                        toggleBulletComplete(task.id);
+                      }
                     }}
                     className="flex h-full w-full items-center justify-center cursor-pointer"
                     title="Mark Done"
@@ -1106,30 +1146,43 @@ export default function GoalsPage() {
 
                 <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                   {/* Text content */}
-                  <p className="text-sm font-semibold text-[#2F3331] leading-relaxed break-words pr-2">
+                  <p className="text-sm font-semibold text-[#2F3331] dark:text-[#FAFAFA] leading-relaxed break-words pr-2">
                     {task.text}
                   </p>
 
-                  {/* Chips group (Time and Date) */}
+                  {/* Chips group (Time and Date/Note) */}
                   <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
                     {/* Time Chip */}
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF3C4] text-[#8C6B00] px-2.5 py-0.5 text-[9px] font-extrabold select-none shadow-sm border border-[#FFE082]/30">
-                      <FontAwesomeIcon icon={faClock} className="w-2.5 h-2.5 text-[#B58900]" />
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF3C4] text-[#8C6B00] dark:bg-[#FFA952]/10 dark:text-[#FFA952] px-2.5 py-0.5 text-[9px] font-extrabold select-none shadow-sm border border-[#FFE082]/30 dark:border-transparent">
+                      <FontAwesomeIcon icon={faClock} className="w-2.5 h-2.5 text-[#B58900] dark:text-[#FFA952]" />
                       {timeStr}
                     </span>
                     
-                    {/* Date Chip (Tapping it redirects to /write on that date) */}
-                    <button
-                      onClick={() => {
-                        setCurrentDate(task.date);
-                        router.push('/write');
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-[#E9FFF4] hover:bg-[#D6FADB] text-[#00A963] px-2.5 py-0.5 text-[9px] font-extrabold transition-colors cursor-pointer"
-                      title={`Go to ${dateStr}`}
-                    >
-                      <FontAwesomeIcon icon={faCalendar} className="w-2.5 h-2.5 text-[#00DC7D]" />
-                      {dateChipStr}
-                    </button>
+                    {/* Date/Note Chip */}
+                    {task.isFromNote ? (
+                      <button
+                        onClick={() => {
+                          router.push(`/notes/new?id=${task.noteId}`);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-[#F2EFFE] hover:bg-[#EDD6FF] text-[#8B00D4] dark:bg-[#C494FF]/10 dark:text-[#C494FF] px-2.5 py-0.5 text-[9px] font-extrabold transition-colors cursor-pointer"
+                        title="Go to Note"
+                      >
+                        <FontAwesomeIcon icon={faBookOpen} className="w-2.5 h-2.5 text-[#8B00D4] dark:text-[#C494FF]" />
+                        <span>Note</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setCurrentDate(task.date);
+                          router.push('/write');
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-[#E9FFF4] hover:bg-[#D6FADB] text-[#00A963] px-2.5 py-0.5 text-[9px] font-extrabold transition-colors cursor-pointer"
+                        title={`Go to ${dateStr}`}
+                      >
+                        <FontAwesomeIcon icon={faCalendar} className="w-2.5 h-2.5 text-[#00DC7D]" />
+                        {dateChipStr}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1141,8 +1194,8 @@ export default function GoalsPage() {
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#E9FFF4] text-[#00A963] mx-auto mb-3">
                 <FontAwesomeIcon icon={faListCheck} className="w-5.5 h-5.5" />
               </div>
-              <h3 className="text-sm font-bold text-[#2F3331]">All Caught Up!</h3>
-              <p className="text-xs text-[#A3A7A8] mt-1 max-w-[240px] mx-auto">There are no outstanding checklist items left in your journal logs. 🎉</p>
+              <h3 className="text-sm font-bold text-[#2F3331] dark:text-[#FAFAFA]">All Caught Up!</h3>
+              <p className="text-xs text-[#A3A7A8] mt-1 max-w-[240px] mx-auto">There are no outstanding checklist items left in your journals or notes. 🎉</p>
             </div>
           )}
         </div>

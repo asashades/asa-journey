@@ -562,7 +562,7 @@ export default function InsightsPage() {
   return (
     <div className="min-h-screen bg-[#FAFAFA] pb-24">
       {/* Header */}
-      <div className="max-w-[600px] mx-auto px-6 pt-8 pb-6">
+      <div className="max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] mx-auto px-6 pt-8 pb-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-5xl font-bold font-sans text-[#2F3331] mb-2">
@@ -640,7 +640,7 @@ export default function InsightsPage() {
       </div>
 
       {/* Tab Navigation (Styled exactly like Collections) */}
-      <div className="max-w-[600px] mx-auto px-6 mb-6">
+      <div className="max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] mx-auto px-6 mb-6">
         <div className="flex items-center gap-1 rounded-full bg-white/80 p-1 shadow-sm ring-1 ring-[#EEF0EF]">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -672,7 +672,7 @@ export default function InsightsPage() {
       </div>
 
       {/* Tab Content */}
-      <div className="max-w-[600px] mx-auto px-6">
+      <div className="max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] mx-auto px-6">
         {activeTab === 'journal' && (
           <div className="space-y-8">
             {/* Gamification Level & XP Progress Card */}

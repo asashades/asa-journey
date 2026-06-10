@@ -6,6 +6,7 @@ import { TAG_SUGGESTION_PROMPT } from '@/lib/ai/prompts';
 import { resolveAIConfig } from '@/lib/ai/providerResolver';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SuggestedTagChipsProps {
   content: string;
@@ -24,6 +25,7 @@ export default function SuggestedTagChips({
   existingTags,
   existingPeople
 }: SuggestedTagChipsProps) {
+  const { userProfile } = useAuth();
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   const [suggestedPeople, setSuggestedPeople] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,7 +35,7 @@ export default function SuggestedTagChips({
     const targetUserId = userId || 'anonymous_user';
 
     // 1. Cek konfigurasi
-    const config = await resolveAIConfig(targetUserId);
+    const config = await resolveAIConfig(targetUserId, userProfile?.settings?.aiConfig);
 
     // 2. Panggil Client AI Wrapper
     const result = await generateStructuredAI({
@@ -43,11 +45,13 @@ export default function SuggestedTagChips({
       feature: 'suggest-tags',
       fallbackParams: {
         content
-      }
+      },
+      aiConfig: userProfile?.settings?.aiConfig
     });
 
-    // 3. Perbarui kuota bulanan pengguna jika bukan mode mock dan bukan anonymous
-    if (!config.enableMock && targetUserId !== 'anonymous_user') {
+    // 3. Perbarui kuota bulanan pengguna jika bukan mode mock, bukan anonymous, dan bukan BYOK
+    const isBYOK = config.mode === 'bring_your_own_key';
+    if (!isBYOK && !config.enableMock && targetUserId !== 'anonymous_user') {
       const now = new Date();
       const yyyyMM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       const usageDocId = `ai_${yyyyMM}`;
@@ -93,7 +97,11 @@ export default function SuggestedTagChips({
         const response = await fetch('/api/ai/suggest-tags', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content, userId })
+          body: JSON.stringify({
+            content,
+            userId,
+            aiConfig: userProfile?.settings?.aiConfig
+          })
         });
 
         const text = await response.text();

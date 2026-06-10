@@ -821,4 +821,274 @@ html.dark .text-\[\#8B9390\] {
   animation: moving-gradient 8s ease infinite;
 }
 
+/* Print layout styles for premium PDF export */
+@media print {
+  /* Set document margin */
+  @page {
+    margin: 20mm;
+    size: A4 portrait;
+  }
+  
+  /* Hide all screen elements by default */
+  body * {
+    visibility: hidden;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  
+  /* Render the print-container and its children */
+  .print-container {
+    visibility: visible;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    display: block !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  
+  .print-container * {
+    visibility: visible;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Light Theme Print Overrides */
+  .print-container.print-theme-light {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+  
+  .print-container.print-theme-light h1,
+  .print-container.print-theme-light h2,
+  .print-container.print-theme-light h3,
+  .print-container.print-theme-light h4,
+  .print-container.print-theme-light h5,
+  .print-container.print-theme-light h6 {
+    color: #000000 !important;
+  }
+  
+  .print-container.print-theme-light p,
+  .print-container.print-theme-light li,
+  .print-container.print-theme-light blockquote,
+  .print-container.print-theme-light span,
+  .print-container.print-theme-light th,
+  .print-container.print-theme-light td,
+  .print-container.print-theme-light div:not(.callout-header):not(.callout-body) {
+    color: #111111 !important;
+  }
+
+  /* Dark Theme Print Overrides */
+  .print-container.print-theme-dark {
+    background-color: #0F1210 !important;
+    color: #E4E7E6 !important;
+  }
+  
+  .print-container.print-theme-dark h1,
+  .print-container.print-theme-dark h2,
+  .print-container.print-theme-dark h3,
+  .print-container.print-theme-dark h4,
+  .print-container.print-theme-dark h5,
+  .print-container.print-theme-dark h6 {
+    color: #FAFAFA !important;
+  }
+  
+  .print-container.print-theme-dark p,
+  .print-container.print-theme-dark li,
+  .print-container.print-theme-dark blockquote,
+  .print-container.print-theme-dark span,
+  .print-container.print-theme-dark th,
+  .print-container.print-theme-dark td,
+  .print-container.print-theme-dark div:not(.callout-header):not(.callout-body) {
+    color: #E4E7E6 !important;
+  }
+
+  /* Keep printed headers on the same page as following content */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  
+  /* Make sure link is contrasting and styled green */
+  .print-container a {
+    color: #00875A !important;
+    text-decoration: underline !important;
+  }
+
+  blockquote, pre, table, figure {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Standard blockquote styling in print */
+  .print-container blockquote:not(.callout-block) {
+    border-left: 4px solid #00DC7D !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+  
+  .print-container.print-theme-light blockquote:not(.callout-block) {
+    background-color: #f9fafb !important;
+    color: #111111 !important;
+  }
+  
+  .print-container.print-theme-dark blockquote:not(.callout-block) {
+    background-color: #161B19 !important;
+    color: #E4E7E6 !important;
+  }
+
+  /* Code blocks high contrast in print */
+  .print-container code {
+    padding: 2px 4px !important;
+    border-radius: 4px !important;
+  }
+  .print-container.print-theme-light code {
+    background-color: #f3f4f6 !important;
+    color: #b91c1c !important;
+    border: 1px solid #e5e7eb !important;
+  }
+  .print-container.print-theme-dark code {
+    background-color: #1C2022 !important;
+    color: #FF8CC6 !important;
+    border: 1px solid #2E3832 !important;
+  }
+  
+  .print-container pre {
+    padding: 1rem !important;
+    border-radius: 8px !important;
+  }
+  .print-container.print-theme-light pre {
+    background-color: #f9fafb !important;
+    color: #111111 !important;
+    border: 1px solid #e5e7eb !important;
+  }
+  .print-container.print-theme-dark pre {
+    background-color: #161B19 !important;
+    color: #E4E7E6 !important;
+    border: 1px solid #2E3832 !important;
+  }
+
+  /* Callout blocks in PDF — preserve backgrounds */
+  .print-container .callout-block {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    border: 1px solid #d0d0d0 !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    background-color: transparent !important;
+  }
+
+  /* Callout header base styles for print */
+  .print-container .callout-header {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 10px 16px !important;
+    border: none !important;
+  }
+
+  /* Callout body base styles for print */
+  .print-container .callout-body {
+    padding: 14px 16px !important;
+  }
+
+  /* Callout body content high contrast text */
+  .print-container.print-theme-light .callout-body * {
+    color: #111111 !important;
+  }
+  .print-container.print-theme-dark .callout-body * {
+    color: #E4E7E6 !important;
+  }
+
+  /* Callout type-specific background colors for print */
+  .print-container.print-theme-light .callout-block[data-callout-type="wisdom"] .callout-header { background-color: #F0D6FF !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="wisdom"] .callout-body { background-color: #FAF0FF !important; }
+  
+  .print-container.print-theme-light .callout-block[data-callout-type="quote"] .callout-header { background-color: #D6E4FF !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="quote"] .callout-body { background-color: #EEF2FF !important; }
+  
+  .print-container.print-theme-light .callout-block[data-callout-type="idea"] .callout-header { background-color: #FFE4B5 !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="idea"] .callout-body { background-color: #FFF8ED !important; }
+  
+  .print-container.print-theme-light .callout-block[data-callout-type="lesson"] .callout-header { background-color: #EDD6FF !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="lesson"] .callout-body { background-color: #F8F0FF !important; }
+  
+  .print-container.print-theme-light .callout-block[data-callout-type="fact"] .callout-header { background-color: #C8F7E4 !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="fact"] .callout-body { background-color: #E9FFF4 !important; }
+  
+  .print-container.print-theme-light .callout-block[data-callout-type="excerpt"] .callout-header { background-color: #FFE4B5 !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="excerpt"] .callout-body { background-color: #FFF8ED !important; }
+  
+  .print-container.print-theme-light .callout-block[data-callout-type="warning"] .callout-header { background-color: #FEE2E2 !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="warning"] .callout-body { background-color: #FEF2F2 !important; }
+  
+  .print-container.print-theme-light .callout-block[data-callout-type="note"] .callout-header { background-color: #C8F7E4 !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="note"] .callout-body { background-color: #E9FFF4 !important; }
+
+  /* Callout dark mode specific backgrounds */
+  .print-container.print-theme-dark .callout-block[data-callout-type="wisdom"] .callout-header { background-color: rgba(196, 148, 255, 0.15) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="wisdom"] .callout-body { background-color: rgba(196, 148, 255, 0.05) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="wisdom"] .callout-header * { color: #C494FF !important; }
+
+  .print-container.print-theme-dark .callout-block[data-callout-type="quote"] .callout-header { background-color: rgba(93, 138, 255, 0.15) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="quote"] .callout-body { background-color: rgba(93, 138, 255, 0.05) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="quote"] .callout-header * { color: #5D8AFF !important; }
+
+  .print-container.print-theme-dark .callout-block[data-callout-type="idea"] .callout-header { background-color: rgba(255, 153, 51, 0.15) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="idea"] .callout-body { background-color: rgba(255, 153, 51, 0.05) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="idea"] .callout-header * { color: #FF9933 !important; }
+
+  .print-container.print-theme-dark .callout-block[data-callout-type="lesson"] .callout-header { background-color: rgba(196, 148, 255, 0.15) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="lesson"] .callout-body { background-color: rgba(196, 148, 255, 0.05) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="lesson"] .callout-header * { color: #C494FF !important; }
+
+  .print-container.print-theme-dark .callout-block[data-callout-type="fact"] .callout-header { background-color: rgba(0, 220, 125, 0.15) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="fact"] .callout-body { background-color: rgba(0, 220, 125, 0.05) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="fact"] .callout-header * { color: #00DC7D !important; }
+
+  .print-container.print-theme-dark .callout-block[data-callout-type="excerpt"] .callout-header { background-color: rgba(255, 153, 51, 0.15) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="excerpt"] .callout-body { background-color: rgba(255, 153, 51, 0.05) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="excerpt"] .callout-header * { color: #FF9933 !important; }
+
+  .print-container.print-theme-dark .callout-block[data-callout-type="warning"] .callout-header { background-color: rgba(255, 69, 58, 0.15) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="warning"] .callout-body { background-color: rgba(255, 69, 58, 0.05) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="warning"] .callout-header * { color: #FF453A !important; }
+
+  .print-container.print-theme-dark .callout-block[data-callout-type="note"] .callout-header { background-color: rgba(0, 220, 125, 0.15) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="note"] .callout-body { background-color: rgba(0, 220, 125, 0.05) !important; }
+  .print-container.print-theme-dark .callout-block[data-callout-type="note"] .callout-header * { color: #00DC7D !important; }
+
+  /* Dashed separator in print */
+  .print-container .callout-divider {
+    border-top: 1px dashed #bbb !important;
+    background-color: transparent !important;
+    height: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Callout header text and icon colors in print */
+  .print-container.print-theme-light .callout-block[data-callout-type="wisdom"] .callout-header * { color: #8B00D4 !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="quote"] .callout-header * { color: #1A56C4 !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="idea"] .callout-header * { color: #B45309 !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="lesson"] .callout-header * { color: #6B21A8 !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="fact"] .callout-header * { color: #00875A !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="excerpt"] .callout-header * { color: #B45309 !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="warning"] .callout-header * { color: #991B1B !important; }
+  .print-container.print-theme-light .callout-block[data-callout-type="note"] .callout-header * { color: #00875A !important; }
+
+  /* Callout icon FontAwesome SVG size in print */
+  .print-container .callout-header svg {
+    visibility: visible !important;
+    width: 16px !important;
+    height: 16px !important;
+  }
+}
+
 

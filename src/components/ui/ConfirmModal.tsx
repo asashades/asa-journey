@@ -42,10 +42,10 @@ export function ConfirmModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative w-full max-w-[400px] rounded-2xl bg-white p-6 shadow-xl animate-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-[400px] rounded-2xl bg-white dark:bg-[#1E2022] border border-[#EEF0EF]/10 dark:border-[#2E3133]/60 p-6 shadow-xl animate-in zoom-in-95 duration-200">
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 text-[#A3A7A8] hover:text-[#2F3331] transition-colors"
+          className="absolute right-4 top-4 text-[#A3A7A8] hover:text-[#2F3331] dark:hover:text-[#FAFAFA] transition-colors"
         >
           <FontAwesomeIcon icon={faXmark} className="w-5 h-5" />
         </button>
@@ -55,17 +55,17 @@ export function ConfirmModal({
             <FontAwesomeIcon icon={faTriangleExclamation} className="w-7 h-7" />
           </div>
           
-          <h3 className="mb-2 text-xl font-bold font-serif text-[#2F3331]">
+          <h3 className="mb-2 text-xl font-bold font-serif text-[#2F3331] dark:text-[#FAFAFA]">
             {title}
           </h3>
-          <p className="mb-8 text-[#6F7476] font-light leading-relaxed">
+          <p className="mb-8 text-[#6F7476] dark:text-[#A3A7A8] font-light leading-relaxed">
             {message}
           </p>
 
           <div className="flex w-full gap-3">
             <button
               onClick={onClose}
-              className="flex-1 rounded-xl bg-[#F2F2F3] py-3 text-sm font-bold text-[#2F3331] transition-colors hover:bg-[#E8E9EA]"
+              className="flex-1 rounded-xl bg-[#F2F2F3] dark:bg-[#2E3133] py-3 text-sm font-bold text-[#2F3331] dark:text-[#E4E7E6] transition-colors hover:bg-[#E8E9EA] dark:hover:bg-[#3E4347]"
             >
               {cancelText}
             </button>

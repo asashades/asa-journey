@@ -5,7 +5,7 @@ import { DAILY_INSIGHT_PROMPT } from '@/lib/ai/prompts';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { userId, date, bullets, dream, weather, condition } = body;
+    const { userId, date, bullets, dream, weather, condition, aiConfig } = body;
 
     if (!userId || !date) {
       return NextResponse.json(
@@ -31,7 +31,8 @@ export async function POST(req: NextRequest) {
       userId,
       systemPrompt: DAILY_INSIGHT_PROMPT,
       userPayload: aiPayload,
-      feature: 'daily-insight'
+      feature: 'daily-insight',
+      aiConfig
     });
 
     const dailyInsight = {

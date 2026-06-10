@@ -66,7 +66,6 @@ const sectionOptions = [
   { id: 'yesterday', label: 'Yesterday', color: '#00DC7D', icon: faBookOpen },
   { id: 'week', label: 'This week', color: '#5D8AFF', icon: faCalendarDays },
   { id: 'pins', label: 'Pins', color: '#C494FF', icon: faTags },
-  { id: 'yearAgo', label: 'One year ago', color: '#FFD166', icon: faCompass },
   { id: 'memory', label: 'Time travel', color: '#00DC7D', icon: faRoad },
   { id: 'moreLess', label: 'More/Less', color: '#FFA952', icon: faPlusMinus },
 ] as const;
@@ -79,9 +78,50 @@ const defaultSections: Record<SectionId, boolean> = {
   yesterday: true,
   week: true,
   pins: true,
-  yearAgo: true,
   memory: true,
   moreLess: true,
+};
+
+const renderParsedWisdom = (text: string, isQuote: boolean = false) => {
+  const lines = text.split('\n');
+  return (
+    <span className="block whitespace-pre-line select-text">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (trimmed.toLowerCase().startsWith('source :') || trimmed.toLowerCase().startsWith('source:')) {
+          const colonIdx = line.indexOf(':');
+          const value = line.substring(colonIdx + 1).trim();
+          return (
+            <span key={idx} className="block mt-1 text-[10px] text-[#A3A7A8] dark:text-[#6F7476] font-sans italic leading-normal select-text">
+              source: <span className="text-[#8B9390] dark:text-[#6F7476]">{value}</span>
+            </span>
+          );
+        }
+        if (trimmed.toLowerCase().startsWith('context :') || trimmed.toLowerCase().startsWith('context:')) {
+          const colonIdx = line.indexOf(':');
+          const value = line.substring(colonIdx + 1).trim();
+          return (
+            <span key={idx} className="block mt-1 text-[10px] text-[#A3A7A8] dark:text-[#6F7476] font-sans italic leading-normal select-text">
+              context: <span className="text-[#8B9390] dark:text-[#6F7476]">{value}</span>
+            </span>
+          );
+        }
+        if (trimmed.startsWith('--')) {
+          return (
+            <span key={idx} className="block mt-1 text-[10px] text-[#A3A7A8] dark:text-[#6F7476] font-light leading-normal select-text">
+              {line}
+            </span>
+          );
+        }
+        // Normal line
+        return (
+          <span key={idx} className={`block leading-relaxed ${isQuote ? 'italic text-[#4D5652] dark:text-[#A3A7A8]' : ''}`}>
+            {line}
+          </span>
+        );
+      })}
+    </span>
+  );
 };
 
 export default function ReflectPage() {
@@ -129,6 +169,7 @@ export default function ReflectPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [visibleSections, setVisibleSections] = useState(defaultSections);
   const [randomTimeTravelDate, setRandomTimeTravelDate] = useState<string | null>(null);
+  const [isRecapExpanded, setIsRecapExpanded] = useState(false);
 
   const today = new Date();
   const todayKey = format(today, 'yyyy-MM-dd');
@@ -329,78 +370,137 @@ export default function ReflectPage() {
     };
   }, [randomTimeTravelDate, entries, notes, wisdoms, ideas]);
 
-  // Get actual items for "This Week" (combining Wisdom, Ideas, Notes, and Highlights/Stars)
-  const combinedWeekItems = useMemo(() => {
-    const weekNotes = (notes || []).filter(note => {
-      const date = note.linkedDate || (note.createdAt ? format(new Date(note.createdAt), 'yyyy-MM-dd') : '');
+  // Get actual data and items for "This Week" (combining Wisdom, Ideas, Notes, Highlights, and Entries)
+  const weekData = useMemo(() => {
+    const weekNotesList = (notes || []).filter(note => {
+      const date = note.linkedJournalDate || note.linkedDate || note.linkedEntryId || getRawDateString(note);
       return date >= weekStartKey && date <= todayKey;
     });
 
-    const weekWisdoms = (wisdoms || []).filter(wisdom => {
-      const date = wisdom.linkedEntryId || (wisdom.createdAt ? format(new Date(wisdom.createdAt), 'yyyy-MM-dd') : '');
+    const weekWisdomsList = (wisdoms || []).filter(wisdom => {
+      const date = wisdom.linkedEntryId || getRawDateString(wisdom);
       return date >= weekStartKey && date <= todayKey;
     });
 
-    const weekIdeas = (ideas || []).filter(idea => {
+    const weekIdeasList = (ideas || []).filter(idea => {
       const linkedDate = idea.linkedEntries?.find(d => d >= weekStartKey && d <= todayKey);
-      const date = linkedDate || (idea.createdAt ? format(new Date(idea.createdAt), 'yyyy-MM-dd') : '');
+      const date = linkedDate || getRawDateString(idea);
       return date >= weekStartKey && date <= todayKey;
     });
 
-    const weekHighlights = (highlights || []).filter(highlight => {
+    const weekHighlightsList = (highlights || []).filter(highlight => {
       return highlight.entryDate >= weekStartKey && highlight.entryDate <= todayKey;
+    });
+
+    const weekEntriesList = entries.filter(e => {
+      return e.date >= weekStartKey && e.date <= todayKey && (e.bullets.length > 0 || e.dream?.trim());
     });
 
     const getRawDate = (item: any): Date => {
       if (!item.createdAt) return new Date(0);
-      if (typeof item.createdAt.toDate === 'function') return item.createdAt.toDate();
-      if (item.createdAt instanceof Date) return item.createdAt;
-      return new Date(item.createdAt);
+      try {
+        let d: Date;
+        if (typeof item.createdAt.toDate === 'function') d = item.createdAt.toDate();
+        else if (item.createdAt instanceof Date) d = item.createdAt;
+        else d = new Date(item.createdAt);
+        return isNaN(d.getTime()) ? new Date(0) : d;
+      } catch {
+        return new Date(0);
+      }
     };
 
-    const noteItems = weekNotes.map(n => ({
-      id: `note:${n.id}`,
-      type: 'note' as const,
-      text: n.title ? `${n.title}: ${n.content}` : n.content,
-      date: n.linkedDate || format(getRawDate(n), 'yyyy-MM-dd'),
-      rawDate: getRawDate(n),
-    }));
-
-    const wisdomItems = weekWisdoms.map(w => ({
-      id: `wisdom:${w.id}`,
-      type: 'wisdom' as const,
-      text: w.content,
-      date: w.linkedEntryId || format(getRawDate(w), 'yyyy-MM-dd'),
-      rawDate: getRawDate(w),
-    }));
-
-    const ideaItems = weekIdeas.map(idItem => {
-      const date = idItem.linkedEntries?.find(d => d >= weekStartKey && d <= todayKey) || format(getRawDate(idItem), 'yyyy-MM-dd');
+    const mappedNotes = weekNotesList.map(n => {
+      const rawDate = getRawDate(n);
+      const date = n.linkedJournalDate || n.linkedDate || n.linkedEntryId || (rawDate.getTime() === 0 ? '' : format(rawDate, 'yyyy-MM-dd'));
       return {
-        id: `idea:${idItem.id}`,
-        type: 'idea' as const,
-        text: idItem.content,
+        id: n.id,
+        key: `note:${n.id}`,
+        type: 'note' as const,
+        title: n.title || 'Untitled Note',
+        text: n.title || 'Untitled Note',
         date,
-        rawDate: getRawDate(idItem),
+        rawDate,
+        onClick: () => router.push(`/notes/new?id=${n.id}`),
       };
     });
 
-    const starItems = weekHighlights.map(h => ({
-      id: `star:${h.id}`,
+    const mappedWisdoms = weekWisdomsList.map(w => {
+      const rawDate = getRawDate(w);
+      const date = w.linkedEntryId || (rawDate.getTime() === 0 ? '' : format(rawDate, 'yyyy-MM-dd'));
+      return {
+        id: w.id,
+        key: `wisdom:${w.id}`,
+        type: 'wisdom' as const,
+        wisdomType: w.type,
+        title: w.content,
+        text: w.content,
+        date,
+        rawDate,
+        onClick: () => router.push(`/collections?tab=wisdom&focus=${w.id}`),
+      };
+    });
+
+    const mappedIdeas = weekIdeasList.map(idItem => {
+      const rawDate = getRawDate(idItem);
+      const date = idItem.linkedEntries?.find(d => d >= weekStartKey && d <= todayKey) || (rawDate.getTime() === 0 ? '' : format(rawDate, 'yyyy-MM-dd'));
+      return {
+        id: idItem.id,
+        key: `idea:${idItem.id}`,
+        type: 'idea' as const,
+        title: idItem.content,
+        text: idItem.content,
+        date,
+        rawDate,
+        onClick: () => router.push(`/collections?tab=ideas&focus=${idItem.id}`),
+      };
+    });
+
+    const mappedStars = weekHighlightsList.map(h => ({
+      id: h.id,
+      key: `star:${h.id}`,
       type: 'star' as const,
+      title: h.content,
       text: h.content,
       date: h.entryDate,
       rawDate: getRawDate(h),
+      onClick: () => router.push(`/write?date=${h.entryDate}`),
     }));
 
-    return [
-      ...noteItems,
-      ...wisdomItems,
-      ...ideaItems,
-      ...starItems,
-    ].sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime())
-     .slice(0, 5);
-  }, [notes, wisdoms, ideas, highlights, weekStartKey, todayKey]);
+    const mappedEntries = weekEntriesList.map(e => ({
+      id: e.id || e.date,
+      key: `entry:${e.date}`,
+      type: 'entry' as const,
+      title: `Journal Entry - ${format(parseISO(e.date), 'EEEE')}`,
+      text: e.dream || (e.bullets[0]?.text) || `Journal logged for ${format(parseISO(e.date), 'EEEE')}`,
+      date: e.date,
+      rawDate: new Date(e.date),
+      onClick: () => router.push(`/write?date=${e.date}`),
+    }));
+
+    const totalCapturedCount = weekNotesList.length + weekWisdomsList.length + weekIdeasList.length + weekHighlightsList.length + weekEntriesList.length;
+
+    const allPreviewItems = [
+      ...mappedNotes,
+      ...mappedWisdoms,
+      ...mappedIdeas,
+      ...mappedStars,
+      ...mappedEntries,
+    ].sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
+
+    return {
+      stats: {
+        notes: weekNotesList.length,
+        quotes: weekWisdomsList.filter(w => w.type === 'quote').length,
+        facts: weekWisdomsList.filter(w => w.type === 'fact').length,
+        lessons: weekWisdomsList.filter(w => w.type === 'lesson').length,
+        ideas: weekIdeasList.length,
+        entries: weekEntriesList.length,
+        total: totalCapturedCount
+      },
+      previewItems: allPreviewItems.slice(0, 3),
+      totalRemaining: Math.max(0, totalCapturedCount - 3)
+    };
+  }, [notes, wisdoms, ideas, highlights, entries, weekStartKey, todayKey, router]);
 
   // More/Less Habit Focus Calculation
   const weeklyHabits = useMemo(() => {
@@ -429,9 +529,6 @@ export default function ReflectPage() {
     return { date, dateKey: format(date, 'yyyy-MM-dd') };
   });
   
-  const oneYearDate = subYears(today, 1);
-  const oneYearKey = format(oneYearDate, 'yyyy-MM-dd');
-  const oneYearEntry = entries.find(entry => entry.date === oneYearKey);
 
   const toggleSection = (section: SectionId) => {
     setVisibleSections(current => ({ ...current, [section]: !current[section] }));
@@ -551,7 +648,7 @@ export default function ReflectPage() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#151719] pb-24 transition-colors duration-300">
-      <div className="mx-auto max-w-[600px] px-6 pt-8">
+      <div className="mx-auto max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] px-6 pt-8">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="font-sans text-5xl font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">Reflect</h1>
@@ -610,608 +707,728 @@ export default function ReflectPage() {
           </div>
         </div>
 
-        <main className="mt-14 space-y-10">
-          {/* Quiet Insight Section */}
-          <section>
-            <QuietInsightCard />
-          </section>
+        <main className="mt-14 space-y-8">
+          {/* Bento Grid layout on Desktop (3 columns) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 grid-flow-row-dense items-start">
+            
+            {/* Cosmic Recap Bento Hero Card */}
+            <div className={`col-span-1 ${isRecapExpanded ? 'lg:col-span-3 md:col-span-2' : ''} transition-all duration-300`}>
+              <QuietInsightCard onToggleOpen={setIsRecapExpanded} />
+            </div>
 
-          {visibleSections.random && (
-            <section className="space-y-6 bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm">
-              {wisdomOfTheDay && (
+            {/* Focus Goals (col-span-1) */}
+            {visibleSections.focus && (
+              <section className="col-span-1 bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm hover:scale-[1.015] hover:border-[#CCD0CF] dark:hover:border-[#3E4246] hover:shadow-lg hover:shadow-neutral-200/50 dark:hover:shadow-black/40 transition-all duration-300 min-h-[220px] flex flex-col justify-between">
+                <div>
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FFF0F5] dark:bg-[#FF8FB3]/10 text-[#FF8FB3]">
+                      <FontAwesomeIcon icon={faBullseye} className="h-4 w-4" />
+                    </span>
+                    <h2 className="font-sans text-lg font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">Focus</h2>
+                  </div>
+                  <div className="space-y-3.5">
+                    {activeGoals.slice(0, 2).map((goal, index) => (
+                      <div key={goal.id} className="flex items-start gap-2.5">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FFF0F5] dark:bg-[#FF8FB3]/10 text-[10px] font-bold text-[#FF8FB3]">
+                          {index + 1}
+                        </span>
+                        <p className="text-xs font-light leading-relaxed text-[#2F3331] dark:text-[#FAFAFA] line-clamp-2">{goal.content}</p>
+                      </div>
+                    ))}
+                    {activeGoals.length === 0 && (
+                      <p className="text-xs font-light italic text-[#74797B] dark:text-[#6F7476]">No active goals.</p>
+                    )}
+                  </div>
+                </div>
+                {activeGoals.length > 2 && (
+                  <button
+                    onClick={() => router.push('/goals')}
+                    className="text-[10px] font-semibold text-[#A3A7A8] hover:text-[#FF8FB3] transition-colors mt-3 text-left block cursor-pointer"
+                  >
+                    + {activeGoals.length - 2} more →
+                  </button>
+                )}
+              </section>
+            )}
+
+            {/* Gem of the Day (col-span-1) */}
+            {visibleSections.random && wisdomOfTheDay && (
+              <section className="col-span-1 bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm hover:scale-[1.015] hover:border-[#CCD0CF] dark:hover:border-[#3E4246] hover:shadow-lg hover:shadow-neutral-200/50 dark:hover:shadow-black/40 transition-all duration-300 min-h-[220px] flex flex-col justify-between">
                 <button
                   onClick={() => router.push(`/collections?tab=wisdom&focus=${wisdomOfTheDay.id}`)}
-                  className="block w-full text-left"
+                  className="block w-full text-left cursor-pointer"
                 >
-                  <h2 className="mb-4 text-sm font-bold text-[#FFB95C] uppercase tracking-wider font-sans">Gem of the day</h2>
-                  <div className="flex items-start gap-4">
+                  <h2 className="mb-3 text-[10px] font-bold text-[#FFB95C] uppercase tracking-wider font-sans">Gem of the day</h2>
+                  <div className="flex items-start gap-3">
                     <span
-                      className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-                      style={{ backgroundColor: thoughtStyle.bg, color: thoughtStyle.color }}
+                      className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                      style={{ backgroundColor: `${thoughtStyle.color}20`, color: thoughtStyle.color }}
                     >
                       <FontAwesomeIcon icon={thoughtIcon} className="h-3.5 w-3.5" />
                     </span>
-                    <p className="whitespace-pre-line text-base font-light leading-7 text-[#2F3331] dark:text-[#FAFAFA]">
-                      {wisdomOfTheDay.content}
-                    </p>
+                    <div className="text-sm font-light leading-relaxed text-[#2F3331] dark:text-[#FAFAFA] line-clamp-3 flex-1">
+                      {renderParsedWisdom(wisdomOfTheDay.content, wisdomOfTheDay.type === 'quote')}
+                    </div>
                   </div>
                 </button>
-              )}
+                <div className="mt-4 pt-2 border-t border-[#EEF0EF] dark:border-[#2E3133]/40 text-right">
+                  <button
+                    onClick={() => router.push(`/collections?tab=wisdom&focus=${wisdomOfTheDay.id}`)}
+                    className="text-[10px] font-bold text-[#A3A7A8] hover:text-[#FFB95C] transition-colors cursor-pointer"
+                  >
+                    Open gem →
+                  </button>
+                </div>
+              </section>
+            )}
 
-              {ideaOfTheDay && (
+            {/* Idea of the Day (col-span-1) */}
+            {visibleSections.random && ideaOfTheDay && (
+              <section className="col-span-1 bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm hover:scale-[1.015] hover:border-[#CCD0CF] dark:hover:border-[#3E4246] hover:shadow-lg hover:shadow-neutral-200/50 dark:hover:shadow-black/40 transition-all duration-300 min-h-[220px] flex flex-col justify-between">
                 <button
                   onClick={() => router.push(`/collections?tab=ideas&focus=${ideaOfTheDay.id}`)}
-                  className="block w-full text-left"
+                  className="block w-full text-left cursor-pointer"
                 >
-                  <h2 className="mb-4 text-sm font-bold text-[#FFB95C] uppercase tracking-wider font-sans">Idea of the day</h2>
-                  <div className="flex items-start gap-4">
-                    <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#FFE4B5] text-[#B45309]">
+                  <h2 className="mb-3 text-[10px] font-bold text-[#FFA952] uppercase tracking-wider font-sans">Idea of the day</h2>
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#FFE4B5] dark:bg-[#FFA952]/10 text-[#B45309] dark:text-[#FFA952]">
                       <FontAwesomeIcon icon={faLightbulb} className="h-3.5 w-3.5" />
                     </span>
-                    <p className="text-base font-light leading-7 text-[#2F3331] dark:text-[#FAFAFA]">
+                    <p className="text-sm font-light leading-relaxed text-[#2F3331] dark:text-[#FAFAFA] line-clamp-3">
                       {ideaOfTheDay.content}
                     </p>
                   </div>
                 </button>
-              )}
-            </section>
-          )}
+                <div className="mt-4 pt-2 border-t border-[#EEF0EF] dark:border-[#2E3133]/40 text-right">
+                  <button
+                    onClick={() => router.push(`/collections?tab=ideas&focus=${ideaOfTheDay.id}`)}
+                    className="text-[10px] font-bold text-[#A3A7A8] hover:text-[#FFA952] transition-colors cursor-pointer"
+                  >
+                    Open idea →
+                  </button>
+                </div>
+              </section>
+            )}
 
-          {visibleSections.focus && (
-            <section className="bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm">
-              <div className="mb-6 flex items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FFF0F5] dark:bg-[#FF8FB3]/10 text-[#FF8FB3]">
-                  <FontAwesomeIcon icon={faBullseye} className="h-4 w-4" />
-                </span>
-                <h2 className="font-sans text-xl font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">Focus</h2>
-              </div>
-              <div className="space-y-5">
-                {activeGoals.length > 0 ? activeGoals.map((goal, index) => (
-                  <div key={goal.id} className="flex items-start gap-4">
-                    <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#FFF0F5] dark:bg-[#FF8FB3]/10 text-sm font-bold text-[#FF8FB3]">
-                      {index + 1}
+            {/* Yesterday Card (col-span-2) */}
+            {visibleSections.yesterday && (
+              <section className="col-span-1 md:col-span-2 lg:col-span-2 bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm hover:scale-[1.015] hover:border-[#CCD0CF] dark:hover:border-[#3E4246] hover:shadow-lg hover:shadow-neutral-200/50 dark:hover:shadow-black/40 transition-all duration-300 flex flex-col justify-between min-h-[220px]">
+                <div>
+                  <div className="mb-3 flex items-center gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E9FFF4] dark:bg-[#00DC7D]/10 text-[#00A963] dark:text-[#00DC7D]">
+                      <FontAwesomeIcon icon={faBookOpen} className="h-4 w-4" />
                     </span>
-                    <p className="text-base font-light leading-7 text-[#2F3331] dark:text-[#FAFAFA]">{goal.content}</p>
-                  </div>
-                )) : (
-                  <p className="text-sm font-light italic text-[#74797B] dark:text-[#6F7476]">No focus goals active yet.</p>
-                )}
-              </div>
-            </section>
-          )}
-
-          {visibleSections.yesterday && (
-            <section className="bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E9FFF4] dark:bg-[#00DC7D]/10 text-[#00A963] dark:text-[#00DC7D]">
-                  <FontAwesomeIcon icon={faBookOpen} className="h-4 w-4" />
-                </span>
-                <h2 className="font-sans text-xl font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">Yesterday</h2>
-              </div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-[#A3A7A8] dark:text-[#6F7476] font-sans">{format(yesterday, 'EEEE, MMMM d')}</p>
-
-              {yesterdayEntry && yesterdayEntry.bullets.length > 0 ? (
-                <div className="mt-5 space-y-4">
-                  {sortBullets(yesterdayEntry.bullets).slice(0, 4).map((bullet) => (
-                    <button
-                      key={bullet.id}
-                      onClick={() => router.push(`/write?date=${yesterdayKey}`)}
-                      className="block w-full text-left text-sm font-light leading-6 text-[#5D6264] dark:text-[#A3A7A8] transition-colors hover:text-[#2F3331] dark:hover:text-white"
-                    >
-                      <HighlightedText text={bullet.text} interactive />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-5 text-sm italic text-[#74797B] dark:text-[#6F7476]">
-                  There is no entry for {format(yesterday, 'MMMM d')} yet.
-                </p>
-              )}
-
-              <button
-                onClick={() => router.push(`/write?date=${yesterdayKey}`)}
-                className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gray-50 dark:bg-[#282A2D] text-[#2F3331] dark:text-[#FAFAFA] border border-[#CCD0CF] dark:border-[#2E3133] text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
-              >
-                <FontAwesomeIcon icon={faPlus} className="h-3 w-3 text-[#00DC7D]" />
-                <span>Write Entry</span>
-              </button>
-            </section>
-          )}
-
-          {visibleSections.week && (
-            <section className="bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm">
-              <div className="mb-5 flex items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E6F0FF] dark:bg-[#5D8AFF]/10 text-[#5D8AFF]">
-                  <FontAwesomeIcon icon={faCalendarDays} className="h-4 w-4" />
-                </span>
-                <h2 className="font-sans text-xl font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">This week</h2>
-              </div>
-              
-              {/* Compact Spacing Actual Entries Grid */}
-              <div className="space-y-3">
-                {combinedWeekItems.map(item => {
-                  const style = itemIconStyles[item.type];
-                  const icon = itemIcons[item.type];
-                  return (
-                    <div key={item.id} className="flex items-center gap-3 py-1.5 px-3 rounded-xl bg-gray-50/50 dark:bg-neutral-800/20 border border-transparent hover:border-[#EEF0EF] dark:hover:border-[#2E3133] transition-all">
-                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${style.bg} ${style.text}`}>
-                        <FontAwesomeIcon icon={icon} className="h-3.5 w-3.5" />
-                      </span>
-                      <p className="text-sm font-light text-[#2F3331] dark:text-[#FAFAFA] line-clamp-2 leading-relaxed flex-1">
-                        {item.text}
-                      </p>
-                      <span className="text-[10px] text-[#A3A7A8] dark:text-[#6F7476] shrink-0 font-sans font-light">
-                        {format(parseISO(item.date), 'MMM d')}
-                      </span>
+                    <div>
+                      <h2 className="font-sans text-lg font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">Yesterday</h2>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#A3A7A8] dark:text-[#6F7476] font-sans">{format(yesterday, 'EEEE, MMMM d')}</p>
                     </div>
-                  );
-                })}
-                {combinedWeekItems.length === 0 && (
-                  <p className="text-sm font-light italic text-[#74797B] dark:text-[#6F7476] py-3 text-center">
-                    No entries logged this week yet.
-                  </p>
-                )}
-              </div>
-            </section>
-          )}
-
-          {visibleSections.pins && (
-            <section className="bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F2EFFE] dark:bg-[#C494FF]/10 text-[#8B00D4] dark:text-[#C494FF]">
-                    <FontAwesomeIcon icon={faTags} className="h-4 w-4" />
-                  </span>
-                  <h2 className="font-sans text-xl font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">Pins</h2>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowPinModal(true);
-                    setShowCreateGroupForm(false);
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-50 dark:bg-[#1E2022] hover:bg-[#F2F2F3] dark:hover:bg-[#282A2D] text-xs font-bold text-[#2F3331] dark:text-[#FAFAFA] border border-[#CCD0CF] dark:border-[#2E3133] transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                >
-                  <FontAwesomeIcon icon={faPlus} className="w-3 h-3 text-[#00DC7D]" />
-                  <span>Pin Tag or Group</span>
-                </button>
-              </div>
-
-              {combinedPins.length > 0 ? (
-                <div className="space-y-5">
-                  {combinedPins.map(pin => {
-                    const isGroup = pin.type === 'group';
-                    const itemId = pin.id;
-                    const name = pin.name;
-                    const color = pin.color;
-                    const timeline = pin.timeline;
-
-                    return (
-                      <div
-                        key={itemId}
-                        className="rounded-xl border border-[#EEF0EF] bg-[#FAFAFA] p-4 relative overflow-hidden transition-all duration-300 shadow-sm"
-                      >
-                        {/* Decorative background glow for groups */}
-                        <div
-                          className="absolute -right-16 -top-16 w-36 h-36 rounded-full blur-3xl opacity-[0.03] dark:opacity-[0.05] pointer-events-none"
-                          style={{ backgroundColor: color }}
-                        />
-
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            <span
-                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all"
-                              style={{ backgroundColor: `${color}15`, color: color }}
-                            >
-                              <FontAwesomeIcon icon={isGroup ? faFolderOpen : faTag} className="w-3.5 h-3.5" />
-                            </span>
-                            <div className="min-w-0">
-                              <h3 className="font-bold text-base text-[#2F3331] dark:text-[#FAFAFA] truncate leading-none">
-                                {isGroup ? name : `#${name}`}
-                              </h3>
-                              {isGroup && (
-                                <span className="text-[10px] text-[#A3A7A8] dark:text-[#CBD5E1] font-light font-sans tracking-wide block mt-1 truncate">
-                                  {pin.tags.length} tag(s): {pin.tags.map((gt: string) => `#${gt}`).join(', ')}
-                                </span>
-                              )}
-                              {!isGroup && (
-                                <span className="text-[10px] text-[#A3A7A8] dark:text-[#CBD5E1] font-light font-sans tracking-wide block mt-1">
-                                  Used {pin.count} time(s)
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            {isGroup && (
-                              <button
-                                onClick={() => handleStartEditGroup(pin.rawGroup)}
-                                className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-[#282A2D] text-[#A3A7A8] hover:text-[#2F3331] dark:hover:text-[#FAFAFA] transition-all cursor-pointer"
-                                title="Edit Tag Group"
-                              >
-                                <FontAwesomeIcon icon={faPen} className="w-3 h-3" />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => isGroup ? togglePinGroup(pin.rawGroup.id) : togglePinTag(name)}
-                              className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-[#282A2D] text-[#A3A7A8] hover:text-[#FF453A] transition-all cursor-pointer"
-                              title="Unpin"
-                            >
-                              <FontAwesomeIcon icon={faTrash} className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* 30-day Grid Timeline */}
-                        <div className="relative">
-                          <div className="grid grid-cols-[repeat(30,minmax(0,1fr))] gap-1.5 py-1">
-                            {timeline.map((day: any) => {
-                              const isDetailActive = selectedDayDetail?.itemId === itemId && selectedDayDetail?.dateKey === day.dateKey;
-                              return (
-                                <button
-                                  key={day.dateKey}
-                                  title={`${format(day.date, 'MMM d')}: ${day.bullets.length} log(s)`}
-                                  disabled={!day.active}
-                                  onClick={() => {
-                                    if (isDetailActive) {
-                                      setSelectedDayDetail(null);
-                                    } else {
-                                      setSelectedDayDetail({
-                                        itemId,
-                                        itemName: isGroup ? name : `#${name}`,
-                                        dateKey: day.dateKey,
-                                        bullets: day.bullets
-                                      });
-                                    }
-                                  }}
-                                  className={`h-3 rounded-[3px] transition-all duration-200 ${
-                                    day.active
-                                      ? 'cursor-pointer hover:scale-130 active:scale-95 shadow-sm'
-                                      : 'cursor-default bg-gray-100 dark:bg-[#1A1C1D]'
-                                  } ${
-                                    isDetailActive
-                                      ? 'ring-2 ring-[#2F3331] dark:ring-white scale-120 z-10'
-                                      : ''
-                                  }`}
-                                  style={{
-                                    backgroundColor: day.active ? color : undefined,
-                                    boxShadow: day.active ? `0 0 6px ${color}50` : undefined,
-                                    opacity: day.active ? 1 : 0.4
-                                  }}
-                                />
-                              );
-                            })}
-                          </div>
-
-                          <div className="flex justify-between items-center text-[9px] text-[#A3A7A8] dark:text-[#CBD5E1] font-semibold mt-2 uppercase tracking-wider font-sans select-none">
-                            <span>30 days ago</span>
-                            <span className="font-light normal-case">
-                              Active <span className="font-bold text-[#2F3331] dark:text-[#FAFAFA]">{timeline.filter((d: any) => d.active).length}</span> of 30 days
-                            </span>
-                            <span>Today</span>
-                          </div>
-                        </div>
-
-                        {/* Interactive sliding logs detail drawer */}
-                        {selectedDayDetail && selectedDayDetail.itemId === itemId && (
-                          <div className="mt-4 rounded-xl bg-gray-100 dark:bg-[#151718] border border-[#EEF0EF] dark:border-[#3E4246] p-4 animate-in fade-in slide-in-from-top-3 duration-250 shadow-inner">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-[#A3A7A8] dark:text-[#CBD5E1] font-sans">
-                                Logs for {format(parseISO(selectedDayDetail.dateKey), 'EEEE, MMMM d, yyyy')}
-                              </span>
-                              <button
-                                onClick={() => setSelectedDayDetail(null)}
-                                className="text-[#A3A7A8] hover:text-[#FF453A] p-0.5 rounded-full hover:bg-gray-200 dark:hover:bg-neutral-700 transition-all w-5 h-5 flex items-center justify-center text-xs leading-none cursor-pointer"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                            <ul className="space-y-2.5">
-                              {selectedDayDetail.bullets.map((b: any, i: number) => (
-                                <li
-                                  key={i}
-                                  className="text-sm font-light text-[#5D6264] dark:text-[#E2E8F0] pl-3 border-l-2"
-                                  style={{ borderLeftColor: color }}
-                                >
-                                  <HighlightedText text={b} interactive />
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                /* Sleek Empty State */
-                <div className="text-center py-6">
-                  <div className="mx-auto w-12 h-12 rounded-full bg-[#EAD8FF] dark:bg-[#C494FF]/10 flex items-center justify-center text-[#8B00D4] dark:text-[#C494FF] mb-4">
-                    <FontAwesomeIcon icon={faTag} className="w-5 h-5" />
                   </div>
-                  <h3 className="text-base font-bold text-[#2F3331] dark:text-[#FAFAFA] mb-1">Track habits & tags over 30 days</h3>
-                  <p className="text-xs text-[#6F7476] dark:text-[#A3A7A8] max-w-[380px] mx-auto font-light leading-relaxed mb-5">
-                    Pins give you convenient 30-day timelines for Tags and Tag Groups. Group exercising tags together, or track how often you work on a side project!
-                  </p>
+
+                  {yesterdayEntry && yesterdayEntry.bullets.length > 0 ? (
+                    <div className="mt-4 space-y-2.5">
+                      {sortBullets(yesterdayEntry.bullets).slice(0, 3).map((bullet) => (
+                        <button
+                          key={bullet.id}
+                          onClick={() => router.push(`/write?date=${yesterdayKey}`)}
+                          className="block w-full text-left text-sm font-light leading-relaxed text-[#5D6264] dark:text-[#A3A7A8] transition-colors hover:text-[#2F3331] dark:hover:text-white"
+                        >
+                          <span className="line-clamp-2 block">
+                            <HighlightedText text={bullet.text} interactive />
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-sm italic text-[#74797B] dark:text-[#6F7476]">
+                      No entry yet.
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-5 pt-3 border-t border-[#EEF0EF] dark:border-[#2E3133]/40 flex items-center justify-between">
+                  <button
+                    onClick={() => router.push(`/write?date=${yesterdayKey}`)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-50 dark:bg-[#282A2D] text-[#2F3331] dark:text-[#FAFAFA] border border-[#CCD0CF] dark:border-[#2E3133] text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+                  >
+                    <FontAwesomeIcon icon={faPlus} className="h-2.5 w-2.5 text-[#00DC7D]" />
+                    <span>Write Entry</span>
+                  </button>
+                  {yesterdayEntry && yesterdayEntry.bullets.length > 0 && (
+                    <button
+                      onClick={() => router.push(`/write?date=${yesterdayKey}`)}
+                      className="text-[10px] font-bold text-[#A3A7A8] hover:text-[#00A963] dark:hover:text-[#00DC7D] transition-colors cursor-pointer"
+                    >
+                      Open entry →
+                    </button>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* Pins Card (col-span-2) */}
+            {visibleSections.pins && (
+              <section className="col-span-1 md:col-span-2 lg:col-span-2 bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm space-y-4 hover:scale-[1.015] hover:border-[#CCD0CF] dark:hover:border-[#3E4246] hover:shadow-lg hover:shadow-neutral-200/50 dark:hover:shadow-black/40 transition-all duration-300 min-h-[220px] flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F2EFFE] dark:bg-[#C494FF]/10 text-[#8B00D4] dark:text-[#C494FF]">
+                      <FontAwesomeIcon icon={faTags} className="h-4 w-4" />
+                    </span>
+                    <h2 className="font-sans text-lg font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">Pins</h2>
+                  </div>
                   <button
                     onClick={() => {
                       setShowPinModal(true);
                       setShowCreateGroupForm(false);
                     }}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#2F3331] dark:bg-[#FAFAFA] text-white dark:text-[#2F3331] text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-md shadow-black/10 dark:shadow-none"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-50 dark:bg-[#1E2022] hover:bg-[#F2F2F3] dark:hover:bg-[#282A2D] text-[10px] font-bold text-[#2F3331] dark:text-[#FAFAFA] border border-[#CCD0CF] dark:border-[#2E3133] transition-all hover:scale-105 active:scale-95 cursor-pointer"
                   >
-                    <FontAwesomeIcon icon={faPlus} className="w-3 h-3" />
-                    <span>Create Your First Pin</span>
+                    <FontAwesomeIcon icon={faPlus} className="w-2.5 h-2.5 text-[#00DC7D]" />
+                    <span>Pin</span>
                   </button>
                 </div>
-              )}
-            </section>
-          )}
 
-          {visibleSections.yearAgo && oneYearEntry && (
-            <section className="bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FFFDF0] dark:bg-[#FFD166]/10 text-[#FF9500] dark:text-[#FFD166]">
-                  <FontAwesomeIcon icon={faCompass} className="h-4 w-4" />
-                </span>
-                <h2 className="font-sans text-xl font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">One year ago</h2>
-              </div>
-              <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-[#A3A7A8] dark:text-[#6F7476] font-sans">{format(oneYearDate, 'EEEE, MMMM d, yyyy')}</p>
-              <button
-                onClick={() => router.push(`/write?date=${oneYearKey}`)}
-                className="block w-full text-left text-base font-light leading-7 text-[#2F3331] dark:text-[#FAFAFA] hover:text-[#00A963] dark:hover:text-[#00DC7D] transition-colors"
-              >
-                {oneYearEntry.dream || oneYearEntry.bullets[0]?.text || 'Open entry'}
-              </button>
-            </section>
-          )}
+                {combinedPins.length > 0 ? (
+                  <div className="space-y-4">
+                    {combinedPins.slice(0, 2).map(pin => {
+                      const isGroup = pin.type === 'group';
+                      const itemId = pin.id;
+                      const name = pin.name;
+                      const color = pin.color;
+                      const timeline = pin.timeline;
 
-          {visibleSections.memory && (
-            <section className="bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm">
-              <div className="mb-5 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E9FFF4] dark:bg-[#00DC7D]/10 text-[#00A963] dark:text-[#00DC7D]">
-                    <FontAwesomeIcon icon={faRoad} className="h-4 w-4" />
-                  </span>
-                  <h2 className="font-sans text-xl font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">Time travel</h2>
-                </div>
-                {randomTimeTravelDate && (
-                  <button
-                    onClick={handleRerollTimeTravel}
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-50 dark:bg-[#282A2D] text-[#2F3331] dark:text-[#FAFAFA] border border-[#CCD0CF] dark:border-[#2E3133] hover:scale-105 active:scale-95 transition-all shadow-sm cursor-pointer"
-                    title="reroll time travel"
-                  >
-                    <FontAwesomeIcon icon={faDice} className="h-4 w-4 text-[#00DC7D]" />
-                  </button>
-                )}
-              </div>
-              {randomTimeTravelDate ? (
-                (() => {
-                  const entryDate = parseISO(randomTimeTravelDate);
-                  const isEntryToday = randomTimeTravelDate === todayKey;
-                  const entryNumber = entryNumberByDate.get(randomTimeTravelDate) || 1;
-                  const heading = format(entryDate, entryDate.getFullYear() === today.getFullYear() ? 'EEE, MMM d' : 'EEE, MMM d, yyyy');
-                  
-                  const visibleBullets = sortBullets(timeTravelItems.bullets).slice(0, 5);
-                  
-                  const entryForDate = entries.find(e => e.date === randomTimeTravelDate);
-                  const hasWisdom = wisdoms.some(wisdom => (wisdom.linkedEntryId || getRawDateString(wisdom)) === randomTimeTravelDate);
-                  const hasNote = notes.some(note => note.linkedDate === randomTimeTravelDate || note.linkedEntryId === randomTimeTravelDate || getRawDateString(note) === randomTimeTravelDate);
-                  const hasIdea = ideas.some(idea => idea.linkedEntries?.includes(randomTimeTravelDate) || getRawDateString(idea) === randomTimeTravelDate);
-                  const hasMedia = entryForDate ? (entryForDate.media?.length ?? 0) > 0 : false;
-                  const hasLocation = entryForDate ? !!entryForDate.location : false;
-                  const hasIndicators = hasWisdom || hasNote || hasIdea || hasMedia || hasLocation;
-
-                  return (
-                    <div className="mt-2 text-left">
-                      <button
-                        onClick={() => router.push(`/write?date=${randomTimeTravelDate}`)}
-                        className="group block w-full text-left transition-all hover:opacity-90 focus:outline-none cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between mb-3 border-b border-[#EEF0EF] dark:border-[#2E3133] pb-2">
-                          <div className="flex items-baseline gap-2">
-                            <h3 className="font-sans text-base font-bold text-[#2F3331] dark:text-[#FAFAFA] group-hover:text-[#00A963] dark:group-hover:text-[#00DC7D] transition-colors">
-                              {heading}
-                            </h3>
-                            <span className="text-xs font-semibold text-[#6F7476] dark:text-[#A3A7A8]">
-                              #{entryNumber} {isEntryToday && <span className="text-[#FF9933]">/ Today</span>}
-                            </span>
-                          </div>
-                          <span className="text-xs font-bold text-[#A3A7A8] dark:text-[#6F7476] group-hover:text-[#00A963] dark:group-hover:text-[#00DC7D] transition-colors">
-                            Open →
-                          </span>
-                        </div>
-
-                        <div className="mt-4 space-y-4">
-                          {/* Dream */}
-                          {timeTravelItems.dream && (
-                            <div className="flex items-start gap-3">
-                              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#FFF6D9] dark:bg-[#FFCC33]/10 text-[#FFCC33]">
-                                <FontAwesomeIcon icon={faMoon} className="h-2.5 w-2.5" />
+                      return (
+                        <div
+                          key={itemId}
+                          className="rounded-xl border border-[#EEF0EF] dark:border-[#2E3133] bg-[#FAFAFA] dark:bg-[#161B19]/30 p-3 relative overflow-hidden transition-all duration-300 shadow-sm"
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all"
+                                style={{ backgroundColor: `${color}15`, color: color }}
+                              >
+                                <FontAwesomeIcon icon={isGroup ? faFolderOpen : faTag} className="w-3 h-3" />
                               </span>
-                              <p className="line-clamp-3 text-sm font-light leading-6 text-[#74797B] dark:text-[#A3A7A8] italic">
-                                {timeTravelItems.dream}
-                              </p>
+                              <div className="min-w-0">
+                                <h3 className="font-bold text-sm text-[#2F3331] dark:text-[#FAFAFA] truncate leading-none">
+                                  {isGroup ? name : `#${name}`}
+                                </h3>
+                                {isGroup && (
+                                  <span className="text-[9px] text-[#A3A7A8] dark:text-[#CBD5E1] font-light font-sans tracking-wide block mt-1 truncate max-w-[150px]">
+                                    {pin.tags.map((gt: string) => `#${gt}`).join(', ')}
+                                  </span>
+                                )}
+                                {!isGroup && (
+                                  <span className="text-[9px] text-[#A3A7A8] dark:text-[#CBD5E1] font-light font-sans tracking-wide block mt-1">
+                                    Used {pin.count} time(s)
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          )}
 
-                          {/* Bullets */}
-                          {timeTravelItems.bullets.length > 0 && (
-                            <div className="space-y-1.5">
-                              {visibleBullets.map((bullet) => {
-                                const isSourceValid = !bullet.source || (
-                                  bullet.source === 'wisdom' ? wisdoms.some(w => w.id === bullet.sourceId || (w.linkedEntryId === (timeTravelItems.date || '') && w.content === bullet.text)) :
-                                  bullet.source === 'note' ? notes.some(n => n.id === bullet.sourceId || (((n.linkedEntryId === (timeTravelItems.date || '') || n.linkedDate === (timeTravelItems.date || ''))) && (n.content === bullet.text || (n.title && `${n.title}: ${n.content}` === bullet.text)))) :
-                                  bullet.source === 'idea' ? ideas.some(i => i.id === bullet.sourceId || (i.linkedEntries?.includes(timeTravelItems.date || '') && i.content === bullet.text)) :
-                                  false
-                                );
-                                const hasValidSource = bullet.source && isSourceValid;
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              {isGroup && (
+                                <button
+                                  onClick={() => handleStartEditGroup(pin.rawGroup)}
+                                  className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-[#282A2D] text-[#A3A7A8] hover:text-[#2F3331] dark:hover:text-[#FAFAFA] transition-all cursor-pointer"
+                                  title="Edit Tag Group"
+                                >
+                                  <FontAwesomeIcon icon={faPen} className="w-3 h-3" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => isGroup ? togglePinGroup(pin.rawGroup.id) : togglePinTag(name)}
+                                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-[#282A2D] text-[#A3A7A8] hover:text-[#FF453A] transition-all cursor-pointer"
+                                title="Unpin"
+                              >
+                                <FontAwesomeIcon icon={faTrash} className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
 
-                                const sourceColors = hasValidSource && bullet.source === 'wisdom'
-                                  ? { bg: 'bg-[#F0D6FF] dark:bg-[#C494FF]/10', text: 'text-[#8B00D4] dark:text-[#C494FF]' }
-                                  : hasValidSource && bullet.source === 'note'
-                                  ? { bg: 'bg-[#C8F7E4] dark:bg-[#00DC7D]/10', text: 'text-[#00875A] dark:text-[#00DC7D]' }
-                                  : hasValidSource && bullet.source === 'idea'
-                                  ? { bg: 'bg-[#FFE4B5] dark:bg-[#FFA952]/10', text: 'text-[#B45309] dark:text-[#FFA952]' }
-                                  : null;
-
+                          {/* 30-day Grid Timeline */}
+                          <div className="relative">
+                            <div className="grid grid-cols-[repeat(30,minmax(0,1fr))] gap-1 py-0.5">
+                              {timeline.map((day: any) => {
+                                const isDetailActive = selectedDayDetail?.itemId === itemId && selectedDayDetail?.dateKey === day.dateKey;
                                 return (
-                                  <div key={bullet.id} className="flex items-start gap-2">
-                                    {bullet.style === 'checklist' ? (
-                                      <FontAwesomeIcon
-                                        icon={bullet.isCompleted ? faCheck : faSquare}
-                                        className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${bullet.isCompleted ? 'text-[#22C55E]' : 'text-[#CCD0CF]'}`}
-                                      />
-                                    ) : bullet.style === 'star' ? (
-                                      <FontAwesomeIcon
-                                        icon={faStar}
-                                        className={`mt-0.5 h-3 w-3 shrink-0 ${bullet.isHighlight ? 'text-[#FF9933]' : 'text-[#F59E0B]/60'}`}
-                                      />
-                                    ) : (
-                                      <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${bullet.isHighlight ? 'bg-[#FF9933]' : 'bg-[#9AA0A1]'}`} />
-                                    )}
-                                    <div className="min-w-0 flex-1">
-                                      <p className={`line-clamp-2 text-sm font-light leading-6 ${hasValidSource ? sourceColors?.text || 'text-[#5D5AEF]' : 'text-[#2F3331] dark:text-[#FAFAFA]'} ${bullet.isHighlight ? 'font-semibold' : ''} ${bullet.isCompleted ? 'text-[#A3A7A8] line-through' : ''}`}>
-                                        <HighlightedText text={bullet.text} interactive />
-                                      </p>
-                                      {sourceColors && (
-                                        <span className={`mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider ${sourceColors.bg} ${sourceColors.text}`}>
-                                          <FontAwesomeIcon icon={
-                                            bullet.source === 'wisdom' ? faTree :
-                                            bullet.source === 'note' ? faBook :
-                                            faLightbulb
-                                          } className="h-2.5 w-2.5" />
-                                          {bullet.source}
-                                          {bullet.sourceType && ` (${bullet.sourceType})`}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
+                                  <button
+                                    key={day.dateKey}
+                                    title={`${format(day.date, 'MMM d')}: ${day.bullets.length} log(s)`}
+                                    disabled={!day.active}
+                                    onClick={() => {
+                                      if (isDetailActive) {
+                                        setSelectedDayDetail(null);
+                                      } else {
+                                        setSelectedDayDetail({
+                                          itemId,
+                                          itemName: isGroup ? name : `#${name}`,
+                                          dateKey: day.dateKey,
+                                          bullets: day.bullets
+                                        });
+                                      }
+                                    }}
+                                    className={`h-2.5 rounded-[2px] transition-all duration-200 ${
+                                      day.active
+                                        ? 'cursor-pointer hover:scale-130 active:scale-95 shadow-sm'
+                                        : 'cursor-default bg-gray-100 dark:bg-[#1A1C1D]'
+                                    } ${
+                                      isDetailActive
+                                        ? 'ring-1 ring-[#2F3331] dark:ring-white scale-120 z-10'
+                                        : ''
+                                    }`}
+                                    style={{
+                                      backgroundColor: day.active ? color : undefined,
+                                      boxShadow: day.active ? `0 0 4px ${color}50` : undefined,
+                                      opacity: day.active ? 1 : 0.4
+                                    }}
+                                  />
                                 );
                               })}
-                              {timeTravelItems.bullets.length > visibleBullets.length && (
-                                <p className="pl-6 text-xs font-semibold text-[#A3A7A8]">
-                                  + {timeTravelItems.bullets.length - visibleBullets.length} more
+                            </div>
+
+                            <div className="flex justify-between items-center text-[8px] text-[#A3A7A8] dark:text-[#CBD5E1] font-semibold mt-1.5 uppercase tracking-wider font-sans select-none">
+                              <span>30d ago</span>
+                              <span>Today</span>
+                            </div>
+                          </div>
+
+                          {/* Interactive sliding logs detail drawer */}
+                          {selectedDayDetail && selectedDayDetail.itemId === itemId && (
+                            <div className="mt-3 rounded-lg bg-gray-100 dark:bg-[#151718] border border-[#EEF0EF] dark:border-[#3E4246] p-3 animate-in fade-in slide-in-from-top-3 duration-250 shadow-inner">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-[#A3A7A8] dark:text-[#CBD5E1] font-sans">
+                                  Logs for {format(parseISO(selectedDayDetail.dateKey), 'MMM d')}
+                                </span>
+                                <button
+                                  onClick={() => setSelectedDayDetail(null)}
+                                  className="text-[#A3A7A8] hover:text-[#FF453A] p-0.5 rounded-full hover:bg-gray-200 dark:hover:bg-neutral-700 transition-all w-4 h-4 flex items-center justify-center text-[10px] leading-none cursor-pointer"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                              <ul className="space-y-1.5">
+                                {selectedDayDetail.bullets.map((b: any, i: number) => (
+                                  <li
+                                    key={i}
+                                    className="text-xs font-light text-[#5D6264] dark:text-[#E2E8F0] pl-2 border-l-2"
+                                    style={{ borderLeftColor: color }}
+                                  >
+                                    <HighlightedText text={b} interactive />
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {combinedPins.length > 2 && (
+                      <button
+                        onClick={() => {
+                          setShowPinModal(true);
+                          setShowCreateGroupForm(false);
+                        }}
+                        className="text-[10px] font-semibold text-[#A3A7A8] hover:text-[#8B00D4] dark:hover:text-[#C494FF] transition-colors block text-left cursor-pointer"
+                      >
+                        + {combinedPins.length - 2} more pins →
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <div className="mx-auto w-9 h-9 rounded-full bg-[#EAD8FF] dark:bg-[#C494FF]/10 flex items-center justify-center text-[#8B00D4] dark:text-[#C494FF] mb-3">
+                      <FontAwesomeIcon icon={faTag} className="w-4 h-4" />
+                    </div>
+                    <h3 className="text-xs font-bold text-[#2F3331] dark:text-[#FAFAFA] mb-1">Track habits & tags</h3>
+                    <p className="text-[10px] text-[#6F7476] dark:text-[#A3A7A8] font-light leading-relaxed mb-3">
+                      Pins show 30-day timelines of your tags.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setShowPinModal(true);
+                        setShowCreateGroupForm(false);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#2F3331] dark:bg-[#FAFAFA] text-white dark:text-[#2F3331] text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                    >
+                      <FontAwesomeIcon icon={faPlus} className="w-2.5 h-2.5" />
+                      <span>Create Pin</span>
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Habit Focus (col-span-1) */}
+            {visibleSections.moreLess && (
+              <section className="col-span-1 bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm hover:scale-[1.015] hover:border-[#CCD0CF] dark:hover:border-[#3E4246] hover:shadow-lg hover:shadow-neutral-200/50 dark:hover:shadow-black/40 transition-all duration-300 min-h-[220px] flex flex-col justify-between">
+                <div>
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FFF8ED] dark:bg-[#FFA952]/10 text-[#B45309] dark:text-[#FFA952]">
+                      <FontAwesomeIcon icon={faPlusMinus} className="h-4 w-4" />
+                    </span>
+                    <h2 className="font-sans text-lg font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">Habits</h2>
+                  </div>
+
+                  {weeklyHabits.length > 0 ? (
+                    <div className="space-y-3">
+                      {weeklyHabits.slice(0, 2).map(habit => {
+                        const isMore = habit.doMoreLess === 'more';
+                        const weekCount = habit.weekCount;
+                        return (
+                          <div
+                            key={habit.id}
+                            className="flex flex-col gap-1.5 p-2 rounded-xl bg-[#FAFAFA] dark:bg-[#202324] border border-[#EEF0EF] dark:border-[#2E3133]/60"
+                          >
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="text-xs font-bold text-[#2F3331] dark:text-[#FAFAFA] truncate">
+                                #{habit.name}
+                              </span>
+                              <span
+                                className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider shrink-0 ${
+                                  isMore
+                                    ? 'bg-[#E9FFF4] text-[#00A963] dark:bg-[#00DC7D]/10 dark:text-[#00DC7D]'
+                                    : 'bg-amber-50 text-amber-600 dark:bg-[#FFA952]/10 dark:text-[#FFA952]'
+                                }`}
+                              >
+                                {isMore ? 'More' : 'Less'}
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="text-[#5D6264] dark:text-[#CBD5E1]">
+                                Logged: <span className="font-bold text-[#2F3331] dark:text-[#FAFAFA]">{weekCount}x</span>
+                              </span>
+                              <span className="font-sans font-medium">
+                                {isMore ? (
+                                  weekCount > 0 ? (
+                                    <span className="text-[#00A963] dark:text-[#00DC7D] font-bold">🔥 {weekCount}x</span>
+                                  ) : (
+                                    <span className="text-gray-400 dark:text-neutral-500 font-light">💪 0x</span>
+                                  )
+                                ) : (
+                                  weekCount === 0 ? (
+                                    <span className="text-[#00A963] dark:text-[#00DC7D] font-bold">🌟 0x</span>
+                                  ) : (
+                                    <span className="text-amber-500 font-bold">⚠️ {weekCount}x</span>
+                                  )
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 border border-dashed border-[#CCD0CF] dark:border-[#2E3133] rounded-xl bg-gray-50/20">
+                      <p className="text-[10px] text-[#A3A7A8] dark:text-[#6F7476] font-light leading-relaxed">
+                        No habits tracked.
+                      </p>
+                    </div>
+                  )}
+                </div>
+                {weeklyHabits.length > 2 && (
+                  <button
+                    onClick={() => router.push('/tags')}
+                    className="text-[10px] font-semibold text-[#A3A7A8] hover:text-[#FFA952] transition-colors mt-3 text-left block cursor-pointer"
+                  >
+                    + {weeklyHabits.length - 2} more →
+                  </button>
+                )}
+              </section>
+            )}
+
+
+
+            {/* This Week (col-span-1) */}
+            {visibleSections.week && (
+              <section className="col-span-1 bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm hover:scale-[1.015] hover:border-[#CCD0CF] dark:hover:border-[#3E4246] hover:shadow-lg hover:shadow-neutral-200/50 dark:hover:shadow-black/40 transition-all duration-300 min-h-[220px] flex flex-col justify-between">
+                <div>
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E6F0FF] dark:bg-[#5D8AFF]/10 text-[#5D8AFF]">
+                      <FontAwesomeIcon icon={faCalendarDays} className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <h2 className="font-sans text-lg font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">This week</h2>
+                      <p className="text-xs text-[#A3A7A8] dark:text-[#6F7476] font-light mt-0.5">{weekData.stats.total} captured moments</p>
+                    </div>
+                  </div>
+                  
+                  {/* Stats list */}
+                  <div className="mb-4 flex flex-wrap gap-1.5">
+                    {weekData.stats.entries > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#E9FFF4] text-[#00A963] dark:bg-[#00DC7D]/10 dark:text-[#00DC7D]">
+                        {weekData.stats.entries} Entry
+                      </span>
+                    )}
+                    {weekData.stats.notes > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#E6F0FF] text-[#5D8AFF] dark:bg-[#5D8AFF]/10 dark:text-[#5D8AFF]">
+                        {weekData.stats.notes} Note
+                      </span>
+                    )}
+                    {weekData.stats.quotes > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF8ED] text-amber-600 dark:bg-[#FFA952]/10 dark:text-[#FFA952]">
+                        {weekData.stats.quotes} Quote
+                      </span>
+                    )}
+                    {weekData.stats.facts > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#F2EFFE] text-[#8B00D4] dark:bg-[#C494FF]/10 dark:text-[#C494FF]">
+                        {weekData.stats.facts} Fact
+                      </span>
+                    )}
+                    {weekData.stats.lessons > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
+                        {weekData.stats.lessons} Lesson
+                      </span>
+                    )}
+                    {weekData.stats.ideas > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF0F5] text-pink-500 dark:bg-pink-500/10 dark:text-pink-400">
+                        {weekData.stats.ideas} Idea
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Preview items */}
+                  <div className="divide-y divide-[#EEF0EF]/80 dark:divide-[#2E3133]/50">
+                    {weekData.previewItems.map(item => {
+                      let bgStyle = 'bg-gray-100 dark:bg-neutral-800';
+                      let textStyle = 'text-gray-500 dark:text-[#A3A7A8]';
+                      let icon = faBook;
+                      
+                      if (item.type === 'note') {
+                        bgStyle = 'bg-[#E9FFF4] dark:bg-[#00DC7D]/10';
+                        textStyle = 'text-[#00A963] dark:text-[#00DC7D]';
+                        icon = faBookOpen;
+                      } else if (item.type === 'wisdom') {
+                        bgStyle = 'bg-[#F2EFFE] dark:bg-[#C494FF]/10';
+                        textStyle = 'text-[#8B00D4] dark:text-[#C494FF]';
+                        icon = wisdomIcons[item.wisdomType || ''] || faTree;
+                      } else if (item.type === 'idea') {
+                        bgStyle = 'bg-[#FFF8ED] dark:bg-[#FFA952]/10';
+                        textStyle = 'text-[#B45309] dark:text-[#FFA952]';
+                        icon = faLightbulb;
+                      } else if (item.type === 'star') {
+                        bgStyle = 'bg-[#FFFDF0] dark:bg-[#FFD166]/10';
+                        textStyle = 'text-[#FF9500] dark:text-[#FFD166]';
+                        icon = faStar;
+                      } else if (item.type === 'entry') {
+                        bgStyle = 'bg-[#E9FFF4] dark:bg-[#00DC7D]/10';
+                        textStyle = 'text-[#00A963] dark:text-[#00DC7D]';
+                        icon = faBook;
+                      }
+
+                      return (
+                        <button
+                          key={item.key}
+                          onClick={item.onClick}
+                          className="w-full flex items-center gap-3 py-3 transition-colors hover:bg-gray-50/50 dark:hover:bg-neutral-800/20 text-left cursor-pointer"
+                        >
+                          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${bgStyle} ${textStyle}`}>
+                            <FontAwesomeIcon icon={icon} className="h-3 w-3" />
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-light text-[#2F3331] dark:text-[#FAFAFA] line-clamp-2 leading-relaxed">
+                              {item.title}
+                            </p>
+                            <span className="text-[10px] text-[#A3A7A8] dark:text-[#6F7476] font-sans font-light">
+                              {format(parseISO(item.date), 'EEEE, MMM d')}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {weekData.stats.total === 0 && (
+                      <p className="text-sm font-light italic text-[#74797B] dark:text-[#6F7476] py-4 text-center">
+                        No entries logged this week yet.
+                      </p>
+                    )}
+                    {weekData.totalRemaining > 0 && (
+                      <div className="py-2.5 text-xs font-semibold text-[#A3A7A8] dark:text-[#6F7476]">
+                        + {weekData.totalRemaining} more reflections
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* Time Travel (Memory card) (col-span-2) */}
+            {visibleSections.memory && (
+              <section className="col-span-1 md:col-span-2 lg:col-span-2 bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm hover:scale-[1.015] hover:border-[#CCD0CF] dark:hover:border-[#3E4246] hover:shadow-lg hover:shadow-neutral-200/50 dark:hover:shadow-black/40 transition-all duration-300 min-h-[220px] flex flex-col justify-between">
+                <div className="w-full">
+                  <div className="mb-5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E9FFF4] dark:bg-[#00DC7D]/10 text-[#00A963] dark:text-[#00DC7D]">
+                        <FontAwesomeIcon icon={faRoad} className="h-4 w-4" />
+                      </span>
+                      <h2 className="font-sans text-lg font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">Time travel</h2>
+                    </div>
+                    {randomTimeTravelDate && (
+                      <button
+                        onClick={handleRerollTimeTravel}
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-50 dark:bg-[#282A2D] text-[#2F3331] dark:text-[#FAFAFA] border border-[#CCD0CF] dark:border-[#2E3133] hover:scale-105 active:scale-95 transition-all shadow-sm cursor-pointer"
+                        title="reroll time travel"
+                      >
+                        <FontAwesomeIcon icon={faDice} className="h-4 w-4 text-[#00DC7D]" />
+                      </button>
+                    )}
+                  </div>
+                  {randomTimeTravelDate ? (
+                    (() => {
+                      const entryDate = parseISO(randomTimeTravelDate);
+                      const isEntryToday = randomTimeTravelDate === todayKey;
+                      const entryNumber = entryNumberByDate.get(randomTimeTravelDate) || 1;
+                      const heading = format(entryDate, entryDate.getFullYear() === today.getFullYear() ? 'EEE, MMM d' : 'EEE, MMM d, yyyy');
+                      
+                      const visibleBullets = sortBullets(timeTravelItems.bullets);
+                      
+                      const entryForDate = entries.find(e => e.date === randomTimeTravelDate);
+                      const hasWisdom = wisdoms.some(wisdom => (wisdom.linkedEntryId || getRawDateString(wisdom)) === randomTimeTravelDate);
+                      const hasNote = notes.some(note => note.linkedDate === randomTimeTravelDate || note.linkedEntryId === randomTimeTravelDate || getRawDateString(note) === randomTimeTravelDate);
+                      const hasIdea = ideas.some(idea => idea.linkedEntries?.includes(randomTimeTravelDate) || getRawDateString(idea) === randomTimeTravelDate);
+                      const hasMedia = entryForDate ? (entryForDate.media?.length ?? 0) > 0 : false;
+                      const hasLocation = entryForDate ? !!entryForDate.location : false;
+                      const hasIndicators = hasWisdom || hasNote || hasIdea || hasMedia || hasLocation;
+
+                      return (
+                        <div className="mt-2 text-left">
+                          <button
+                            onClick={() => router.push(`/write?date=${randomTimeTravelDate}`)}
+                            className="group block w-full text-left transition-all hover:opacity-90 focus:outline-none cursor-pointer"
+                          >
+                            <div className="flex items-center justify-between mb-3 border-b border-[#EEF0EF] dark:border-[#2E3133] pb-2">
+                              <div className="flex items-baseline gap-2">
+                                <h3 className="font-sans text-sm font-bold text-[#2F3331] dark:text-[#FAFAFA] group-hover:text-[#00A963] dark:group-hover:text-[#00DC7D] transition-colors">
+                                  {heading}
+                                </h3>
+                                <span className="text-[10px] font-semibold text-[#6F7476] dark:text-[#A3A7A8]">
+                                  #{entryNumber} {isEntryToday && <span className="text-[#FF9933]">/ Today</span>}
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-bold text-[#A3A7A8] dark:text-[#6F7476] group-hover:text-[#00A963] dark:group-hover:text-[#00DC7D] transition-colors">
+                                Open →
+                              </span>
+                            </div>
+
+                            <div className="mt-4 space-y-3">
+                              {/* Dream */}
+                              {timeTravelItems.dream && (
+                                <div className="flex items-start gap-2.5">
+                                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FFF6D9] dark:bg-[#FFCC33]/10 text-[#FFCC33]">
+                                    <FontAwesomeIcon icon={faMoon} className="h-2 w-2" />
+                                  </span>
+                                  <p className="line-clamp-2 text-xs font-light leading-relaxed text-[#74797B] dark:text-[#A3A7A8] italic">
+                                    {timeTravelItems.dream}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Bullets */}
+                              {timeTravelItems.bullets.length > 0 && (
+                                <div className="space-y-2">
+                                  {visibleBullets.map((bullet) => {
+                                    const isSourceValid = !bullet.source || (
+                                      bullet.source === 'wisdom' ? wisdoms.some(w => w.id === bullet.sourceId || (w.linkedEntryId === (timeTravelItems.date || '') && w.content === bullet.text)) :
+                                      bullet.source === 'note' ? notes.some(n => n.id === bullet.sourceId || (((n.linkedEntryId === (timeTravelItems.date || '') || n.linkedDate === (timeTravelItems.date || ''))) && (n.content === bullet.text || (n.title && `${n.title}: ${n.content}` === bullet.text)))) :
+                                      bullet.source === 'idea' ? ideas.some(i => i.id === bullet.sourceId || (i.linkedEntries?.includes(timeTravelItems.date || '') && i.content === bullet.text)) :
+                                      false
+                                    );
+                                    const hasValidSource = bullet.source && isSourceValid;
+
+                                    const sourceColors = hasValidSource && bullet.source === 'wisdom'
+                                      ? { bg: 'bg-[#F0D6FF] dark:bg-[#C494FF]/10', text: 'text-[#8B00D4] dark:text-[#C494FF]' }
+                                      : hasValidSource && bullet.source === 'note'
+                                      ? { bg: 'bg-[#C8F7E4] dark:bg-[#00DC7D]/10', text: 'text-[#00875A] dark:text-[#00DC7D]' }
+                                      : hasValidSource && bullet.source === 'idea'
+                                      ? { bg: 'bg-[#FFE4B5] dark:bg-[#FFA952]/10', text: 'text-[#B45309] dark:text-[#FFA952]' }
+                                      : null;
+
+                                    return (
+                                      <div key={bullet.id} className="flex items-start gap-2">
+                                        {bullet.style === 'checklist' ? (
+                                          <FontAwesomeIcon
+                                            icon={bullet.isCompleted ? faCheck : faSquare}
+                                            className={`mt-0.5 h-3 w-3 shrink-0 ${bullet.isCompleted ? 'text-[#22C55E]' : 'text-[#CCD0CF]'}`}
+                                          />
+                                        ) : bullet.style === 'star' ? (
+                                          <FontAwesomeIcon
+                                            icon={faStar}
+                                            className={`mt-0.5 h-2.5 w-2.5 shrink-0 ${bullet.isHighlight ? 'text-[#FF9933]' : 'text-[#F59E0B]/60'}`}
+                                          />
+                                        ) : (
+                                          <span className={`mt-1.5 h-1.2 w-1.2 shrink-0 rounded-full ${bullet.isHighlight ? 'bg-[#FF9933]' : 'bg-[#9AA0A1]'}`} />
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                          <p className={`line-clamp-2 text-xs font-light leading-relaxed ${hasValidSource ? sourceColors?.text || 'text-[#5D5AEF]' : 'text-[#2F3331] dark:text-[#FAFAFA]'} ${bullet.isHighlight ? 'font-semibold' : ''} ${bullet.isCompleted ? 'text-[#A3A7A8] line-through' : ''}`}>
+                                            <HighlightedText text={bullet.text} interactive />
+                                          </p>
+                                          {sourceColors && (
+                                            <span className={`mt-0.5 inline-flex items-center gap-1 rounded px-1 py-0.2 text-[8.5px] font-bold uppercase tracking-wider ${sourceColors.bg} ${sourceColors.text}`}>
+                                              <FontAwesomeIcon icon={
+                                                bullet.source === 'wisdom' ? faTree :
+                                                bullet.source === 'note' ? faBook :
+                                                faLightbulb
+                                              } className="h-2 w-2" />
+                                              {bullet.source}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Empty state */}
+                              {!timeTravelItems.dream && timeTravelItems.bullets.length === 0 && (
+                                <p className="text-xs font-light italic leading-relaxed text-[#74797B] dark:text-[#6F7476] py-3 text-center">
+                                  No logs recorded for this day.
                                 </p>
                               )}
                             </div>
-                          )}
 
-                          {/* Empty state */}
-                          {!timeTravelItems.dream && timeTravelItems.bullets.length === 0 && (
-                            <p className="text-sm font-light italic leading-6 text-[#74797B] dark:text-[#6F7476] py-3 text-center">
-                              No logs recorded for this day.
-                            </p>
-                          )}
+                            {/* Bottom Indicators */}
+                            {hasIndicators && (
+                              <div className="mt-4 flex items-center gap-1.5 select-none">
+                                {hasWisdom && (
+                                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F0D6FF] dark:bg-[#C494FF]/10 text-[#8B00D4] dark:text-[#C494FF]" title="Wisdom inside log">
+                                    <FontAwesomeIcon icon={faTree} className="h-2 w-2" />
+                                  </span>
+                                )}
+                                {hasNote && (
+                                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#C8F7E4] dark:bg-[#00DC7D]/10 text-[#00875A] dark:text-[#00DC7D]" title="Note inside log">
+                                    <FontAwesomeIcon icon={faBook} className="h-2 w-2" />
+                                  </span>
+                                )}
+                                {hasIdea && (
+                                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FFE4B5] dark:bg-[#FFA952]/10 text-[#B45309] dark:text-[#FFA952]" title="Idea inside log">
+                                    <FontAwesomeIcon icon={faLightbulb} className="h-2 w-2" />
+                                  </span>
+                                )}
+                                {hasMedia && (
+                                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F2F2F3] dark:bg-[#282A2D] text-[#6F7476] dark:text-[#A3A7A8]" title="Media inside log">
+                                    <FontAwesomeIcon icon={faImage} className="h-2 w-2" />
+                                  </span>
+                                )}
+                                {hasLocation && (
+                                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FFE2E2] dark:bg-[#FF453A]/10 text-[#FF453A] dark:text-[#FF453A]" title="Location inside log">
+                                    <FontAwesomeIcon icon={faLocationDot} className="h-2  w-2" />
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </button>
                         </div>
-
-                        {/* Bottom Indicators */}
-                        {hasIndicators && (
-                          <div className="mt-4 flex items-center gap-1.5 select-none">
-                            {hasWisdom && (
-                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F0D6FF] dark:bg-[#C494FF]/10 text-[#8B00D4] dark:text-[#C494FF]" title="Wisdom inside log">
-                                <FontAwesomeIcon icon={faTree} className="h-2.5 w-2.5" />
-                              </span>
-                            )}
-                            {hasNote && (
-                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#C8F7E4] dark:bg-[#00DC7D]/10 text-[#00875A] dark:text-[#00DC7D]" title="Note inside log">
-                                <FontAwesomeIcon icon={faBook} className="h-2.5 w-2.5" />
-                              </span>
-                            )}
-                            {hasIdea && (
-                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FFE4B5] dark:bg-[#FFA952]/10 text-[#B45309] dark:text-[#FFA952]" title="Idea inside log">
-                                <FontAwesomeIcon icon={faLightbulb} className="h-2.5 w-2.5" />
-                              </span>
-                            )}
-                            {hasMedia && (
-                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F2F2F3] dark:bg-[#282A2D] text-[#6F7476] dark:text-[#A3A7A8]" title="Media inside log">
-                                <FontAwesomeIcon icon={faImage} className="h-2.5 w-2.5" />
-                              </span>
-                            )}
-                            {hasLocation && (
-                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FFE2E2] dark:bg-[#FF453A]/10 text-[#FF453A] dark:text-[#FF453A]" title="Location inside log">
-                                <FontAwesomeIcon icon={faLocationDot} className="h-2.5 w-2.5" />
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </button>
-                    </div>
-                  );
-                })()
-              ) : (
-                <p className="text-sm font-light italic text-[#74797B] dark:text-[#6F7476]">Time travel opens once you have daily entries.</p>
-              )}
-            </section>
-          )}
-
-          {visibleSections.moreLess && (
-            <section className="bg-white dark:bg-[#1E2022] rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] p-5 shadow-sm">
-              <div className="mb-5 flex items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FFF8ED] dark:bg-[#FFA952]/10 text-[#B45309] dark:text-[#FFA952]">
-                  <FontAwesomeIcon icon={faPlusMinus} className="h-4 w-4" />
-                </span>
-                <h2 className="font-sans text-xl font-bold tracking-normal text-[#2F3331] dark:text-[#FAFAFA]">Habit focus (More/Less)</h2>
-              </div>
-
-              {weeklyHabits.length > 0 ? (
-                <div className="space-y-4">
-                  {weeklyHabits.map(habit => {
-                    const isMore = habit.doMoreLess === 'more';
-                    const weekCount = habit.weekCount;
-                    return (
-                      <div
-                        key={habit.id}
-                        className="flex flex-col gap-2 p-3.5 rounded-xl bg-[#FAFAFA] border border-[#EEF0EF] transition-all hover:shadow-sm"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-bold text-[#2F3331] dark:text-[#FAFAFA]">
-                            #{habit.name}
-                          </span>
-                          <span
-                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              isMore
-                                ? 'bg-[#E9FFF4] text-[#00A963] dark:bg-[#00DC7D]/10 dark:text-[#00DC7D]'
-                                : 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
-                            }`}
-                          >
-                            {isMore ? 'Do More' : 'Do Less'}
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-center justify-between text-xs mt-1">
-                          <span className="text-[#5D6264] dark:text-[#CBD5E1]">
-                            Logged this week: <span className="font-bold text-[#2F3331] dark:text-[#FAFAFA]">{weekCount} times</span>
-                          </span>
-                          
-                          <span className="font-sans text-[11px] font-medium leading-none">
-                            {isMore ? (
-                              weekCount > 0 ? (
-                                <span className="text-[#00A963] dark:text-[#00DC7D]">Aktif {weekCount}x minggu ini! Terus pertahaman! 🔥</span>
-                              ) : (
-                                <span className="text-gray-400 dark:text-neutral-400">Belum dimulai minggu ini. Yuk lakukan! 💪</span>
-                              )
-                            ) : (
-                              weekCount === 0 ? (
-                                <span className="text-[#00A963] dark:text-[#00DC7D]">0x minggu ini! Luar biasa bersih! 🌟</span>
-                              ) : (
-                                <span className="text-amber-500">Sudah di-log {weekCount}x. Tetap awasi batasmu! ⚠️</span>
-                              )
-                            )}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })()
+                  ) : (
+                    <p className="text-xs font-light italic text-[#74797B] dark:text-[#6F7476]">Time travel opens once you have daily entries.</p>
+                  )}
                 </div>
-              ) : (
-                <div className="text-center py-6 border border-dashed border-[#CCD0CF] dark:border-[#2E3133] rounded-xl bg-gray-50/20">
-                  <p className="text-xs text-[#A3A7A8] dark:text-[#6F7476] font-light max-w-[280px] mx-auto leading-relaxed">
-                    No tags set as Habit Focus. Tag your habits as "Do More" or "Do Less" in tag details to track weekly progress here.
-                  </p>
-                </div>
-              )}
-            </section>
-          )}
+              </section>
+            )}
+
+          </div>
         </main>
 
         {/* ==========================================

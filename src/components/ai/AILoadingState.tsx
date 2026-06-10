@@ -22,7 +22,7 @@ export default function AILoadingState() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-[#EEF0EF] bg-white p-12 text-center shadow-sm">
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] bg-white dark:bg-[#1E2022] p-12 text-center shadow-sm">
       {/* Dynamic Cosmic Orbit Loading Circle */}
       <div className="relative mb-6 flex h-16 w-16 items-center justify-center">
         <span className="absolute h-full w-full rounded-full border-2 border-[#00DC7D]/10" />
@@ -30,8 +30,8 @@ export default function AILoadingState() {
         <div className="h-3 w-3 animate-ping rounded-full bg-[#00DC7D] opacity-75" />
       </div>
 
-      <h3 className="font-serif text-xl font-bold text-[#2F3331]">Cosmic Recap</h3>
-      <p className="mt-2 text-sm text-[#A3A7A8] font-mono animate-pulse transition-opacity duration-500">
+      <h3 className="font-serif text-xl font-bold text-[#2F3331] dark:text-[#FAFAFA]">Cosmic Recap</h3>
+      <p className="mt-2 text-sm text-[#A3A7A8] dark:text-[#6F7476] font-mono animate-pulse transition-opacity duration-500">
         {reflectiveMessages[msgIdx]}
       </p>
     </div>

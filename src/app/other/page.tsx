@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { addDays, differenceInCalendarDays, format, parseISO, startOfYear, subMonths } from 'date-fns';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
-import type { Entry, Idea, Note, Wisdom, WisdomType } from '@/types';
+import type { Entry, Idea, Wisdom, WisdomType } from '@/types';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { ActivityHeatmap } from '@/components/ui/ActivityHeatmap';
 import {
@@ -39,11 +39,11 @@ import {
   faPlay,
 } from '@fortawesome/free-solid-svg-icons';
 
-type ModuleTab = 'dreams' | 'highlights' | 'tags' | 'people' | 'notes' | 'wisdom' | 'ideas';
-type EditableCollection = 'dreams' | 'notes' | 'wisdom' | 'ideas';
+type ModuleTab = 'dreams' | 'highlights' | 'tags' | 'people' | 'wisdom' | 'ideas';
+type EditableCollection = 'dreams' | 'wisdom' | 'ideas';
 type CollectionScope = 'alltime' | 'year';
 type TabConfig = { id: ModuleTab; label: string; icon: IconDefinition; count: number };
-const moduleTabs: ModuleTab[] = ['dreams', 'highlights', 'tags', 'people', 'notes', 'wisdom', 'ideas'];
+const moduleTabs: ModuleTab[] = ['dreams', 'highlights', 'tags', 'people', 'wisdom', 'ideas'];
 const dreamColor = '#FF9933';
 const dreamSoftColor = '#FFF4E6';
 
@@ -134,9 +134,28 @@ const parseWisdom = (fullContent: string) => {
 };
 
 const dateKeyFromDate = (date: Date) => format(date, 'yyyy-MM-dd');
-const getWisdomDateKey = (wisdom: Wisdom) => wisdom.linkedEntryId || dateKeyFromDate(wisdom.createdAt);
-const getNoteDateKey = (note: Note) => note.linkedDate || note.linkedEntryId || dateKeyFromDate(note.createdAt);
-const getIdeaDateKey = (idea: Idea) => dateKeyFromDate(idea.createdAt);
+
+const getWisdomDateKey = (wisdom: Wisdom) => {
+  const d = wisdom.linkedEntryId;
+  if (d) return d;
+  if (!wisdom.createdAt) return '';
+  try {
+    const dateObj = wisdom.createdAt instanceof Date ? wisdom.createdAt : (typeof (wisdom.createdAt as any).toDate === 'function' ? (wisdom.createdAt as any).toDate() : new Date(wisdom.createdAt));
+    return isNaN(dateObj.getTime()) ? '' : format(dateObj, 'yyyy-MM-dd');
+  } catch {
+    return '';
+  }
+};
+
+const getIdeaDateKey = (idea: Idea) => {
+  if (!idea.createdAt) return '';
+  try {
+    const dateObj = idea.createdAt instanceof Date ? idea.createdAt : (typeof (idea.createdAt as any).toDate === 'function' ? (idea.createdAt as any).toDate() : new Date(idea.createdAt));
+    return isNaN(dateObj.getTime()) ? '' : format(dateObj, 'yyyy-MM-dd');
+  } catch {
+    return '';
+  }
+};
 
 const isInCollectionScope = (dateKey: string, scope: CollectionScope, selectedYear: number) => {
   if (scope === 'alltime') return true;
@@ -184,19 +203,24 @@ export default function OtherPage() {
     tags,
     people,
     wisdoms,
-    notes,
     ideas,
     saveEntry,
     addWisdom,
     updateWisdom,
     deleteWisdom,
-    updateNote,
-    deleteNote,
     updateIdea,
     deleteIdea,
   } = useData();
 
-  const [activeTab, setActiveTab] = useState<ModuleTab>('dreams');
+  const getInitialTab = (): ModuleTab => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab') as ModuleTab | null;
+      if (tab && moduleTabs.includes(tab)) return tab;
+    }
+    return 'dreams';
+  };
+  const [activeTab, setActiveTab] = useState<ModuleTab>(getInitialTab);
   const [editingItem, setEditingItem] = useState<{ type: EditableCollection; id: string } | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
@@ -226,7 +250,7 @@ export default function OtherPage() {
   const [newWisdomAuthor, setNewWisdomAuthor] = useState('');
   const [newWisdomSource, setNewWisdomSource] = useState('');
   const [newWisdomContext, setNewWisdomContext] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState<{ type: 'dream' | 'note' | 'wisdom' | 'idea'; id: string; entry?: Entry } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ type: 'dream' | 'wisdom' | 'idea'; id: string; entry?: Entry } | null>(null);
   const [tagsSubTab, setTagsSubTab] = useState<'all' | 'groups'>('all');
   const [peopleSubTab, setPeopleSubTab] = useState<'all' | 'groups'>('all');
   const [focusedItem, setFocusedItem] = useState('');
@@ -256,17 +280,14 @@ export default function OtherPage() {
       curr.updatedAt > prev.updatedAt ? curr : prev, entries[0]);
     const latestWisdom = wisdoms.reduce((prev, curr) =>
       curr.updatedAt > prev.updatedAt ? curr : prev, wisdoms[0]);
-    const latestNote = notes.reduce((prev, curr) =>
-      curr.updatedAt > prev.updatedAt ? curr : prev, notes[0]);
     const latestIdea = ideas.reduce((prev, curr) =>
       curr.updatedAt > prev.updatedAt ? curr : prev, ideas[0]);
     return Math.max(
       latestEntry?.updatedAt?.getTime() || 0,
       latestWisdom?.updatedAt?.getTime() || 0,
-      latestNote?.updatedAt?.getTime() || 0,
       latestIdea?.updatedAt?.getTime() || 0,
     );
-  }, [entries, wisdoms, notes, ideas]);
+  }, [entries, wisdoms, ideas]);
 
   const doMoreLessColors: Record<string, { bg: string; color: string; icon: typeof faArrowUp }> = {
     more: { bg: '#D6E4FF', color: '#1A56C4', icon: faArrowUp },
@@ -278,7 +299,6 @@ export default function OtherPage() {
     ...entries.map(entry => parseISO(entry.date).getFullYear()),
     ...highlights.map(highlight => parseISO(highlight.entryDate).getFullYear()),
     ...wisdoms.map(wisdom => parseISO(getWisdomDateKey(wisdom)).getFullYear()),
-    ...notes.map(note => parseISO(getNoteDateKey(note)).getFullYear()),
     ...ideas.map(idea => idea.createdAt.getFullYear()),
   ])).sort((a, b) => b - a);
   const scopedEntries = entries.filter(entry => isInCollectionScope(entry.date, collectionScope, selectedYear));
@@ -294,7 +314,6 @@ export default function OtherPage() {
   const heatmapDays = buildHeatmapDays(allDreamDateKeys, collectionScope, selectedYear, now);
   const scopedHighlights = highlights.filter(highlight => isInCollectionScope(highlight.entryDate, collectionScope, selectedYear));
   const scopedWisdoms = wisdoms.filter(wisdom => isInCollectionScope(getWisdomDateKey(wisdom), collectionScope, selectedYear));
-  const scopedNotes = notes.filter(note => isInCollectionScope(getNoteDateKey(note), collectionScope, selectedYear));
   const scopedIdeas = ideas.filter(idea => isInCollectionScope(getIdeaDateKey(idea), collectionScope, selectedYear));
   const scopedTagCounts = scopedEntries.reduce((counts, entry) => {
     entry.bullets.forEach(bullet => {
@@ -357,7 +376,6 @@ export default function OtherPage() {
     { id: 'highlights', label: 'Stars', icon: faStar, count: scopedHighlights.length },
     { id: 'tags', label: 'Tags', icon: faTag, count: scopedTags.length },
     { id: 'people', label: 'People', icon: faAt, count: scopedPeople.length },
-    { id: 'notes', label: 'Notes', icon: faBook, count: scopedNotes.length },
     { id: 'wisdom', label: 'Wisdom', icon: faTree, count: scopedWisdoms.length },
     { id: 'ideas', label: 'Ideas', icon: faLightbulb, count: scopedIdeas.length },
   ];
@@ -376,12 +394,6 @@ export default function OtherPage() {
     setEditingItem({ type: 'dreams', id: entry.id });
     setEditTitle('');
     setEditContent(entry.dream);
-  };
-
-  const startEditNote = (note: Note) => {
-    setEditingItem({ type: 'notes', id: note.id });
-    setEditTitle(note.title);
-    setEditContent(note.content);
   };
 
   const startEditWisdom = (wisdom: Wisdom) => {
@@ -409,11 +421,6 @@ export default function OtherPage() {
       const entry = entries.find(e => e.id === editingItem.id);
       if (!entry) return;
       await saveEntry({ ...entry, dream: content, updatedAt: new Date() });
-    }
-
-    if (editingItem.type === 'notes') {
-      const title = editTitle.trim() || 'Untitled';
-      await updateNote(editingItem.id, { title, content });
     }
 
     if (editingItem.type === 'wisdom') {
@@ -450,10 +457,6 @@ export default function OtherPage() {
     setConfirmDelete({ type: 'dream', id: entry.id, entry });
   };
 
-  const deleteNoteItem = (noteId: string) => {
-    setConfirmDelete({ type: 'note', id: noteId });
-  };
-
   const deleteWisdomItem = (wisdomId: string) => {
     setConfirmDelete({ type: 'wisdom', id: wisdomId });
   };
@@ -466,7 +469,6 @@ export default function OtherPage() {
     if (!confirmDelete) return;
     const { type, id, entry } = confirmDelete;
     if (type === 'dream' && entry) await saveEntry({ ...entry, dream: '', updatedAt: new Date() });
-    if (type === 'note') await deleteNote(id);
     if (type === 'wisdom') await deleteWisdom(id);
     if (type === 'idea') await deleteIdea(id);
     setConfirmDelete(null);
@@ -513,13 +515,13 @@ export default function OtherPage() {
         </div>
       )}
       {/* Header */}
-      <div className="max-w-[600px] mx-auto px-6 pt-8 pb-6">
+      <div className="max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] mx-auto px-6 pt-8 pb-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-5xl font-bold font-sans text-[#2F3331] mb-2">
               Collections
             </h1>
-            <p className="text-[#6F7476] font-light">dreams, wisdom, notes, ideas</p>
+            <p className="text-[#6F7476] font-light">dreams, wisdom, ideas</p>
           </div>
           <div className="relative pt-2">
             <button
@@ -591,7 +593,7 @@ export default function OtherPage() {
       </div>
 
       {/* Module Navigation */}
-      <div className="max-w-[600px] mx-auto px-6 mb-6">
+      <div className="max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] mx-auto px-6 mb-6">
         <div className="flex items-center gap-1 rounded-full bg-white/80 p-1 shadow-sm ring-1 ring-[#EEF0EF]">
           {collectionTabs.map((tab) => {
             const Icon = tab.icon;
@@ -631,7 +633,7 @@ export default function OtherPage() {
       </div>
 
       {/* Tab Content */}
-      <div className="max-w-[600px] mx-auto px-6">
+      <div className="max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] mx-auto px-6">
         {activeTab === 'dreams' && (
           <div className="space-y-8">
             <div>
@@ -921,93 +923,7 @@ export default function OtherPage() {
           </div>
         )}
 
-        {activeTab === 'notes' && (
-          <div className="space-y-4">
-            {scopedNotes.map((note) => (
-              <div key={note.id} className="relative py-3">
-                <div className="mb-2 pr-10">
-                  <h3 className="font-bold text-[#2F3331]">{note.title}</h3>
-                </div>
-                {/* Kebab menu */}
-                <div className="absolute right-0 top-2">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleMenu(`note:${note.id}`); }}
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-[#A3A7A8] hover:bg-[#F2F2F3] hover:text-[#2F3331] transition-colors"
-                    title="actions"
-                  >
-                    <span className="text-base leading-none" style={{ letterSpacing: '-2px' }}>&#8943;</span>
-                  </button>
-                  {activeMenu === `note:${note.id}` && (
-                    <div
-                      className="absolute right-0 top-9 z-30 min-w-[140px] rounded-2xl bg-white py-1.5 shadow-xl ring-1 ring-[#EEF0EF]"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <button
-                        onClick={() => { closeMenu(); setSelectedGradientIndex(3); setShareItem({ type: 'note', title: note.title, content: note.content, date: note.createdAt }); }}
-                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-[#2F3331] hover:bg-[#F7F8F7] transition-colors"
-                      >
-                        <FontAwesomeIcon icon={faShareNodes} className="w-3.5 h-3.5 text-[#6F7476]" />
-                        Share Card
-                      </button>
-                      <button
-                        onClick={() => { closeMenu(); startEditNote(note); }}
-                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-[#2F3331] hover:bg-[#F7F8F7] transition-colors"
-                      >
-                        <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5 text-[#6F7476]" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => { closeMenu(); deleteNoteItem(note.id); }}
-                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-[#FF453A] hover:bg-[#FF453A]/5 transition-colors"
-                      >
-                        <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
-                {editingItem?.type === 'notes' && editingItem.id === note.id ? (
-                  <div className="py-2">
-                    <div className="mb-3 flex items-center justify-between">
-                      <input
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                        className="min-w-0 flex-1 bg-transparent text-lg font-bold text-[#2F3331] focus:outline-none"
-                        placeholder="Title"
-                        autoFocus
-                      />
-                      <div className="flex items-center gap-2">
-                        <button onClick={stopEditing} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F3] text-[#6F7476] transition-colors hover:bg-[#E8E9EA] hover:text-[#2F3331]" title="cancel">
-                          <FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />
-                        </button>
-                        <button onClick={saveCollectionEdit} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00DC7D] text-white transition-colors hover:bg-[#00B866]" title="save">
-                          <FontAwesomeIcon icon={faCheck} className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                    <textarea
-                      value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
-                      rows={4}
-                      className="w-full resize-none bg-transparent py-1 text-[#6F7476] placeholder-[#A3A7A8] focus:outline-none"
-                      placeholder="Note content..."
-                    />
-                  </div>
-                ) : (
-                  <p className="text-sm text-[#6F7476] whitespace-pre-line mb-3 font-light">{note.content}</p>
-                )}
-                <p className="text-xs text-[#A3A7A8]">{format(note.createdAt, 'MMM d, yyyy')}</p>
-              </div>
-            ))}
-            {scopedNotes.length === 0 && (
-              <div className="text-center py-12">
-                <FontAwesomeIcon icon={faBook} className="w-12 h-12 text-[#CCD0CF] mx-auto mb-3" />
-                <p className="text-[#6F7476]">no notes yet</p>
-                <p className="text-sm text-[#A3A7A8]">use the + button in write to add notes</p>
-              </div>
-            )}
-          </div>
-        )}
+
 
         {activeTab === 'wisdom' && (
           <div className="space-y-4">

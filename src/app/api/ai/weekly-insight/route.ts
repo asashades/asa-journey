@@ -9,7 +9,7 @@ import { AIInsight } from '@/types/ai';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { userId, weekStart, weekEnd, forceRegenerate } = body;
+    const { userId, weekStart, weekEnd, forceRegenerate, aiConfig, entries, activeGoals } = body;
 
     if (!userId || !weekStart || !weekEnd) {
       return NextResponse.json(
@@ -22,57 +22,123 @@ export async function POST(req: NextRequest) {
     const insightDocRef = doc(db, 'users', userId, 'aiInsights', docId);
 
     // 1. Cek konfigurasi dan status mock
-    const config = await resolveAIConfig(userId);
+    const config = await resolveAIConfig(userId, aiConfig);
 
-    // 2. Jika tidak dipaksa untuk regenerasi, cek jika insight minggu ini sudah ada
+    // 2. Jika tidak dipaksa untuk regenerasi, cek jika insight minggu ini sudah ada (wrap in try-catch)
     if (!forceRegenerate) {
-      const existingSnap = await getDoc(insightDocRef);
-      if (existingSnap.exists()) {
-        console.log(`[Weekly Insight API] Returned existing insight for ${docId}`);
-        return NextResponse.json({ success: true, insight: existingSnap.data() as AIInsight });
+      try {
+        const existingSnap = await getDoc(insightDocRef);
+        if (existingSnap.exists()) {
+          console.log(`[Weekly Insight API] Returned existing insight for ${docId}`);
+          return NextResponse.json({ success: true, insight: existingSnap.data() as AIInsight });
+        }
+      } catch (checkErr) {
+        console.warn(`[Weekly Insight API] Failed to check existing insight in Firestore:`, checkErr);
       }
     }
 
-    // 3. Batasan Kuota Bulanan (hanya diperiksa jika bukan mode mock/simulasi)
+    // 3. Batasan Kuota Bulanan (hanya diperiksa jika bukan mode mock/simulasi dan bukan BYOK)
     const now = new Date();
     const yyyyMM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const usageDocId = `ai_${yyyyMM}`;
     const usageDocRef = doc(db, 'users', userId, 'usage', usageDocId);
 
-    if (!config.enableMock) {
-      const usageSnap = await getDoc(usageDocRef);
-      if (usageSnap.exists()) {
-        const usageData = usageSnap.data();
-        const monthlyLimit = Number(process.env.AI_WEEKLY_INSIGHT_MONTHLY_LIMIT) || 3;
-        if ((usageData.weeklyInsightCount || 0) >= monthlyLimit) {
-          return NextResponse.json(
-            { 
-              success: false, 
-              message: `Anda telah mencapai batas kuota refleksi mingguan AI untuk bulan ini (${monthlyLimit}x per bulan). Silakan coba lagi bulan depan atau konfigurasi API Key sendiri.` 
-            },
-            { status: 429 }
-          );
+    const isBYOK = config.mode === 'bring_your_own_key';
+    if (!isBYOK && !config.enableMock) {
+      try {
+        const usageSnap = await getDoc(usageDocRef);
+        if (usageSnap.exists()) {
+          const usageData = usageSnap.data();
+          const monthlyLimit = Number(process.env.AI_WEEKLY_INSIGHT_MONTHLY_LIMIT) || 3;
+          if ((usageData.weeklyInsightCount || 0) >= monthlyLimit) {
+            return NextResponse.json(
+              { 
+                success: false, 
+                message: `Anda telah mencapai batas kuota refleksi mingguan AI untuk bulan ini (${monthlyLimit}x per bulan). Silakan coba lagi bulan depan atau konfigurasi API Key sendiri.` 
+              },
+              { status: 429 }
+            );
+          }
         }
+      } catch (quotaCheckErr) {
+        console.warn(`[Weekly Insight API] Failed to check usage quota from Firestore:`, quotaCheckErr);
       }
     }
 
     // 4. Mengambil entri harian pengguna dalam rentang tanggal
-    const entriesRef = collection(db, 'users', userId, 'entries');
-    const q = query(
-      entriesRef,
-      where('date', '>=', weekStart),
-      where('date', '<=', weekEnd)
-    );
-    const snap = await getDocs(q);
-    const entriesData = snap.docs.map(d => d.data());
-
-    // Menyaring entri yang memiliki tulisan (bullets atau mimpi)
-    const validEntries = entriesData.filter(
-      e => (e.bullets && e.bullets.length > 0) || (e.dream && e.dream.trim().length > 0)
-    );
+    let compactEntries = [];
+    if (entries && Array.isArray(entries)) {
+      console.log(`[Weekly Insight API] Using entries provided in request body (${entries.length} entries)`);
+      // If the entries are already compact entries (bullets is array of string)
+      const isAlreadyMapped = entries.length > 0 && Array.isArray(entries[0]?.bullets) && typeof entries[0]?.bullets[0] === 'string';
+      if (isAlreadyMapped) {
+        compactEntries = entries;
+      } else {
+        const validEntries = entries.filter(
+          (e: any) => (e.bullets && e.bullets.length > 0) || (e.dream && e.dream.trim().length > 0)
+        );
+        compactEntries = validEntries.map((e: any) => {
+          const bulletsList = (e.bullets || []).map((b: any) => typeof b === 'string' ? b : b.text);
+          const highlightsList = (e.bullets || []).filter((b: any) => b.isHighlight).map((b: any) => b.text);
+          const tagsList: string[] = [];
+          const peopleList: string[] = [];
+          (e.bullets || []).forEach((b: any) => {
+            if (b.tags) tagsList.push(...b.tags);
+            if (b.mentions) peopleList.push(...b.mentions);
+          });
+          return {
+            id: e.id,
+            date: e.date,
+            dream: e.dream || '',
+            bullets: bulletsList,
+            highlights: highlightsList,
+            tags: Array.from(new Set(tagsList)),
+            people: Array.from(new Set(peopleList)),
+            weather: e.weather || null,
+            condition: e.condition || null,
+            dailyInsight: e.dailyInsight || null
+          };
+        });
+      }
+    } else {
+      console.log(`[Weekly Insight API] Fetching entries from Firestore for user ${userId}`);
+      const entriesRef = collection(db, 'users', userId, 'entries');
+      const q = query(
+        entriesRef,
+        where('date', '>=', weekStart),
+        where('date', '<=', weekEnd)
+      );
+      const snap = await getDocs(q);
+      const entriesData = snap.docs.map(d => d.data());
+      const validEntries = entriesData.filter(
+        e => (e.bullets && e.bullets.length > 0) || (e.dream && e.dream.trim().length > 0)
+      );
+      compactEntries = validEntries.map(e => {
+        const bulletsList = (e.bullets || []).map((b: any) => b.text);
+        const highlightsList = (e.bullets || []).filter((b: any) => b.isHighlight).map((b: any) => b.text);
+        const tagsList: string[] = [];
+        const peopleList: string[] = [];
+        (e.bullets || []).forEach((b: any) => {
+          if (b.tags) tagsList.push(...b.tags);
+          if (b.mentions) peopleList.push(...b.mentions);
+        });
+        return {
+          id: e.id,
+          date: e.date,
+          dream: e.dream || '',
+          bullets: bulletsList,
+          highlights: highlightsList,
+          tags: Array.from(new Set(tagsList)),
+          people: Array.from(new Set(peopleList)),
+          weather: e.weather || null,
+          condition: e.condition || null,
+          dailyInsight: e.dailyInsight || null
+        };
+      });
+    }
 
     // 5. Jika tidak ada entri tulisan sama sekali, kembalikan status kosong
-    if (validEntries.length === 0) {
+    if (compactEntries.length === 0) {
       return NextResponse.json({
         success: false,
         emptyState: true,
@@ -80,46 +146,24 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 6. Konstruksi muatan data ringkas untuk AI
-    const compactEntries = validEntries.map(e => {
-      const bulletsList = (e.bullets || []).map((b: any) => b.text);
-      const highlightsList = (e.bullets || []).filter((b: any) => b.isHighlight).map((b: any) => b.text);
-      
-      // Ambil tag dan people mentah dari setiap bullet
-      const tagsList: string[] = [];
-      const peopleList: string[] = [];
-      (e.bullets || []).forEach((b: any) => {
-        if (b.tags) tagsList.push(...b.tags);
-        if (b.mentions) peopleList.push(...b.mentions);
-      });
-
-      return {
-        id: e.id,
-        date: e.date,
-        dream: e.dream || '',
-        bullets: bulletsList,
-        highlights: highlightsList,
-        tags: Array.from(new Set(tagsList)),
-        people: Array.from(new Set(peopleList)),
-        weather: e.weather || null,
-        condition: e.condition || null,
-        dailyInsight: e.dailyInsight || null
-      };
-    });
-
-    // Mengambil target/goals aktif pengguna saat ini sebagai konteks tambahan bagi AI
-    const goalsRef = collection(db, 'users', userId, 'goals');
-    const goalsSnap = await getDocs(goalsRef);
-    const activeGoals = goalsSnap.docs
-      .map(d => d.data())
-      .filter(g => !g.isCompleted)
-      .map(g => ({ id: g.id, title: g.content }));
+    let activeGoalsData = [];
+    if (activeGoals && Array.isArray(activeGoals)) {
+      activeGoalsData = activeGoals;
+    } else {
+      console.log(`[Weekly Insight API] Fetching goals from Firestore for user ${userId}`);
+      const goalsRef = collection(db, 'users', userId, 'goals');
+      const goalsSnap = await getDocs(goalsRef);
+      activeGoalsData = goalsSnap.docs
+        .map(d => d.data())
+        .filter(g => !g.isCompleted)
+        .map(g => ({ id: g.id, title: g.content }));
+    }
 
     const aiPayload = {
       dateRange: { start: weekStart, end: weekEnd },
-      entryCount: validEntries.length,
+      entryCount: compactEntries.length,
       entries: compactEntries,
-      activeGoals
+      activeGoals: activeGoalsData
     };
 
     // 7. Panggil Client AI Wrapper
@@ -131,7 +175,8 @@ export async function POST(req: NextRequest) {
       fallbackParams: {
         weekStart,
         weekEnd
-      }
+      },
+      aiConfig: config
     });
 
     // 8. Siapkan dokumen final yang sepenuhnya kompatibel dengan tipe AIInsight baru
@@ -176,7 +221,7 @@ export async function POST(req: NextRequest) {
       })),
       suggestedTags: aiResult.suggestedTags || [],
       suggestedPeople: aiResult.suggestedPeople || [],
-      sourceEntryIds: validEntries.map(e => e.id),
+      sourceEntryIds: compactEntries.map(e => e.id),
       aiMeta: {
         model: config.model,
         promptVersion: '1.0',
@@ -186,30 +231,38 @@ export async function POST(req: NextRequest) {
       updatedAt: new Date().toISOString()
     };
 
-    // 9. Simpan hasil ke Firestore
-    await setDoc(insightDocRef, finalInsight);
+    // 9. Simpan hasil ke Firestore (wrap in try-catch)
+    try {
+      await setDoc(insightDocRef, finalInsight);
+    } catch (saveErr) {
+      console.warn(`[Weekly Insight API] Failed to save weekly insight to Firestore on server (likely permission error). Continuing.`, saveErr);
+    }
 
-    // 10. Perbarui kuota bulanan pengguna jika bukan mode mock
-    if (!config.enableMock) {
-      const usageSnap = await getDoc(usageDocRef);
-      if (usageSnap.exists()) {
-        const usageData = usageSnap.data();
-        await setDoc(usageDocRef, {
-          ...usageData,
-          weeklyInsightCount: (usageData.weeklyInsightCount || 0) + 1,
-          lastWeeklyInsightAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      } else {
-        await setDoc(usageDocRef, {
-          userId,
-          month: yyyyMM,
-          weeklyInsightCount: 1,
-          tagSuggestionCount: 0,
-          lastWeeklyInsightAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
+    // 10. Perbarui kuota bulanan pengguna jika bukan mode mock dan bukan BYOK
+    if (!isBYOK && !config.enableMock) {
+      try {
+        const usageSnap = await getDoc(usageDocRef);
+        if (usageSnap.exists()) {
+          const usageData = usageSnap.data();
+          await setDoc(usageDocRef, {
+            ...usageData,
+            weeklyInsightCount: (usageData.weeklyInsightCount || 0) + 1,
+            lastWeeklyInsightAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        } else {
+          await setDoc(usageDocRef, {
+            userId,
+            month: yyyyMM,
+            weeklyInsightCount: 1,
+            tagSuggestionCount: 0,
+            lastWeeklyInsightAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        }
+      } catch (quotaErr) {
+        console.warn(`[Weekly Insight API] Failed to update weekly insight usage quota on server.`, quotaErr);
       }
     }
 

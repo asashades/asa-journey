@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, KeyboardEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { format, isValid } from 'date-fns';
@@ -22,6 +23,7 @@ import {
   faBookmark,
   faBookOpen,
   faCheck,
+  faExpand,
   faImage,
   faLocationDot,
   faSpinner,
@@ -448,6 +450,7 @@ export default function WritePage() {
     ideas,
     tags,
   } = useData();
+  const router = useRouter();
 
   const { userProfile } = useAuth();
   const settings = userProfile?.settings || {
@@ -902,11 +905,6 @@ export default function WritePage() {
     if (!title && !content) return;
     const note = await addNote(title || 'Untitled', content, [], currentDate);
     if (!note) return;
-    const noteBulletText = content ? (title ? `${title}: ${content}` : content) : title;
-    await addBullet(noteBulletText, 'bullet', {
-      source: 'note',
-      sourceId: note.id,
-    });
     setNoteTitle('');
     setNoteContent('');
     setActiveInlinePanel(null);
@@ -1152,7 +1150,8 @@ export default function WritePage() {
             bullets: currentEntry.bullets,
             dream: currentEntry.dream,
             weather: currentEntry.weather || null,
-            condition: currentEntry.condition || null
+            condition: currentEntry.condition || null,
+            aiConfig: userProfile?.settings?.aiConfig
           })
         });
 
@@ -1185,7 +1184,8 @@ export default function WritePage() {
           userId: userProfile?.uid || 'anonymous',
           systemPrompt: DAILY_INSIGHT_PROMPT,
           userPayload: aiPayload,
-          feature: 'daily-insight'
+          feature: 'daily-insight',
+          aiConfig: userProfile?.settings?.aiConfig
         });
 
         dailyInsight = {
@@ -1783,6 +1783,19 @@ export default function WritePage() {
                       <FontAwesomeIcon icon={faXmark} className="h-3.5 w-3.5" />
                     </button>
                     <button
+                      onClick={() => {
+                        const qParams = new URLSearchParams();
+                        if (noteTitle.trim()) qParams.set('title', noteTitle.trim());
+                        if (noteContent.trim()) qParams.set('content', noteContent.trim());
+                        qParams.set('linkedDate', currentDate);
+                        router.push(`/notes/new?${qParams.toString()}`);
+                      }}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[#EAD8FF] text-[#7A2EB8] transition-colors hover:bg-[#DBC0FF]"
+                      title="fullscreen editor"
+                    >
+                      <FontAwesomeIcon icon={faExpand} className="h-3.5 w-3.5" />
+                    </button>
+                    <button
                       onClick={handleAddNote}
                       className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00DC7D] text-white transition-colors hover:bg-[#00B866]"
                       title="save"
@@ -2176,6 +2189,25 @@ export default function WritePage() {
             />
           ))}
 
+          {/* Linked Notes Row (Small icons below) */}
+          {notes.filter(n => (n.linkedJournalDate === currentDate || n.linkedDate === currentDate) && n.status !== 'archived' && n.status !== 'deleted').length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2 mb-4">
+              {notes
+                .filter(n => (n.linkedJournalDate === currentDate || n.linkedDate === currentDate) && n.status !== 'archived' && n.status !== 'deleted')
+                .map((note) => (
+                  <button
+                    key={note.id}
+                    onClick={() => router.push(`/notes/new?id=${note.id}`)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#C8F7E4]/40 border border-[#00DC7D]/20 px-2.5 py-1 text-xs font-semibold text-[#00875A] transition-all hover:bg-[#C8F7E4]/60 active:scale-95 cursor-pointer"
+                    title={note.title || 'Untitled note'}
+                  >
+                    <FontAwesomeIcon icon={faBook} className="w-3.5 h-3.5 text-[#00875A]" />
+                    <span>{note.title || 'Untitled Note'}</span>
+                  </button>
+                ))}
+            </div>
+          )}
+
           <div className="flex items-start gap-3 py-3">
             <BulletStyleToggle
               style={bulletStyle}
@@ -2266,12 +2298,12 @@ export default function WritePage() {
               <button
                 onClick={handleGenerateDailyInsight}
                 disabled={isGeneratingDailyInsight || (!currentEntry?.dream && (!currentEntry?.bullets || currentEntry.bullets.length === 0))}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-white border border-[#CCD0CF] px-3.5 py-1.5 text-xs font-semibold text-[#2F3331] shadow-sm hover:bg-[#F2F2F3] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+                className="inline-flex items-center gap-1.5 rounded-xl text-white bg-gradient-to-r from-[#8B00D4] via-[#6F42C1] to-[#00DC7D] px-3.5 py-1.5 text-xs font-bold shadow-[0_0_12px_rgba(139,0,212,0.25)] hover:shadow-[0_0_18px_rgba(139,0,212,0.45)] hover:scale-103 active:scale-97 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {isGeneratingDailyInsight ? (
-                  <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin text-[#2F3331]" />
+                  <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin text-white" />
                 ) : (
-                  <AISparklesIcon className="h-3.5 w-3.5 text-[#2F3331]" />
+                  <AISparklesIcon className="h-3.5 w-3.5 text-white" />
                 )}
                 {currentEntry?.dailyInsight ? 'Analyze Again' : 'Analyze Day'}
               </button>

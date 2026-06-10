@@ -77,7 +77,7 @@ export default function SettingsPage() {
 
   // Local AI Configuration states
   const [aiMode, setAiMode] = useState<'built_in' | 'bring_your_own_key'>(aiConfig.mode || 'built_in');
-  const [aiProvider, setAiProvider] = useState<'gemini' | 'openai' | 'anthropic'>(aiConfig.provider || 'gemini');
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'openai' | 'anthropic' | 'deepseek'>(aiConfig.provider || 'gemini');
   const [aiApiKey, setAiApiKey] = useState(aiConfig.apiKey || '');
   const [aiModelName, setAiModelName] = useState(aiConfig.modelName || '');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -440,12 +440,12 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <div className="mx-auto max-w-[600px] px-6 pt-8">
+      <div className="mx-auto max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] px-6 pt-8">
         <h1 className="mb-2 font-sans text-5xl font-bold text-[#2F3331]">Settings</h1>
         <p className="text-[#6F7476]">account, export, and quick guide</p>
       </div>
 
-      <div className="mx-auto mt-12 max-w-[600px] space-y-12 px-6">
+      <div className="mx-auto mt-12 max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] space-y-12 px-6">
         <section>
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2F3331]">
@@ -519,29 +519,29 @@ export default function SettingsPage() {
                 {([
                   {
                     id: 'journalistic',
-                    name: 'Journalistic',
-                    desc: 'Classic Minimal',
+                    name: 'Orbital Dawn',
+                    desc: 'Clean Starlight',
                     preview: 'bg-[#FAFAFA] border-[#CCD0CF]',
                     indicator: 'bg-[#00DC7D]'
                   },
                   {
                     id: 'cosmic',
-                    name: 'Cosmic Quiet',
-                    desc: 'Deep Observatory',
+                    name: 'Deep Nebula',
+                    desc: 'Cosmic Observatory',
                     preview: 'bg-[#08090D] border-[#1F2433]',
                     indicator: 'bg-[#9CF6F6]'
                   },
                   {
                     id: 'moss',
-                    name: 'Ink & Moss',
-                    desc: 'Editorial Moss',
+                    name: 'Emerald Station',
+                    desc: 'Verdant Outpost',
                     preview: 'bg-[#111412] border-[#2E3832]',
                     indicator: 'bg-[#00DC7D]'
                   },
                   {
                     id: 'nocturne',
-                    name: 'Nocturne Lab',
-                    desc: 'Luminous Glow',
+                    name: 'Twilight Void',
+                    desc: 'Luminous Darkspace',
                     preview: 'bg-[#08090D] border-[#202433]',
                     indicator: 'bg-[#B79CFF]'
                   }
@@ -685,22 +685,30 @@ export default function SettingsPage() {
               <div className="space-y-4 rounded-2xl bg-[#FAFAFA] p-5 border border-[#EEF0EF]">
                 <div>
                   <label className="block text-xs font-bold text-[#6F7476] uppercase tracking-wider mb-2">Select Provider</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['gemini', 'openai', 'anthropic'] as const).map((prov) => (
+                  <div className="grid grid-cols-4 gap-2">
+                    {(['gemini', 'openai', 'anthropic', 'deepseek'] as const).map((prov) => (
                       <button
                         key={prov}
                         type="button"
                         onClick={() => {
                           setAiProvider(prov);
-                          setAiModelName(prov === 'gemini' ? 'gemini-flash-latest' : prov === 'openai' ? 'gpt-4o-mini' : 'claude-3-haiku-20240307');
+                          setAiModelName(
+                            prov === 'gemini'
+                              ? 'gemini-3.5-flash'
+                              : prov === 'openai'
+                              ? 'gpt-4o-mini'
+                              : prov === 'anthropic'
+                              ? 'claude-3-haiku-20240307'
+                              : 'deepseek-chat'
+                          );
                         }}
-                        className={`rounded-xl border py-2 text-center text-xs font-bold transition-all ${
+                        className={`rounded-xl border py-2 text-center text-[10px] sm:text-xs font-bold transition-all ${
                           aiProvider === prov
                             ? 'border-[#00DC7D] bg-white text-[#00DC7D] shadow-sm font-extrabold'
                             : 'border-[#E4E7E6] bg-white text-[#6F7476] hover:bg-[#F2F2F3]'
                         }`}
                       >
-                        {prov === 'gemini' ? 'Google Gemini' : prov === 'openai' ? 'OpenAI' : 'Anthropic'}
+                        {prov === 'gemini' ? 'Gemini' : prov === 'openai' ? 'OpenAI' : prov === 'anthropic' ? 'Anthropic' : 'DeepSeek'}
                       </button>
                     ))}
                   </div>
@@ -732,10 +740,12 @@ export default function SettingsPage() {
                     type="text"
                     placeholder={
                       aiProvider === 'gemini'
-                        ? 'gemini-flash-latest'
+                        ? 'gemini-3.5-flash'
                         : aiProvider === 'openai'
                         ? 'gpt-4o-mini'
-                        : 'claude-3-haiku-20240307'
+                        : aiProvider === 'anthropic'
+                        ? 'claude-3-haiku-20240307'
+                        : 'deepseek-chat'
                     }
                     value={aiModelName}
                     onChange={(e) => setAiModelName(e.target.value)}

@@ -3,9 +3,10 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useData } from '@/contexts/DataContext';
+import JournalNoteIndicator from '@/components/notes/JournalNoteIndicator';
 import { HighlightedText } from '@/components/ui/HighlightedText';
 import { getEntryNumberByDate, hasEntryContent, sortBullets } from '@/lib/entryUtils';
-import { Entry } from '@/types';
+import { Entry, Note } from '@/types';
 import {
   addDays,
   addMonths,
@@ -45,6 +46,23 @@ type WeeklyEntryData = {
 };
 
 const calendarDayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+const getNoteDateString = (note: Note) => {
+  const d = note.linkedJournalDate || note.linkedJournalEntryId || note.linkedDate || note.linkedEntryId;
+  if (d) return d;
+  if (!note.createdAt) return '';
+  try {
+    const dateObj = note.createdAt instanceof Date ? note.createdAt : (typeof (note.createdAt as any).toDate === 'function' ? (note.createdAt as any).toDate() : new Date(note.createdAt));
+    return isNaN(dateObj.getTime()) ? '' : format(dateObj, 'yyyy-MM-dd');
+  } catch {
+    return '';
+  }
+};
+
+const getNoteDateMatches = (note: Note, dateStr: string) => {
+  if (note.linkedJournalDates?.includes(dateStr)) return true;
+  return getNoteDateString(note) === dateStr;
+};
 
 const matchesSearch = (entry: Entry, query: string) => {
   if (!query) return true;
@@ -131,7 +149,7 @@ export default function JournalPage() {
         bullets: entry?.bullets.length || 0,
         hasDream: !!entry?.dream.trim(),
         hasWisdom: wisdoms.some(wisdom => (wisdom.linkedEntryId || format(wisdom.createdAt, 'yyyy-MM-dd')) === dateStr),
-        hasNote: notes.some(note => (note.linkedDate || note.linkedEntryId || format(note.createdAt, 'yyyy-MM-dd')) === dateStr),
+        hasNote: notes.some(note => getNoteDateMatches(note, dateStr)),
         hasIdea: ideas.some(idea => idea.linkedEntries?.includes(dateStr) || format(idea.createdAt, 'yyyy-MM-dd') === dateStr),
       };
     });
@@ -180,7 +198,7 @@ export default function JournalPage() {
     const hasJournal = entry ? entry.bullets.length > 0 : false;
     const hasDream = !!entry?.dream.trim();
     const hasWisdom = wisdoms.some(wisdom => (wisdom.linkedEntryId || format(wisdom.createdAt, 'yyyy-MM-dd')) === dateStr);
-    const hasNote = notes.some(note => (note.linkedDate || note.linkedEntryId || format(note.createdAt, 'yyyy-MM-dd')) === dateStr);
+    const hasNote = notes.some(note => getNoteDateMatches(note, dateStr));
     const hasIdea = ideas.some(idea => idea.linkedEntries?.includes(dateStr) || format(idea.createdAt, 'yyyy-MM-dd') === dateStr);
 
     return { hasJournal, hasDream, hasExtra: hasWisdom || hasNote || hasIdea };
@@ -188,7 +206,7 @@ export default function JournalPage() {
 
   const renderItemIndicators = (entry: Entry) => {
     const hasWisdom = wisdoms.some(wisdom => (wisdom.linkedEntryId || format(wisdom.createdAt, 'yyyy-MM-dd')) === entry.date);
-    const hasNote = notes.some(note => (note.linkedDate || note.linkedEntryId || format(note.createdAt, 'yyyy-MM-dd')) === entry.date);
+    const hasNote = notes.some(note => getNoteDateMatches(note, entry.date));
     const hasIdea = ideas.some(idea => idea.linkedEntries?.includes(entry.date) || format(idea.createdAt, 'yyyy-MM-dd') === entry.date);
     const hasMedia = (entry.media?.length ?? 0) > 0;
     const hasLocation = !!entry.location;
@@ -203,9 +221,10 @@ export default function JournalPage() {
           </span>
         )}
         {hasNote && (
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#C8F7E4] text-[#00875A]" title="Note inside log">
-            <FontAwesomeIcon icon={faBook} className="h-2.5 w-2.5" />
-          </span>
+          <JournalNoteIndicator 
+            notes={notes.filter(note => getNoteDateMatches(note, entry.date))}
+            dateStr={entry.date}
+          />
         )}
         {hasIdea && (
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FFE4B5] text-[#B45309]" title="Idea inside log">
@@ -247,7 +266,7 @@ export default function JournalPage() {
         }
       `}</style>
 
-      <header className="mx-auto max-w-[680px] px-6 pt-8">
+      <header className="mx-auto max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] px-6 pt-8">
         <div className="flex items-start justify-between gap-4">
           <h1 className="font-sans text-4xl font-bold leading-none tracking-normal text-primary sm:text-5xl">
             Journal
@@ -344,7 +363,7 @@ export default function JournalPage() {
         )}
       </header>
 
-      <section className="mx-auto max-w-[680px] px-6 py-9">
+      <section className="mx-auto max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] px-6 py-9">
         <div className="mb-4 flex items-center justify-between">
           <button
             onClick={goToPreviousWeek}
@@ -421,7 +440,7 @@ export default function JournalPage() {
         </div>
       </section>
 
-      <main className="mx-auto max-w-[680px] px-6">
+      <main className="mx-auto max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] px-6">
         {/* Sleek Performance Filter Selector Bar to prevent DOM lag */}
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 select-none">
           <div className="text-xs font-bold text-[#8E9392] uppercase tracking-wider">
