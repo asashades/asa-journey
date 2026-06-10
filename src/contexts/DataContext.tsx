@@ -92,6 +92,9 @@ interface DataContextType {
   longestStreak: number;
   loading: boolean;
   isOnline: boolean;
+  isSpotlightOpen: boolean;
+  setIsSpotlightOpen: (open: boolean) => void;
+  addQuickJournalBullet: (text: string, style?: Bullet['style'], isHighlight?: boolean) => Promise<Bullet | null>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -217,6 +220,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [personGroups, setPersonGroups] = useState<PersonGroup[]>([]);
   const [goals, setGoals] = useState<FocusGoal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
   const lastTokenSyncSignatureRef = useRef('');
   const isSyncingSourceRef = useRef(false);
   const [isOnline, setIsOnline] = useState(() =>
@@ -329,6 +333,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const entriesData = snapshot.docs.map(doc => entryFromDoc(doc.id, doc.data()));
         setEntries(entriesData);
         updateLocalCache({ entries: entriesData });
+      },
+      (error) => {
+        console.error('[DataContext] Error listening to entries:', error);
       }
     );
 
@@ -344,6 +351,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         })) as Wisdom[];
         setWisdoms(wisdomsData);
         updateLocalCache({ wisdoms: wisdomsData });
+      },
+      (error) => {
+        console.error('[DataContext] Error listening to wisdoms:', error);
       }
     );
 
@@ -359,6 +369,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         })) as Note[];
         setNotes(notesData);
         updateLocalCache({ notes: notesData });
+      },
+      (error) => {
+        console.error('[DataContext] Error listening to notes:', error);
       }
     );
 
@@ -379,6 +392,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         notebooksData.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
         setNotebooks(notebooksData);
         updateLocalCache({ notebooks: notebooksData });
+      },
+      (error) => {
+        console.error('[DataContext] Error listening to notebooks:', error);
       }
     );
 
@@ -394,6 +410,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         })) as Idea[];
         setIdeas(ideasData);
         updateLocalCache({ ideas: ideasData });
+      },
+      (error) => {
+        console.error('[DataContext] Error listening to ideas:', error);
       }
     );
 
@@ -409,38 +428,53 @@ export function DataProvider({ children }: { children: ReactNode }) {
         })) as TagGroup[];
         setTagGroups(tagGroupsData);
         updateLocalCache({ tagGroups: tagGroupsData });
+      },
+      (error) => {
+        console.error('[DataContext] Error listening to tagGroups:', error);
       }
     );
 
     const tagsRef = collection(db, 'users', user.uid, 'tags');
-    const unsubTags = onSnapshot(query(tagsRef), (snapshot) => {
-      const tagsData = snapshot.docs
-        .map(doc => ({
-          id: doc.data().id || doc.id,
-          ...doc.data(),
-          name: doc.data().name || doc.id,
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          firstMentioned: doc.data().firstMentioned?.toDate?.() || doc.data().firstMentioned || undefined,
-        })) as Tag[];
-      const sortedTags = tagsData.sort((a, b) => (b.count || 0) - (a.count || 0));
-      setTags(sortedTags);
-      updateLocalCache({ tags: sortedTags });
-    });
+    const unsubTags = onSnapshot(
+      query(tagsRef),
+      (snapshot) => {
+        const tagsData = snapshot.docs
+          .map(doc => ({
+            id: doc.data().id || doc.id,
+            ...doc.data(),
+            name: doc.data().name || doc.id,
+            createdAt: doc.data().createdAt?.toDate() || new Date(),
+            firstMentioned: doc.data().firstMentioned?.toDate?.() || doc.data().firstMentioned || undefined,
+          })) as Tag[];
+        const sortedTags = tagsData.sort((a, b) => (b.count || 0) - (a.count || 0));
+        setTags(sortedTags);
+        updateLocalCache({ tags: sortedTags });
+      },
+      (error) => {
+        console.error('[DataContext] Error listening to tags:', error);
+      }
+    );
 
     const peopleRef = collection(db, 'users', user.uid, 'people');
-    const unsubPeople = onSnapshot(query(peopleRef), (snapshot) => {
-      const peopleData = snapshot.docs
-        .map(doc => ({
-          id: doc.data().id || doc.id,
-          ...doc.data(),
-          name: doc.data().name || doc.id,
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          firstMentioned: doc.data().firstMentioned?.toDate?.() || doc.data().firstMentioned || undefined,
-        })) as Person[];
-      const sortedPeople = peopleData.sort((a, b) => (b.mentions || 0) - (a.mentions || 0));
-      setPeople(sortedPeople);
-      updateLocalCache({ people: sortedPeople });
-    });
+    const unsubPeople = onSnapshot(
+      query(peopleRef),
+      (snapshot) => {
+        const peopleData = snapshot.docs
+          .map(doc => ({
+            id: doc.data().id || doc.id,
+            ...doc.data(),
+            name: doc.data().name || doc.id,
+            createdAt: doc.data().createdAt?.toDate() || new Date(),
+            firstMentioned: doc.data().firstMentioned?.toDate?.() || doc.data().firstMentioned || undefined,
+          })) as Person[];
+        const sortedPeople = peopleData.sort((a, b) => (b.mentions || 0) - (a.mentions || 0));
+        setPeople(sortedPeople);
+        updateLocalCache({ people: sortedPeople });
+      },
+      (error) => {
+        console.error('[DataContext] Error listening to people:', error);
+      }
+    );
 
     const personGroupsRef = collection(db, 'users', user.uid, 'personGroups');
     const unsubPersonGroups = onSnapshot(
@@ -454,6 +488,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         })) as PersonGroup[];
         setPersonGroups(personGroupsData);
         updateLocalCache({ personGroups: personGroupsData });
+      },
+      (error) => {
+        console.error('[DataContext] Error listening to personGroups:', error);
       }
     );
 
@@ -469,6 +506,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         })) as FocusGoal[];
         setGoals(goalsData);
         updateLocalCache({ goals: goalsData });
+      },
+      (error) => {
+        console.error('[DataContext] Error listening to goals:', error);
       }
     );
 
@@ -616,7 +656,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return [entry, ...entries];
     })();
 
-    setCurrentEntry(entry);
+    if (entry.date === currentDate) {
+      setCurrentEntry(entry);
+    }
     setEntries(nextEntries);
     const entryRef = doc(db, 'users', user.uid, 'entries', entry.date);
     await setDoc(entryRef, {
@@ -725,6 +767,64 @@ export function DataProvider({ children }: { children: ReactNode }) {
       bullets: [...entry.bullets, bullet],
       updatedAt: new Date(),
     };
+    await saveEntry(updatedEntry);
+    return bullet;
+  };
+
+  const addQuickJournalBullet = async (
+    text: string,
+    style: Bullet['style'] = 'bullet',
+    isHighlight = false
+  ): Promise<Bullet | null> => {
+    if (!user) return null;
+    const todayKey = format(new Date(), 'yyyy-MM-dd');
+    
+    let entry = entries.find(e => e.date === todayKey);
+    
+    if (!entry) {
+      const entryRef = doc(db, 'users', user.uid, 'entries', todayKey);
+      const entrySnap = await getDoc(entryRef);
+      if (entrySnap.exists()) {
+        entry = entryFromDoc(todayKey, entrySnap.data());
+      } else {
+        entry = {
+          id: todayKey,
+          date: todayKey,
+          dream: '',
+          bullets: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+      }
+    }
+
+    const isChecklist = style === 'checklist';
+    const { cleanText, parsedDate, hasCustomDate, hasCustomTime } = isChecklist
+      ? parseAndStripNLP(text, todayKey)
+      : { cleanText: text, parsedDate: undefined, hasCustomDate: false, hasCustomTime: false };
+
+    const bulletCreatedAt = new Date();
+    const bulletScheduledAt = (isChecklist && (hasCustomDate || hasCustomTime)) ? parsedDate : undefined;
+
+    const bullet: Bullet = {
+      id: uuidv4(),
+      text: cleanText,
+      style,
+      isHighlight: isHighlight ?? cleanText.includes('*'),
+      tags: extractTagNames(cleanText),
+      mentions: extractMentionNames(cleanText),
+      isCompleted: false,
+      createdAt: bulletCreatedAt,
+      updatedAt: new Date(),
+      ...(bulletScheduledAt ? { scheduledAt: bulletScheduledAt } : {})
+    };
+
+    const updatedEntry = {
+      ...entry,
+      bullets: [...entry.bullets, bullet],
+      updatedAt: new Date(),
+    };
+
     await saveEntry(updatedEntry);
     return bullet;
   };
@@ -1629,6 +1729,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       getWeeklyData,
       totalEntries, totalBullets, totalHighlights, totalTags, totalMentions, currentStreak, longestStreak,
       loading, isOnline,
+      isSpotlightOpen, setIsSpotlightOpen, addQuickJournalBullet,
     }}>
       {children}
     </DataContext.Provider>

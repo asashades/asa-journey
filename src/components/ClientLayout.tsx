@@ -1,8 +1,9 @@
 'use client';
 
 import { useAuth, AuthProvider } from '@/contexts/AuthContext';
-import { DataProvider } from '@/contexts/DataContext';
+import { DataProvider, useData } from '@/contexts/DataContext';
 import BottomNav from '@/components/layout/BottomNav';
+import QuickEntrySpotlight from '@/components/layout/QuickEntrySpotlight';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
@@ -90,9 +91,7 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
       <DataProvider>
         <AuthGuard>
           <ThemeWrapper>
-            <div className="pb-20">
-              {children}
-            </div>
+            {children}
           </ThemeWrapper>
         </AuthGuard>
         <BottomNavWrapper />
@@ -103,12 +102,48 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
 
 function BottomNavWrapper() {
   const { user, loading } = useAuth();
+  const { isSpotlightOpen, setIsSpotlightOpen } = useData();
   const pathname = usePathname();
   const isAuthPage = pathname.startsWith('/auth');
+
+  // Handle global keyboard shortcuts to toggle Spotlight
+  useEffect(() => {
+    if (!user || loading || isAuthPage) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Toggle on Cmd+K or Ctrl+K
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSpotlightOpen(!isSpotlightOpen);
+      }
+      // Close on Escape
+      if (e.key === 'Escape' && isSpotlightOpen) {
+        e.preventDefault();
+        setIsSpotlightOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [user, loading, isAuthPage, isSpotlightOpen, setIsSpotlightOpen]);
 
   if (isAuthPage) return null;
   if (!user || loading) return null;
 
-  return <BottomNav />;
+  return (
+    <>
+      <BottomNav
+        className={`morph-transition transform ${
+          isSpotlightOpen ? 'scale-95 opacity-0 blur-sm pointer-events-none' : 'scale-100 opacity-100'
+        }`}
+      />
+
+      <QuickEntrySpotlight
+        className={`morph-transition transform ${
+          isSpotlightOpen ? 'scale-100 opacity-100 pointer-events-auto' : 'scale-90 opacity-0 blur-sm pointer-events-none'
+        }`}
+      />
+    </>
+  );
 }
 

@@ -1216,7 +1216,7 @@ export default function WritePage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white pb-24">
       {!isOnline && (
         <div className="text-center py-2 bg-[#FFCC33]/20 text-[#2F3331] text-sm">
           you are offline, data will sync when back online

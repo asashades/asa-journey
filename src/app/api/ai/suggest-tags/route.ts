@@ -32,19 +32,23 @@ export async function POST(req: NextRequest) {
 
     const isBYOK = config.mode === 'bring_your_own_key';
     if (!isBYOK && !config.enableMock && targetUserId !== 'anonymous_user') {
-      const usageSnap = await getDoc(usageDocRef);
-      if (usageSnap.exists()) {
-        const usageData = usageSnap.data();
-        const monthlyLimit = Number(process.env.AI_TAG_SUGGESTION_MONTHLY_LIMIT) || 20;
-        if ((usageData.tagSuggestionCount || 0) >= monthlyLimit) {
-          return NextResponse.json(
-            { 
-              success: false, 
-              message: `Anda telah mencapai batas kuota rekomendasi tag AI untuk bulan ini (${monthlyLimit}x per bulan).` 
-            },
-            { status: 429 }
-          );
+      try {
+        const usageSnap = await getDoc(usageDocRef);
+        if (usageSnap.exists()) {
+          const usageData = usageSnap.data();
+          const monthlyLimit = Number(process.env.AI_TAG_SUGGESTION_MONTHLY_LIMIT) || 20;
+          if ((usageData.tagSuggestionCount || 0) >= monthlyLimit) {
+            return NextResponse.json(
+              { 
+                success: false, 
+                message: `Anda telah mencapai batas kuota rekomendasi tag AI untuk bulan ini (${monthlyLimit}x per bulan).` 
+              },
+              { status: 429 }
+            );
+          }
         }
+      } catch (quotaCheckErr) {
+        console.warn(`[Suggest Tags API] Failed to check usage quota from Firestore:`, quotaCheckErr);
       }
     }
 
@@ -62,25 +66,29 @@ export async function POST(req: NextRequest) {
 
     // 4. Perbarui kuota bulanan pengguna jika bukan mode mock, bukan anonymous, dan bukan BYOK
     if (!isBYOK && !config.enableMock && targetUserId !== 'anonymous_user') {
-      const usageSnap = await getDoc(usageDocRef);
-      if (usageSnap.exists()) {
-        const usageData = usageSnap.data();
-        await setDoc(usageDocRef, {
-          ...usageData,
-          tagSuggestionCount: (usageData.tagSuggestionCount || 0) + 1,
-          lastTagSuggestionAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      } else {
-        await setDoc(usageDocRef, {
-          userId: targetUserId,
-          month: yyyyMM,
-          weeklyInsightCount: 0,
-          tagSuggestionCount: 1,
-          lastTagSuggestionAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
+      try {
+        const usageSnap = await getDoc(usageDocRef);
+        if (usageSnap.exists()) {
+          const usageData = usageSnap.data();
+          await setDoc(usageDocRef, {
+            ...usageData,
+            tagSuggestionCount: (usageData.tagSuggestionCount || 0) + 1,
+            lastTagSuggestionAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        } else {
+          await setDoc(usageDocRef, {
+            userId: targetUserId,
+            month: yyyyMM,
+            weeklyInsightCount: 0,
+            tagSuggestionCount: 1,
+            lastTagSuggestionAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        }
+      } catch (quotaUpdateErr) {
+        console.warn(`[Suggest Tags API] Failed to update usage quota in Firestore:`, quotaUpdateErr);
       }
     }
 

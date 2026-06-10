@@ -36,19 +36,23 @@ export async function POST(req: NextRequest) {
 
     const isBYOK = config.mode === 'bring_your_own_key';
     if (!isBYOK && !config.enableMock && targetUserId !== 'anonymous_user') {
-      const usageSnap = await getDoc(usageDocRef);
-      if (usageSnap.exists()) {
-        const usageData = usageSnap.data();
-        const monthlyLimit = Number(process.env.AI_NOTE_REFINE_MONTHLY_LIMIT) || 30;
-        if ((usageData.noteRefineCount || 0) >= monthlyLimit) {
-          return NextResponse.json(
-            { 
-              success: false, 
-              message: `Anda telah mencapai batas kuota pemrosesan catatan AI untuk bulan ini (${monthlyLimit}x per bulan).` 
-            },
-            { status: 429 }
-          );
+      try {
+        const usageSnap = await getDoc(usageDocRef);
+        if (usageSnap.exists()) {
+          const usageData = usageSnap.data();
+          const monthlyLimit = Number(process.env.AI_NOTE_REFINE_MONTHLY_LIMIT) || 30;
+          if ((usageData.noteRefineCount || 0) >= monthlyLimit) {
+            return NextResponse.json(
+              { 
+                success: false, 
+                message: `Anda telah mencapai batas kuota pemrosesan catatan AI untuk bulan ini (${monthlyLimit}x per bulan).` 
+              },
+              { status: 429 }
+            );
+          }
         }
+      } catch (quotaCheckErr) {
+        console.warn(`[Refine Note API] Failed to check usage quota from Firestore (likely permission error):`, quotaCheckErr);
       }
     }
 
@@ -59,7 +63,7 @@ export async function POST(req: NextRequest) {
       if (action === 'beautify') {
         refinedText = `# ${noteContent.split('\n')[0]?.replace(/[#*_\-]/g, '').trim() || 'Catatan Refined'}\n\n> [!NOTE] Core Highlight\n> Catatan ini telah dirapikan struktur Markdown-nya dan diperbaiki tata bahasanya agar lebih mudah dibaca dan dipahami.\n\n${noteContent}`;
       } else if (action === 'summarize') {
-        refinedText = `> [!NOTE]\n> **AI Summary:** Catatan ini membahas refleksi ide pengembangan fitur AI notes dan integrasinya dengan halaman sasaran (goals).\n\n${noteContent}\n\n### Action Items\n- [ ] Menambahkan tombol AI Refine di Note Editor\n- [ ] Menghubungkan tugas checklist note dengan Goals Inbox`;
+        refinedText = `> [!NOTE]+ AI Summary\n> Catatan ini membahas refleksi ide pengembangan fitur AI notes dan integrasinya dengan halaman sasaran (goals).\n\n${noteContent}\n\n### Action Items\n- [ ] Menambahkan tombol AI Refine di Note Editor\n- [ ] Menghubungkan tugas checklist note dengan Goals Inbox`;
       } else {
         refinedText = `${noteContent}\n\n---\n\n### ✨ Extracted Wisdom\n\n> [!LESSON]\n> Menyederhanakan alur kerja akan meningkatkan retensi pengguna.\n> context : Workflow optimization\n\n> [!IDEA]\n> Buat widget mini checklist di dashboard untuk mempermudah akses inbox tasks.\n\n> [!FACT]\n> Rata-rata pengguna menghabiskan 3 menit per sesi journaling.\n> source : UX Research Report\n\n> [!QUOTE]\n> "The unexamined life is not worth living."\n> -- Socrates\n\n> [!THOUGHT]\n> Mungkin integrasi AI harus lebih pasif, tidak terlalu agresif mengoreksi.\n\n> [!EXCERPT]\n> Bagian tentang workflow automation sangat relevan dengan proyek saat ini.\n> -- Self-reflection\n> source : Personal Journal`;
       }
@@ -88,9 +92,9 @@ Guidelines:
       systemPrompt = `You are an expert executive assistant. Analyze the note and generate a brief summary along with actionable checklist tasks.
 
 Guidelines:
-1. Generate a brief summary (1-3 sentences) at the very top of the note inside a note callout box:
-   > [!NOTE]
-   > **AI Summary:** [Summary text here]
+ 1. Generate a brief summary (1-3 sentences) at the very top of the note inside a foldable note callout box:
+    > [!NOTE]+ AI Summary
+    > [Summary text here]
 2. Scan the text for any actionable items, tasks, or things to do. Convert them into clear checklist tasks \`- [ ] Task text\` and append them under an "Action Items" header at the bottom of the note.
 3. Keep the original note's text body intact in the middle, between the summary and the action items.
 4. Return the result strictly as a JSON object with a single key "refinedText".`;
@@ -179,8 +183,7 @@ Guidelines:
           const resData = await response.json();
           const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
           if (rawText) {
-            const parsed = JSON.parse(rawText);
-            refinedText = parsed.refinedText;
+            refinedText = parseAIResponse(rawText);
             callSuccess = true;
             break;
           }
@@ -222,8 +225,7 @@ Guidelines:
       const resData = await response.json();
       const rawText = resData.choices?.[0]?.message?.content;
       if (rawText) {
-        const parsed = JSON.parse(rawText);
-        refinedText = parsed.refinedText;
+        refinedText = parseAIResponse(rawText);
       }
     } else if (config.provider === 'anthropic') {
       const apiKey = config.apiKey || process.env.ANTHROPIC_API_KEY || '';
@@ -256,8 +258,7 @@ Guidelines:
       const resData = await response.json();
       const rawText = resData.content?.[0]?.text;
       if (rawText) {
-        const parsed = JSON.parse(rawText);
-        refinedText = parsed.refinedText;
+        refinedText = parseAIResponse(rawText);
       }
     } else if (config.provider === 'deepseek') {
       const apiKey = config.apiKey || process.env.DEEPSEEK_API_KEY || '';
@@ -288,8 +289,7 @@ Guidelines:
       const resData = await response.json();
       const rawText = resData.choices?.[0]?.message?.content;
       if (rawText) {
-        const parsed = JSON.parse(rawText);
-        refinedText = parsed.refinedText;
+        refinedText = parseAIResponse(rawText);
       }
     }
 
@@ -299,26 +299,30 @@ Guidelines:
 
     // 6. Update Monthly Quota
     if (!isBYOK && !config.enableMock && targetUserId !== 'anonymous_user') {
-      const usageSnap = await getDoc(usageDocRef);
-      if (usageSnap.exists()) {
-        const usageData = usageSnap.data();
-        await setDoc(usageDocRef, {
-          ...usageData,
-          noteRefineCount: (usageData.noteRefineCount || 0) + 1,
-          lastNoteRefineAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      } else {
-        await setDoc(usageDocRef, {
-          userId: targetUserId,
-          month: yyyyMM,
-          weeklyInsightCount: 0,
-          tagSuggestionCount: 0,
-          noteRefineCount: 1,
-          lastNoteRefineAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
+      try {
+        const usageSnap = await getDoc(usageDocRef);
+        if (usageSnap.exists()) {
+          const usageData = usageSnap.data();
+          await setDoc(usageDocRef, {
+            ...usageData,
+            noteRefineCount: (usageData.noteRefineCount || 0) + 1,
+            lastNoteRefineAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        } else {
+          await setDoc(usageDocRef, {
+            userId: targetUserId,
+            month: yyyyMM,
+            weeklyInsightCount: 0,
+            tagSuggestionCount: 0,
+            noteRefineCount: 1,
+            lastNoteRefineAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        }
+      } catch (quotaUpdateErr) {
+        console.warn(`[Refine Note API] Failed to update usage quota in Firestore (likely permission error):`, quotaUpdateErr);
       }
     }
 
@@ -334,4 +338,28 @@ Guidelines:
       { status: 500 }
     );
   }
+}
+
+function parseAIResponse(rawText: string): string {
+  const cleanText = rawText.trim();
+  
+  // Try parsing as JSON first (handling optional markdown code blocks)
+  let jsonString = cleanText;
+  if (jsonString.startsWith('```')) {
+    jsonString = jsonString.replace(/^```(?:json)?/i, '').trim();
+    jsonString = jsonString.replace(/```$/, '').trim();
+  }
+  
+  try {
+    const parsed = JSON.parse(jsonString);
+    if (parsed && typeof parsed === 'object') {
+      if (parsed.refinedText) return parsed.refinedText;
+      if (parsed.text) return parsed.text;
+    }
+  } catch (err) {
+    console.warn('[Refine Note API] JSON parsing failed, falling back to raw text:', err);
+  }
+  
+  // If parsing failed or keys don't exist, return the clean raw text directly
+  return cleanText;
 }

@@ -186,13 +186,13 @@ export default function NoteDashboard() {
         description: newNotebookDesc, 
         color: newNotebookColor 
       });
+      setEditingNotebookId(null);
     } else {
       await addNotebook(name, newNotebookDesc, newNotebookColor);
+      setShowNotebookModal(false);
     }
     setNewNotebookName('');
     setNewNotebookDesc('');
-    setEditingNotebookId(null);
-    setShowNotebookModal(false);
     setShowSavedToast(true);
     setTimeout(() => setShowSavedToast(false), 2000);
   };
@@ -543,17 +543,21 @@ export default function NoteDashboard() {
 
               <div>
                 <label className="block text-xs font-bold text-[#6F7476] dark:text-[#A3A7A8] uppercase tracking-wider mb-1.5">Color Tag</label>
-                <div className="flex items-center gap-2">
+                 <div className="flex items-center gap-2">
                   {['#00DC7D', '#5D8AFF', '#FF9933', '#FF453A', '#B79CFF', '#8A5A00', '#FF8CC6'].map(col => (
                     <button
                       key={col}
                       type="button"
                       onClick={() => setNewNotebookColor(col)}
-                      className={`w-8 h-8 rounded-full border-2 transition-transform active:scale-90 ${
-                        newNotebookColor === col ? 'border-[#2F3331] scale-110' : 'border-transparent'
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                        newNotebookColor === col ? 'scale-110 ring-2 ring-[#00DC7D]/50 shadow-md' : 'opacity-85 hover:opacity-100'
                       }`}
                       style={{ backgroundColor: col }}
-                    />
+                    >
+                      {newNotebookColor === col && (
+                        <FontAwesomeIcon icon={faCheck} className="text-white text-xs drop-shadow-sm" />
+                      )}
+                    </button>
                   ))}
                 </div>
               </div>
@@ -567,6 +571,20 @@ export default function NoteDashboard() {
                   <FontAwesomeIcon icon={faCheck} className="mr-1" />
                   {editingNotebookId ? 'Save Changes' : 'Create Notebook'}
                 </button>
+                {editingNotebookId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingNotebookId(null);
+                      setNewNotebookName('');
+                      setNewNotebookDesc('');
+                      setNewNotebookColor('#00DC7D');
+                    }}
+                    className="px-4 py-3 rounded-xl border border-[#CCD0CF] dark:border-[#2E3832] text-[#6F7476] dark:text-[#A3A7A8] text-xs font-bold hover:bg-gray-50 dark:hover:bg-[#1C2320]/50 transition-all"
+                  >
+                    Cancel
+                  </button>
+                )}
               </div>
 
               {allNotebooks.length > 0 && !editingNotebookId && (

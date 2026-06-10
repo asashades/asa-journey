@@ -84,7 +84,6 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
   const [localNoteId, setLocalNoteId] = useState<string | null>(noteId || null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showPDFMenu, setShowPDFMenu] = useState(false);
-  const [pdfTheme, setPdfTheme] = useState<'light' | 'dark'>('light');
 
   // Slash commands states
   const [showSlashMenu, setShowSlashMenu] = useState(false);
@@ -104,10 +103,9 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
   } | null>(null);
   const [isDirty, setIsDirty] = useState(false);
 
-  const handleApplyAIRefine = () => {
-    if (!aiPreview) return;
-    setContentMarkdown(aiPreview.refinedText);
-    performSave(title, aiPreview.refinedText, selectedNotebookId, pinned, favorite, linkedJournalDate);
+  const handleApplyAIRefine = (finalText: string) => {
+    setContentMarkdown(finalText);
+    performSave(title, finalText, selectedNotebookId, pinned, favorite, linkedJournalDate);
     setAiPreview(null);
   };
 
@@ -528,11 +526,9 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
   return (
     <div className="min-h-screen bg-white dark:bg-[#0F1210] pb-24 relative select-none">
       {/* Print-only layout container */}
-      <div className={`hidden print:block print-container p-12 font-sans ${
-        pdfTheme === 'dark' ? 'print-theme-dark bg-[#0F1210] text-[#E4E7E6]' : 'print-theme-light bg-white text-black'
-      }`}>
-        <h1 className={`text-4xl font-bold mb-4 ${pdfTheme === 'dark' ? 'text-[#FAFAFA]' : 'text-black'}`}>{title || 'Untitled'}</h1>
-        <div className={`text-xs mb-6 flex gap-4 ${pdfTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+      <div className="hidden print:block print-container p-12 font-sans print-theme-light bg-white text-black">
+        <h1 className="text-4xl font-bold mb-4 text-black">{title || 'Untitled'}</h1>
+        <div className="text-xs mb-6 flex gap-4 text-gray-500">
           {selectedNotebookId && (
             <span>Notebook: {notebooks.find(n => n.id === selectedNotebookId)?.name || 'Uncategorized'}</span>
           )}
@@ -855,14 +851,6 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
               <FontAwesomeIcon icon={faDownload} className="w-3 h-3" />
               .MD
             </button>
-            {/* PDF Export Theme Toggle */}
-            <button
-              onClick={() => setPdfTheme(prev => prev === 'light' ? 'dark' : 'light')}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#CCD0CF]/60 dark:border-[#2E3832]/60 text-xs text-[#6F7476] dark:text-[#A3A7A8] hover:bg-gray-50 hover:text-black transition-all ml-1"
-              title={`PDF Export Theme: ${pdfTheme === 'light' ? 'Light' : 'Dark'} (click to toggle)`}
-            >
-              <FontAwesomeIcon icon={pdfTheme === 'light' ? faSun : faMoon} className={pdfTheme === 'light' ? 'text-amber-500' : 'text-indigo-500'} />
-            </button>
             <button
               onClick={handleExportPDF}
               className="inline-flex h-8 px-2.5 items-center gap-1.5 rounded-lg border border-[#CCD0CF]/60 dark:border-[#2E3832]/60 text-xs font-bold text-[#6F7476] dark:text-[#A3A7A8] hover:bg-gray-50 hover:text-black transition-all ml-1"
@@ -940,7 +928,14 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
                 </h1>
               )}
               {contentMarkdown.trim() ? (
-                <MarkdownRenderer content={contentMarkdown} />
+                <MarkdownRenderer 
+                  content={contentMarkdown} 
+                  onContentChange={(newContent) => {
+                    setContentMarkdown(newContent);
+                    setIsDirty(true);
+                    performSave(title, newContent, selectedNotebookId, pinned, favorite, linkedJournalDate);
+                  }}
+                />
               ) : (
                 <p className="text-sm italic text-[#A3A7A8]">No content yet. Toggle write mode to start typing.</p>
               )}
