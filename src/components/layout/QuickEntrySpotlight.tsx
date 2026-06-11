@@ -61,7 +61,9 @@ export default function QuickEntrySpotlight() {
     const el = inputRef.current;
     if (el) {
       el.style.height = 'auto';
-      const newHeight = Math.min(120, Math.max(36, el.scrollHeight));
+      const sh = el.scrollHeight;
+      // Keep it strictly single-line (36px) if scrollHeight is 40px or less (only expand if multiple lines / text wrapping occurs)
+      const newHeight = sh > 40 ? Math.min(120, sh) : 36;
       setTextareaHeight(newHeight);
       el.style.height = `${newHeight}px`;
     }
@@ -326,7 +328,7 @@ export default function QuickEntrySpotlight() {
           isSpotlightOpen ? 'opacity-100 scale-100 delay-200 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
         }`}>
           {/* Top Row: Input and controls */}
-          <div className="flex items-center w-full gap-2 h-14 flex-shrink-0">
+          <div className={`flex items-center w-full gap-2 flex-shrink-0 ${isSpotlightOpen ? 'min-h-14 py-2' : 'h-14'}`}>
             {/* Format Selector (Left Group) */}
             <div className="relative flex-shrink-0">
               {target === 'journal' ? (
