@@ -58,13 +58,20 @@ export default function QuickEntrySpotlight() {
       setTextareaHeight(36);
       return;
     }
+    // When there's no text, force single-line height (no scrollHeight measurement)
+    if (!inputText) {
+      setTextareaHeight(36);
+      if (inputRef.current) {
+        inputRef.current.style.height = '36px';
+      }
+      return;
+    }
     const el = inputRef.current;
     if (el) {
-      // Temporarily set height to 36px (single line height) to get accurate scrollHeight measurement
-      // This prevents height feedback loops in flex containers.
-      el.style.height = '36px';
+      // Temporarily collapse to 1px to get true content scrollHeight
+      el.style.height = '1px';
       const sh = el.scrollHeight;
-      // Keep it strictly single-line (36px) if scrollHeight is 40px or less (only expand if multiple lines / text wrapping occurs)
+      // Only expand if content actually overflows single line
       const newHeight = sh > 40 ? Math.min(120, sh) : 36;
       setTextareaHeight(newHeight);
       el.style.height = `${newHeight}px`;
@@ -330,7 +337,7 @@ export default function QuickEntrySpotlight() {
           isSpotlightOpen ? 'opacity-100 scale-100 delay-200 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
         }`}>
           {/* Top Row: Input and controls */}
-          <div className={`flex items-center w-full gap-2 flex-shrink-0 ${isSpotlightOpen ? 'min-h-14 py-2' : 'h-14'}`}>
+          <div className="flex items-center w-full gap-2 flex-shrink-0">
             {/* Format Selector (Left Group) */}
             <div className="relative flex-shrink-0">
               {target === 'journal' ? (
