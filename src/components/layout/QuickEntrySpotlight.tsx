@@ -40,8 +40,9 @@ export default function QuickEntrySpotlight() {
   const [wisdomType, setWisdomType] = useState<WisdomType>('thought');
   const [isTargetMenuOpen, setIsTargetMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [textareaHeight, setTextareaHeight] = useState(36);
 
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const targetMenuRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -50,6 +51,21 @@ export default function QuickEntrySpotlight() {
       overlayRef.current.scrollLeft = inputRef.current.scrollLeft;
     }
   };
+
+  // Adjust textarea height on input change
+  useEffect(() => {
+    if (!isSpotlightOpen) {
+      setTextareaHeight(36);
+      return;
+    }
+    const el = inputRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      const newHeight = Math.min(120, Math.max(36, el.scrollHeight));
+      setTextareaHeight(newHeight);
+      el.style.height = `${newHeight}px`;
+    }
+  }, [inputText, isSpotlightOpen]);
 
   const cycleFormat = () => {
     setFormat((prev) => {
@@ -183,28 +199,28 @@ export default function QuickEntrySpotlight() {
         return (
           <>
             <FontAwesomeIcon icon={faWandMagicSparkles} className="text-purple-500 w-3.5 h-3.5" />
-            <span>Wisdom</span>
+            <span className="hidden md:inline">Wisdom</span>
           </>
         );
       case 'idea':
         return (
           <>
             <FontAwesomeIcon icon={faLightbulb} className="text-amber-500 w-3.5 h-3.5" />
-            <span>Ideas</span>
+            <span className="hidden md:inline">Ideas</span>
           </>
         );
       case 'note':
         return (
           <>
             <FontAwesomeIcon icon={faNoteSticky} className="text-blue-500 w-3.5 h-3.5" />
-            <span>Note</span>
+            <span className="hidden md:inline">Note</span>
           </>
         );
       default:
         return (
           <>
             <FontAwesomeIcon icon={faBook} className="text-emerald-500 w-3.5 h-3.5" />
-            <span>Journal</span>
+            <span className="hidden md:inline">Journal</span>
           </>
         );
     }
@@ -230,23 +246,41 @@ export default function QuickEntrySpotlight() {
     }
   };
 
+  const getContainerHeight = () => {
+    if (!isSpotlightOpen) return 56; // 14 * 4px = 56px (w-14 h-14)
+    
+    let baseHeight = 56;
+    if (target === 'wisdom') {
+      if (wisdomType === 'thought') {
+        baseHeight = 96;
+      } else if (wisdomType === 'excerpt') {
+        baseHeight = 212;
+      } else {
+        baseHeight = 162;
+      }
+    }
+    
+    const extraHeight = Math.max(0, textareaHeight - 36);
+    return baseHeight + extraHeight;
+  };
+
   let morphClasses = '';
   if (!isSpotlightOpen) {
     morphClasses = 'absolute bottom-20 left-[calc(100%-72px)] md:bottom-0 md:left-[calc(50%-320px)] w-14 h-14 rounded-full shadow-md bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out pointer-events-auto cursor-pointer hover:scale-105 active:scale-95 group z-50 flex items-center justify-center overflow-hidden';
   } else {
-    let heightClass = 'h-14 max-h-14 gap-2';
+    let paddingAndGapClass = 'gap-2';
     let borderClass = 'rounded-full';
     if (target === 'wisdom') {
       borderClass = 'rounded-3xl';
       if (wisdomType === 'thought') {
-        heightClass = 'h-[96px] max-h-[96px] py-3 gap-3';
+        paddingAndGapClass = 'py-3 gap-3';
       } else if (wisdomType === 'excerpt') {
-        heightClass = 'h-[212px] max-h-[212px] py-3.5 gap-3';
+        paddingAndGapClass = 'py-3.5 gap-3';
       } else {
-        heightClass = 'h-[162px] max-h-[162px] py-3.5 gap-3';
+        paddingAndGapClass = 'py-3.5 gap-3';
       }
     }
-    morphClasses = `absolute bottom-0 left-4 md:left-[calc(50%-275px)] w-[calc(100%-2rem)] md:w-[550px] ${borderClass} ${heightClass} shadow-2xl bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out pointer-events-auto z-50 flex flex-col px-4 justify-center focus-within:border-emerald-500/50 dark:focus-within:border-emerald-500/30 focus-within:shadow-[0_20px_50px_rgba(16,185,129,0.1)] overflow-visible`;
+    morphClasses = `absolute bottom-0 left-4 md:left-[calc(50%-275px)] w-[calc(100%-2rem)] md:w-[550px] ${borderClass} ${paddingAndGapClass} shadow-2xl bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out pointer-events-auto z-50 flex flex-col px-4 justify-center focus-within:border-emerald-500/50 dark:focus-within:border-emerald-500/30 focus-within:shadow-[0_20px_50px_rgba(16,185,129,0.1)] overflow-visible`;
   }
 
   return (
@@ -264,7 +298,19 @@ export default function QuickEntrySpotlight() {
         onSubmit={handleSubmit}
         onClick={handleFormClick}
         className={morphClasses}
+        style={{ height: `${getContainerHeight()}px` }}
       >
+        {/* Close Button (X) - Floating outside/above the pill on the top right */}
+        {isSpotlightOpen && (
+          <button
+            type="button"
+            onClick={() => setIsSpotlightOpen(false)}
+            className="absolute -top-7 right-2 w-6 h-6 rounded-full bg-white/90 dark:bg-neutral-900/90 border border-[#E4E7E6] dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 flex items-center justify-center text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 transition-all cursor-pointer z-50 shadow-md active:scale-95"
+            aria-label="Close spotlight"
+          >
+            <FontAwesomeIcon icon={faXmark} className="w-3 h-3" />
+          </button>
+        )}
         {/* Closed state: Circular Floating Capture Button content */}
         <div className={`absolute inset-0 flex flex-col items-center justify-center transition-all duration-300 ${
           isSpotlightOpen ? 'opacity-0 pointer-events-none scale-75' : 'opacity-100 scale-100'
@@ -306,14 +352,15 @@ export default function QuickEntrySpotlight() {
               {isSpotlightOpen && inputText && target === 'journal' && format === 'checklist' && (
                 <div
                   ref={overlayRef}
-                  className="pointer-events-none absolute left-0 right-0 top-0 bottom-0 flex items-center text-sm md:text-base overflow-hidden whitespace-nowrap text-neutral-800 dark:text-neutral-100 font-sans select-none"
+                  className="pointer-events-none absolute left-0 right-0 top-0 bottom-0 py-2 text-sm md:text-base overflow-hidden whitespace-pre-wrap break-words text-neutral-800 dark:text-neutral-100 font-sans select-none"
+                  style={{ height: `${textareaHeight}px` }}
                 >
                   <HighlightedText text={inputText} variant="editor" />
                 </div>
               )}
-              <input
+              <textarea
                 ref={inputRef}
-                type="text"
+                rows={1}
                 value={inputText}
                 onChange={(e) => {
                   setInputText(e.target.value);
@@ -326,12 +373,12 @@ export default function QuickEntrySpotlight() {
                 placeholder={getPlaceholder()}
                 disabled={!isSpotlightOpen}
                 tabIndex={isSpotlightOpen ? 0 : -1}
-                className={`w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-sm md:text-base placeholder-neutral-400 dark:placeholder-neutral-600 py-2 h-full caret-[#2F3331] dark:caret-[#FAFAFA] ${
+                className={`w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-sm md:text-base placeholder-neutral-400 dark:placeholder-neutral-600 py-2 resize-none overflow-hidden caret-[#2F3331] dark:caret-[#FAFAFA] ${
                   isSpotlightOpen && inputText && target === 'journal' && format === 'checklist'
                     ? 'text-transparent'
                     : 'text-neutral-800 dark:text-neutral-100'
                 }`}
-                style={{ boxShadow: 'none' }}
+                style={{ height: `${textareaHeight}px`, boxShadow: 'none' }}
               />
             </div>
 
@@ -342,7 +389,7 @@ export default function QuickEntrySpotlight() {
                 onClick={() => setIsTargetMenuOpen(!isTargetMenuOpen)}
                 disabled={!isSpotlightOpen}
                 tabIndex={isSpotlightOpen ? 0 : -1}
-                className={`h-9 px-3.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer ${getTargetBtnClasses(target)}`}
+                className={`h-9 px-2 md:px-3.5 rounded-full text-xs font-bold transition-all flex items-center gap-1 md:gap-1.5 active:scale-95 cursor-pointer ${getTargetBtnClasses(target)}`}
               >
                 {getTargetLabel(target)}
                 <FontAwesomeIcon icon={faChevronUp} className="w-2.5 h-2.5 opacity-60 ml-0.5" />
@@ -399,21 +446,6 @@ export default function QuickEntrySpotlight() {
                 </div>
               )}
             </div>
-
-            {/* Far Right Divider */}
-            <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-800 mx-1 flex-shrink-0" />
-
-            {/* Close Button (X) */}
-            <button
-              type="button"
-              onClick={() => setIsSpotlightOpen(false)}
-              disabled={!isSpotlightOpen}
-              tabIndex={isSpotlightOpen ? 0 : -1}
-              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-pointer flex-shrink-0"
-              aria-label="Close spotlight"
-            >
-              <FontAwesomeIcon icon={faXmark} className="w-4 h-4" />
-            </button>
           </div>
 
           {/* Subtype fields for wisdom */}
