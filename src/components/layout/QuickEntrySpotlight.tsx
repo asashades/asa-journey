@@ -37,13 +37,19 @@ export default function QuickEntrySpotlight() {
   const [target, setTarget] = useState<TargetType>('journal');
   const [format, setFormat] = useState<FormatType>('bullet');
   const [wisdomType, setWisdomType] = useState<WisdomType>('thought');
-  const [isFormatMenuOpen, setIsFormatMenuOpen] = useState(false);
   const [isTargetMenuOpen, setIsTargetMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const formatMenuRef = useRef<HTMLDivElement>(null);
   const targetMenuRef = useRef<HTMLDivElement>(null);
+
+  const cycleFormat = () => {
+    setFormat((prev) => {
+      if (prev === 'bullet') return 'checklist';
+      if (prev === 'checklist') return 'star';
+      return 'bullet';
+    });
+  };
 
   // Focus input on open
   useEffect(() => {
@@ -56,7 +62,6 @@ export default function QuickEntrySpotlight() {
       setAuthorText('');
       setSourceText('');
       setContextText('');
-      setIsFormatMenuOpen(false);
       setIsTargetMenuOpen(false);
     }
   }, [isSpotlightOpen]);
@@ -64,13 +69,6 @@ export default function QuickEntrySpotlight() {
   // Click outside to close menus
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (
-        isFormatMenuOpen &&
-        formatMenuRef.current &&
-        !formatMenuRef.current.contains(event.target as Node)
-      ) {
-        setIsFormatMenuOpen(false);
-      }
       if (
         isTargetMenuOpen &&
         targetMenuRef.current &&
@@ -81,7 +79,7 @@ export default function QuickEntrySpotlight() {
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isFormatMenuOpen, isTargetMenuOpen]);
+  }, [isTargetMenuOpen]);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -276,72 +274,21 @@ export default function QuickEntrySpotlight() {
           {/* Top Row: Input and controls */}
           <div className="flex items-center w-full gap-2 h-14 flex-shrink-0">
             {/* Format Selector (Left Group) */}
-            <div className="relative flex-shrink-0" ref={formatMenuRef}>
+            <div className="relative flex-shrink-0">
               {target === 'journal' ? (
                 <button
                   type="button"
-                  onClick={() => setIsFormatMenuOpen(!isFormatMenuOpen)}
+                  onClick={cycleFormat}
                   disabled={!isSpotlightOpen}
                   tabIndex={isSpotlightOpen ? 0 : -1}
-                  className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-600 dark:text-neutral-400"
-                  title="Change Format"
+                  className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-600 dark:text-neutral-400 active:scale-95 duration-200"
+                  title={`Current Format: ${format.toUpperCase()}. Click to change.`}
                 >
                   {getFormatIcon(format)}
                 </button>
               ) : (
                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-neutral-300 dark:text-neutral-700 opacity-60">
                   <FontAwesomeIcon icon={faCircle} className="w-2.5 h-2.5" />
-                </div>
-              )}
-
-              {/* Format Floating Option Menu */}
-              {isFormatMenuOpen && target === 'journal' && (
-                <div className="absolute bottom-16 left-0 bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] rounded-2xl shadow-xl py-1.5 min-w-[140px] backdrop-blur-md animate-fade-in-up flex flex-col z-50">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormat('bullet');
-                      setIsFormatMenuOpen(false);
-                    }}
-                    disabled={!isSpotlightOpen}
-                    tabIndex={isSpotlightOpen ? 0 : -1}
-                    className={`flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-left ${
-                      format === 'bullet' ? 'text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20' : 'text-neutral-600 dark:text-neutral-400'
-                    }`}
-                  >
-                    <FontAwesomeIcon icon={faCircle} className="w-2.5 h-2.5" />
-                    <span>Bullet •</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormat('checklist');
-                      setIsFormatMenuOpen(false);
-                    }}
-                    disabled={!isSpotlightOpen}
-                    tabIndex={isSpotlightOpen ? 0 : -1}
-                    className={`flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-left ${
-                      format === 'checklist' ? 'text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20' : 'text-neutral-600 dark:text-neutral-400'
-                    }`}
-                  >
-                    <FontAwesomeIcon icon={faCheckSquare} className="text-emerald-500 w-3.5 h-3.5" />
-                    <span>Checklist [ ]</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormat('star');
-                      setIsFormatMenuOpen(false);
-                    }}
-                    disabled={!isSpotlightOpen}
-                    tabIndex={isSpotlightOpen ? 0 : -1}
-                    className={`flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-left ${
-                      format === 'star' ? 'text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20' : 'text-neutral-600 dark:text-neutral-400'
-                    }`}
-                  >
-                    <FontAwesomeIcon icon={faStar} className="text-amber-500 w-3.5 h-3.5" />
-                    <span>Star ⭐</span>
-                  </button>
                 </div>
               )}
             </div>
