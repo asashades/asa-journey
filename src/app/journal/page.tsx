@@ -266,7 +266,7 @@ export default function JournalPage() {
         }
       `}</style>
 
-      <header className="mx-auto max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] px-6 pt-8">
+      <header className="mx-auto max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] px-4 sm:px-6 pt-8">
         <div className="flex items-start justify-between gap-4">
           <h1 className="font-sans text-4xl font-bold leading-none tracking-normal text-primary sm:text-5xl">
             Journal
@@ -363,7 +363,7 @@ export default function JournalPage() {
         )}
       </header>
 
-      <section className="mx-auto max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] px-6 py-9">
+      <section className="mx-auto max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] px-4 sm:px-6 py-9">
         <div className="mb-4 flex items-center justify-between">
           <button
             onClick={goToPreviousWeek}
@@ -387,7 +387,7 @@ export default function JournalPage() {
           </button>
         </div>
 
-        <div className="flex justify-center gap-4 sm:gap-6">
+        <div className="flex justify-center gap-1.5 sm:gap-4 md:gap-6">
           {weekDays.map((day) => {
             const dateStr = format(day, 'yyyy-MM-dd');
             const data = weeklyEntries[dateStr] || { entries: 0, bullets: 0, hasDream: false, hasWisdom: false, hasNote: false, hasIdea: false };
@@ -399,7 +399,7 @@ export default function JournalPage() {
               <div key={dateStr} className="flex flex-col items-center">
                 <button
                   onClick={() => goToDate(dateStr)}
-                  className={`relative flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold transition-all sm:h-14 sm:w-14 ${
+                  className={`relative flex h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14 items-center justify-center rounded-full text-xs sm:text-sm font-bold transition-all ${
                     isToday
                       ? 'border-2 border-primary bg-surface text-primary shadow-sm ring-2 ring-primary/10'
                       : hasMinimumBullets
@@ -440,7 +440,7 @@ export default function JournalPage() {
         </div>
       </section>
 
-      <main className="mx-auto max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] px-6">
+      <main className="mx-auto max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] px-4 sm:px-6">
         {/* Sleek Performance Filter Selector Bar to prevent DOM lag */}
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 select-none">
           <div className="text-xs font-bold text-[#8E9392] uppercase tracking-wider">
