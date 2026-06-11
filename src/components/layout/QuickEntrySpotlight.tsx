@@ -16,6 +16,7 @@ import {
   faBolt,
 } from '@fortawesome/free-solid-svg-icons';
 import { WisdomType } from '@/types';
+import { HighlightedText } from '@/components/ui/HighlightedText';
 
 type TargetType = 'journal' | 'wisdom' | 'idea' | 'note';
 type FormatType = 'bullet' | 'checklist' | 'star';
@@ -42,6 +43,13 @@ export default function QuickEntrySpotlight() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const targetMenuRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  const handleScrollSync = () => {
+    if (inputRef.current && overlayRef.current) {
+      overlayRef.current.scrollLeft = inputRef.current.scrollLeft;
+    }
+  };
 
   const cycleFormat = () => {
     setFormat((prev) => {
@@ -224,7 +232,7 @@ export default function QuickEntrySpotlight() {
 
   let morphClasses = '';
   if (!isSpotlightOpen) {
-    morphClasses = 'absolute bottom-0 left-4 md:left-[calc(50%-320px)] w-14 h-14 rounded-full shadow-md bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out pointer-events-auto cursor-pointer hover:scale-105 active:scale-95 group z-50 flex items-center justify-center overflow-hidden';
+    morphClasses = 'absolute bottom-20 left-[calc(100%-72px)] md:bottom-0 md:left-[calc(50%-320px)] w-14 h-14 rounded-full shadow-md bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out pointer-events-auto cursor-pointer hover:scale-105 active:scale-95 group z-50 flex items-center justify-center overflow-hidden';
   } else {
     let heightClass = 'h-14 max-h-14 gap-2';
     let borderClass = 'rounded-full';
@@ -294,17 +302,38 @@ export default function QuickEntrySpotlight() {
             </div>
 
             {/* Input Box (Center) */}
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder={getPlaceholder()}
-              disabled={!isSpotlightOpen}
-              tabIndex={isSpotlightOpen ? 0 : -1}
-              className="flex-1 bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-sm md:text-base text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-600 py-2 h-full"
-              style={{ boxShadow: 'none' }}
-            />
+            <div className="relative flex-1 h-full flex items-center min-w-0">
+              {isSpotlightOpen && inputText && target === 'journal' && format === 'checklist' && (
+                <div
+                  ref={overlayRef}
+                  className="pointer-events-none absolute left-0 right-0 top-0 bottom-0 flex items-center text-sm md:text-base overflow-hidden whitespace-nowrap text-neutral-800 dark:text-neutral-100 font-sans select-none"
+                >
+                  <HighlightedText text={inputText} variant="editor" />
+                </div>
+              )}
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputText}
+                onChange={(e) => {
+                  setInputText(e.target.value);
+                  setTimeout(handleScrollSync, 0);
+                }}
+                onScroll={handleScrollSync}
+                onKeyUp={handleScrollSync}
+                onKeyDown={handleScrollSync}
+                onSelect={handleScrollSync}
+                placeholder={getPlaceholder()}
+                disabled={!isSpotlightOpen}
+                tabIndex={isSpotlightOpen ? 0 : -1}
+                className={`w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-sm md:text-base placeholder-neutral-400 dark:placeholder-neutral-600 py-2 h-full caret-[#2F3331] dark:caret-[#FAFAFA] ${
+                  isSpotlightOpen && inputText && target === 'journal' && format === 'checklist'
+                    ? 'text-transparent'
+                    : 'text-neutral-800 dark:text-neutral-100'
+                }`}
+                style={{ boxShadow: 'none' }}
+              />
+            </div>
 
             {/* Target Selector (Right Group) */}
             <div className="relative flex-shrink-0" ref={targetMenuRef}>
