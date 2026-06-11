@@ -696,6 +696,8 @@ export default function WritePage() {
     };
   }, []);
 
+  const isFirstRender = useRef(true);
+
   // Synchronize URL date parameter with currentDate state on initial mount
   useEffect(() => {
     const dateParam = new URLSearchParams(window.location.search).get('date');
@@ -711,6 +713,17 @@ export default function WritePage() {
   useEffect(() => {
     const url = new URL(window.location.href);
     const dateParam = url.searchParams.get('date');
+    
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      // If URL doesn't have a date parameter, initialize it to currentDate
+      if (!dateParam && currentDate) {
+        url.searchParams.set('date', currentDate);
+        window.history.replaceState(null, '', url.pathname + url.search);
+      }
+      return;
+    }
+
     if (currentDate && dateParam !== currentDate) {
       url.searchParams.set('date', currentDate);
       window.history.replaceState(null, '', url.pathname + url.search);

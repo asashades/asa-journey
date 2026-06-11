@@ -52,6 +52,14 @@ export default function QuickEntrySpotlight() {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    handleScrollSync();
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
   // Adjust textarea height on input change
   useEffect(() => {
     if (!isSpotlightOpen) {
@@ -123,7 +131,7 @@ export default function QuickEntrySpotlight() {
     }, 2200);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent | React.KeyboardEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
 
@@ -379,7 +387,7 @@ export default function QuickEntrySpotlight() {
                 }}
                 onScroll={handleScrollSync}
                 onKeyUp={handleScrollSync}
-                onKeyDown={handleScrollSync}
+                onKeyDown={handleKeyDown}
                 onSelect={handleScrollSync}
                 placeholder={getPlaceholder()}
                 disabled={!isSpotlightOpen}
