@@ -13,13 +13,14 @@ import {
   faLightbulb,
   faNoteSticky,
   faChevronUp,
+  faBolt,
 } from '@fortawesome/free-solid-svg-icons';
 import { WisdomType } from '@/types';
 
 type TargetType = 'journal' | 'wisdom' | 'idea' | 'note';
 type FormatType = 'bullet' | 'checklist' | 'star';
 
-export default function QuickEntrySpotlight({ className = '' }: { className?: string }) {
+export default function QuickEntrySpotlight() {
   const {
     isSpotlightOpen,
     setIsSpotlightOpen,
@@ -81,8 +82,6 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isFormatMenuOpen, isTargetMenuOpen]);
-
-  if (!isSpotlightOpen) return null;
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -218,26 +217,62 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
     }
   };
 
+  const handleFormClick = (e: React.MouseEvent) => {
+    if (!isSpotlightOpen) {
+      e.preventDefault();
+      setIsSpotlightOpen(true);
+    }
+  };
+
+  let morphClasses = '';
+  if (!isSpotlightOpen) {
+    morphClasses = 'fixed bottom-3 left-4 md:left-[calc(50%-320px)] w-12 h-12 rounded-full shadow-md bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out pointer-events-auto cursor-pointer hover:scale-105 active:scale-95 group z-50 flex items-center justify-center overflow-hidden';
+  } else {
+    let heightClass = 'h-14 max-h-14 gap-2';
+    let borderClass = 'rounded-full';
+    if (target === 'wisdom') {
+      borderClass = 'rounded-3xl';
+      if (wisdomType === 'thought') {
+        heightClass = 'h-[96px] max-h-[96px] py-3 gap-3';
+      } else if (wisdomType === 'excerpt') {
+        heightClass = 'h-[212px] max-h-[212px] py-3.5 gap-3';
+      } else {
+        heightClass = 'h-[162px] max-h-[162px] py-3.5 gap-3';
+      }
+    }
+    morphClasses = `fixed bottom-3 left-4 md:left-[calc(50%-275px)] w-[calc(100%-2rem)] md:w-[550px] ${borderClass} ${heightClass} shadow-2xl bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out pointer-events-auto z-50 flex flex-col px-4 justify-center focus-within:border-emerald-500/50 dark:focus-within:border-emerald-500/30 focus-within:shadow-[0_20px_50px_rgba(16,185,129,0.1)] overflow-visible`;
+  }
+
   return (
-    <div className={`fixed bottom-4 left-0 right-0 z-50 px-4 flex flex-col items-center pointer-events-none ${className}`}>
-      
+    <>
       {/* Toast Notification */}
       <div
-        className={`mb-3 px-4 py-2 bg-neutral-900/90 dark:bg-white/95 text-white dark:text-neutral-900 text-xs font-semibold rounded-full shadow-lg border border-neutral-800 dark:border-neutral-200 transition-all duration-300 transform pointer-events-auto ${
+        className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-neutral-900/90 dark:bg-white/95 text-white dark:text-neutral-900 text-xs font-semibold rounded-full shadow-lg border border-neutral-800 dark:border-neutral-200 transition-all duration-300 transform pointer-events-auto ${
           toastMessage ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-2 scale-95 pointer-events-none'
         }`}
       >
         {toastMessage}
       </div>
 
-      {/* Main Spotlight Pill */}
-      <div className="w-full max-w-[550px] pointer-events-auto">
-        <form
-          onSubmit={handleSubmit}
-          className={`relative border border-[#E4E7E6] bg-white/95 backdrop-blur-lg shadow-2xl flex flex-col justify-center px-4 transition-all duration-500 ease-out focus-within:border-emerald-500/50 dark:focus-within:border-emerald-500/30 focus-within:shadow-[0_20px_50px_rgba(16,185,129,0.1)] ${
-            target === 'wisdom' ? 'h-auto py-3.5 rounded-3xl gap-3' : 'h-14 rounded-full gap-2'
-          }`}
-        >
+      <form
+        onSubmit={handleSubmit}
+        onClick={handleFormClick}
+        className={morphClasses}
+      >
+        {/* Closed state: Circular Floating Capture Button content */}
+        <div className={`absolute inset-0 flex flex-col items-center justify-center transition-all duration-300 ${
+          isSpotlightOpen ? 'opacity-0 pointer-events-none scale-75' : 'opacity-100 scale-100'
+        }`}>
+          <FontAwesomeIcon icon={faBolt} className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" />
+          <span className="text-[8px] font-semibold max-h-0 opacity-0 overflow-hidden transition-all duration-300 ease-in-out group-hover:max-h-8 group-hover:opacity-100 group-hover:mt-0.5 text-neutral-500 dark:text-neutral-400">
+            Capture
+          </span>
+        </div>
+
+        {/* Open state: Form contents (delayed fade-in) */}
+        <div className={`w-full flex flex-col transition-all duration-500 ${
+          isSpotlightOpen ? 'opacity-100 scale-100 delay-200 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
+        }`}>
           {/* Top Row: Input and controls */}
           <div className="flex items-center w-full gap-2 h-14 flex-shrink-0">
             {/* Format Selector (Left Group) */}
@@ -246,6 +281,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
                 <button
                   type="button"
                   onClick={() => setIsFormatMenuOpen(!isFormatMenuOpen)}
+                  disabled={!isSpotlightOpen}
+                  tabIndex={isSpotlightOpen ? 0 : -1}
                   className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-600 dark:text-neutral-400"
                   title="Change Format"
                 >
@@ -266,6 +303,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
                       setFormat('bullet');
                       setIsFormatMenuOpen(false);
                     }}
+                    disabled={!isSpotlightOpen}
+                    tabIndex={isSpotlightOpen ? 0 : -1}
                     className={`flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-left ${
                       format === 'bullet' ? 'text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20' : 'text-neutral-600 dark:text-neutral-400'
                     }`}
@@ -279,6 +318,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
                       setFormat('checklist');
                       setIsFormatMenuOpen(false);
                     }}
+                    disabled={!isSpotlightOpen}
+                    tabIndex={isSpotlightOpen ? 0 : -1}
                     className={`flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-left ${
                       format === 'checklist' ? 'text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20' : 'text-neutral-600 dark:text-neutral-400'
                     }`}
@@ -292,6 +333,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
                       setFormat('star');
                       setIsFormatMenuOpen(false);
                     }}
+                    disabled={!isSpotlightOpen}
+                    tabIndex={isSpotlightOpen ? 0 : -1}
                     className={`flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-left ${
                       format === 'star' ? 'text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20' : 'text-neutral-600 dark:text-neutral-400'
                     }`}
@@ -310,6 +353,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder={getPlaceholder()}
+              disabled={!isSpotlightOpen}
+              tabIndex={isSpotlightOpen ? 0 : -1}
               className="flex-1 bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-sm md:text-base text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-600 py-2 h-full"
               style={{ boxShadow: 'none' }}
             />
@@ -319,6 +364,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
               <button
                 type="button"
                 onClick={() => setIsTargetMenuOpen(!isTargetMenuOpen)}
+                disabled={!isSpotlightOpen}
+                tabIndex={isSpotlightOpen ? 0 : -1}
                 className={`h-9 px-3.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer ${getTargetBtnClasses(target)}`}
               >
                 {getTargetLabel(target)}
@@ -334,6 +381,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
                       setTarget('journal');
                       setIsTargetMenuOpen(false);
                     }}
+                    disabled={!isSpotlightOpen}
+                    tabIndex={isSpotlightOpen ? 0 : -1}
                     className={`flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-left ${
                       target === 'journal' ? 'text-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20' : 'text-neutral-600 dark:text-neutral-400'
                     }`}
@@ -347,6 +396,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
                       setTarget('wisdom');
                       setIsTargetMenuOpen(false);
                     }}
+                    disabled={!isSpotlightOpen}
+                    tabIndex={isSpotlightOpen ? 0 : -1}
                     className={`flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-left ${
                       target === 'wisdom' ? 'text-purple-500 bg-purple-50/50 dark:bg-purple-950/20' : 'text-neutral-600 dark:text-neutral-400'
                     }`}
@@ -360,6 +411,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
                       setTarget('idea');
                       setIsTargetMenuOpen(false);
                     }}
+                    disabled={!isSpotlightOpen}
+                    tabIndex={isSpotlightOpen ? 0 : -1}
                     className={`flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-left ${
                       target === 'idea' ? 'text-amber-500 bg-amber-50/50 dark:bg-amber-950/20' : 'text-neutral-600 dark:text-neutral-400'
                     }`}
@@ -378,6 +431,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
             <button
               type="button"
               onClick={() => setIsSpotlightOpen(false)}
+              disabled={!isSpotlightOpen}
+              tabIndex={isSpotlightOpen ? 0 : -1}
               className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-pointer flex-shrink-0"
               aria-label="Close spotlight"
             >
@@ -394,6 +449,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
                   value={authorText}
                   onChange={(e) => setAuthorText(e.target.value)}
                   placeholder="Author..."
+                  disabled={!isSpotlightOpen}
+                  tabIndex={isSpotlightOpen ? 0 : -1}
                   className="w-full bg-neutral-50/50 dark:bg-neutral-800/20 border border-[#E4E7E6] rounded-xl px-3.5 py-1.5 text-xs text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-600 outline-none focus:border-purple-500/50 dark:focus:border-purple-500/30"
                 />
               )}
@@ -403,6 +460,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
                   value={sourceText}
                   onChange={(e) => setSourceText(e.target.value)}
                   placeholder="Source..."
+                  disabled={!isSpotlightOpen}
+                  tabIndex={isSpotlightOpen ? 0 : -1}
                   className="w-full bg-neutral-50/50 dark:bg-neutral-800/20 border border-[#E4E7E6] rounded-xl px-3.5 py-1.5 text-xs text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-600 outline-none focus:border-purple-500/50 dark:focus:border-purple-500/30"
                 />
               )}
@@ -412,6 +471,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
                   value={contextText}
                   onChange={(e) => setContextText(e.target.value)}
                   placeholder="Context..."
+                  disabled={!isSpotlightOpen}
+                  tabIndex={isSpotlightOpen ? 0 : -1}
                   className="w-full bg-neutral-50/50 dark:bg-neutral-800/20 border border-[#E4E7E6] rounded-xl px-3.5 py-1.5 text-xs text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-600 outline-none focus:border-purple-500/50 dark:focus:border-purple-500/30"
                 />
               )}
@@ -427,6 +488,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
                   key={t}
                   type="button"
                   onClick={() => setWisdomType(t)}
+                  disabled={!isSpotlightOpen}
+                  tabIndex={isSpotlightOpen ? 0 : -1}
                   className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold transition-all duration-200 cursor-pointer ${
                     wisdomType === t
                       ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/45 dark:text-purple-300'
@@ -438,8 +501,8 @@ export default function QuickEntrySpotlight({ className = '' }: { className?: st
               ))}
             </div>
           )}
-        </form>
-      </div>
-    </div>
+        </div>
+      </form>
+    </>
   );
 }

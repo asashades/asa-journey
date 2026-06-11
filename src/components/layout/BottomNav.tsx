@@ -15,7 +15,6 @@ import {
   faCrosshairs,
   faImages,
   faNoteSticky,
-  faBolt,
 } from '@fortawesome/free-solid-svg-icons';
 import { useData } from '@/contexts/DataContext';
 
@@ -28,7 +27,7 @@ const navItems = [
 
 export default function BottomNav({ className = '' }: { className?: string }) {
   const pathname = usePathname();
-  const { setIsSpotlightOpen } = useData();
+  const { isSpotlightOpen } = useData();
   const [isSpeedDialOpen, setIsSpeedDialOpen] = useState(false);
   const isMoreActive = pathname.startsWith('/collections') || pathname.startsWith('/settings') || pathname.startsWith('/other') || pathname.startsWith('/insights') || pathname.startsWith('/gallery') || pathname.startsWith('/notes');
   const speedDialItems = [
@@ -40,21 +39,10 @@ export default function BottomNav({ className = '' }: { className?: string }) {
   ];
 
   return (
-    <nav className={`pointer-events-none fixed bottom-3 left-0 right-0 z-50 px-4 safe-area-pb ${className}`}>
-      {/* Circular Floating Capture Button (paling kiri, di luar pill) */}
-      <button
-        type="button"
-        onClick={() => setIsSpotlightOpen(true)}
-        className="pointer-events-auto absolute left-4 md:left-[calc(50%-320px)] top-[4px] w-12 h-12 rounded-full border border-[#E4E7E6] bg-white/95 text-[#A3A7A8] hover:bg-[#E9FFF4] hover:text-[#00A963] shadow-md flex flex-col items-center justify-center transition-all duration-300 cursor-pointer transform hover:scale-105 active:scale-95 group"
-        aria-label="Open Spotlight Quick Entry"
-      >
-        <FontAwesomeIcon icon={faBolt} className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" />
-        <span className="text-[8px] font-semibold max-h-0 opacity-0 overflow-hidden transition-all duration-300 ease-in-out group-hover:max-h-8 group-hover:opacity-100 group-hover:mt-0.5">
-          Capture
-        </span>
-      </button>
-
-      <div className="pointer-events-auto mx-auto flex max-w-lg items-center justify-around rounded-full border border-[#E4E7E6] bg-white/95 px-3 py-2 shadow-lg backdrop-blur">
+    <nav className={`pointer-events-none fixed bottom-3 left-0 right-0 z-40 px-4 safe-area-pb ${className}`}>
+      <div className={`pointer-events-auto mx-auto flex max-w-lg items-center justify-around rounded-full border border-[#E4E7E6] bg-white/95 px-3 py-2 shadow-lg backdrop-blur transition-all duration-500 ease-out ${
+        isSpotlightOpen ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
+      }`}>
         {navItems.map(({ href, label, icon }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/');
           return (

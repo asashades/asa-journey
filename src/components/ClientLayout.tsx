@@ -132,17 +132,8 @@ function BottomNavWrapper() {
 
   return (
     <>
-      <BottomNav
-        className={`morph-transition transform ${
-          isSpotlightOpen ? 'scale-95 opacity-0 blur-sm pointer-events-none' : 'scale-100 opacity-100'
-        }`}
-      />
-
-      <QuickEntrySpotlight
-        className={`morph-transition transform ${
-          isSpotlightOpen ? 'scale-100 opacity-100 pointer-events-auto' : 'scale-90 opacity-0 blur-sm pointer-events-none'
-        }`}
-      />
+      <BottomNav />
+      <QuickEntrySpotlight />
     </>
   );
 }
