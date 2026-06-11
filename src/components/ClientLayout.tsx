@@ -3,7 +3,6 @@
 import { useAuth, AuthProvider } from '@/contexts/AuthContext';
 import { DataProvider, useData } from '@/contexts/DataContext';
 import BottomNav from '@/components/layout/BottomNav';
-import QuickEntrySpotlight from '@/components/layout/QuickEntrySpotlight';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
@@ -133,7 +132,6 @@ function BottomNavWrapper() {
   return (
     <>
       <BottomNav />
-      <QuickEntrySpotlight />
     </>
   );
 }

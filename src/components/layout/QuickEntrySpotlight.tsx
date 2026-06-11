@@ -226,7 +226,7 @@ export default function QuickEntrySpotlight() {
 
   let morphClasses = '';
   if (!isSpotlightOpen) {
-    morphClasses = 'fixed bottom-3 left-4 md:left-[calc(50%-320px)] w-12 h-12 rounded-full shadow-md bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out pointer-events-auto cursor-pointer hover:scale-105 active:scale-95 group z-50 flex items-center justify-center overflow-hidden';
+    morphClasses = 'absolute bottom-0 left-4 md:left-[calc(50%-320px)] w-14 h-14 rounded-full shadow-md bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out pointer-events-auto cursor-pointer hover:scale-105 active:scale-95 group z-50 flex items-center justify-center overflow-hidden';
   } else {
     let heightClass = 'h-14 max-h-14 gap-2';
     let borderClass = 'rounded-full';
@@ -240,7 +240,7 @@ export default function QuickEntrySpotlight() {
         heightClass = 'h-[162px] max-h-[162px] py-3.5 gap-3';
       }
     }
-    morphClasses = `fixed bottom-3 left-4 md:left-[calc(50%-275px)] w-[calc(100%-2rem)] md:w-[550px] ${borderClass} ${heightClass} shadow-2xl bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out pointer-events-auto z-50 flex flex-col px-4 justify-center focus-within:border-emerald-500/50 dark:focus-within:border-emerald-500/30 focus-within:shadow-[0_20px_50px_rgba(16,185,129,0.1)] overflow-visible`;
+    morphClasses = `absolute bottom-0 left-4 md:left-[calc(50%-275px)] w-[calc(100%-2rem)] md:w-[550px] ${borderClass} ${heightClass} shadow-2xl bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out pointer-events-auto z-50 flex flex-col px-4 justify-center focus-within:border-emerald-500/50 dark:focus-within:border-emerald-500/30 focus-within:shadow-[0_20px_50px_rgba(16,185,129,0.1)] overflow-visible`;
   }
 
   return (

@@ -17,6 +17,7 @@ import {
   faNoteSticky,
 } from '@fortawesome/free-solid-svg-icons';
 import { useData } from '@/contexts/DataContext';
+import QuickEntrySpotlight from './QuickEntrySpotlight';
 
 const navItems = [
   { href: '/write', label: 'Write', icon: faPen },
@@ -92,6 +93,7 @@ export default function BottomNav({ className = '' }: { className?: string }) {
           </button>
         </div>
       </div>
+      <QuickEntrySpotlight />
     </nav>
   );
 }

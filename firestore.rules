@@ -37,6 +37,12 @@ service cloud.firestore {
         allow write: if isOwner(userId);
       }
 
+      // User's notebooks
+      match /notebooks/{notebookId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+
       // User's ideas
       match /ideas/{ideaId} {
         allow read: if isOwner(userId);

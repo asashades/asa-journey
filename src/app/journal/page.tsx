@@ -508,9 +508,17 @@ export default function JournalPage() {
 
             return (
               <Fragment key={entry.id}>
-                <button
+                <div
                   onClick={() => goToDate(entry.date)}
-                  className="group w-full py-5 text-left transition-colors"
+                  className="group w-full py-5 text-left transition-colors cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      goToDate(entry.date);
+                    }
+                  }}
                 >
                   <div>
                     <h2 className="font-sans text-2xl font-bold leading-tight tracking-normal text-primary sm:text-[26px]">
@@ -601,7 +609,7 @@ export default function JournalPage() {
                   </div>
 
                   {renderItemIndicators(entry)}
-                </button>
+                </div>
 
                 {index === 0 && shouldShowAddYesterday && (
                   <div className="flex py-5">
