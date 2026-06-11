@@ -22,6 +22,7 @@ Format *micro-journaling* intuitif yang mendorong Anda untuk mengekspresikan pik
 - **Bullet Points**: Pecah entri harian menjadi poin-poin terstruktur.
 - **Micro-Tagging & Mentions**: Gunakan `#tag` untuk menandai aktivitas/tema dan `@nama` untuk menyebut orang terdekat layaknya media sosial.
 - **Bullet Styles & Highlights**: Siklus jenis bullet menggunakan keyboard shortcut (`Tab`), dan buat highlight instan menggunakan tanda bintang `*` di sekeliling teks untuk menandai momen penting.
+- **Clickable Markdown Checkboxes**: Centang/selesaikan item to-do list secara interaktif langsung dari rendering Markdown pada entri harian atau catatan Anda.
 - **AI Suggested Tags**: Mendapatkan saran tag secara cerdas saat sedang mengetik entri jurnal.
 - **Wisdom Quick Panel**: Mempermudah pencatatan mutiara hikmah secara kategoris langsung dari FAB tulis dengan pewarnaan indah terkoordinasi (Thought, Quote, Fact, Excerpt, Lesson).
 
@@ -33,7 +34,8 @@ Visualisasikan perjalanan hidup Anda secara kronologis yang indah:
 
 ### 3. 💡 Reflect (Refleksi Harian & Cosmic Recap)
 Halaman cerdas yang mengurasi memori dan tujuan Anda untuk sesi introspeksi harian:
-- **Cosmic Recap (AI Weekly Reflection)**: Menjelajahi pola emosi, tema berulang, pelajaran hidup, serta target mingguan yang disarankan secara otomatis dari catatan Anda menggunakan Google Gemini API (`gemini-flash-latest`).
+- **Cosmic Recap (AI Weekly Reflection)**: Menjelajahi pola emosi, tema berulang, pelajaran hidup, serta target mingguan yang disarankan secara otomatis dari catatan Anda menggunakan Google Gemini API.
+- **Interactive AI Wisdom & Action Checklists**: Ubah rekomendasi refleksi AI atau rencana aksi hasil Cosmic Recap secara instan menjadi checklist tugas mandiri atau catatan mutiara hikmah yang siap dihubungkan.
 - **Use Simulation Option**: Opsi manual berbasis simulasi data apabila koneksi API Key mengalami error atau batas kuota tercapai.
 - **Yesterday & Flashback**: Baca kembali apa yang Anda lakukan kemarin atau tepat 1 tahun yang lalu (*throwback*).
 - **Gem & Idea of the Day**: Menampilkan kutipan bijak acak dari modul *Wisdom* atau gagasan cemerlang dari modul *Ideas* Anda.
@@ -64,6 +66,8 @@ Analisis hubungan sosial dan kebiasaan pribadi Anda:
 Modul catatan independen yang terpisah dari lini masa jurnal harian:
 - **Double Labeling**: Kelompokkan catatan Anda dengan banyak label.
 - **Context Linking**: Hubungkan catatan panjang, riset buku, atau rekapan bulanan Anda langsung ke tanggal jurnal tertentu.
+- **Notebook UI & Dashboard**: Desain laci dashboard catatan baru yang mempermudah pengelompokan label, dilengkapi modal konfirmasi penghapusan demi keamanan data, serta visualisasi editor yang lebih premium.
+- **Light-mode PDF Export**: Ekspor catatan panjang atau draf jurnal Anda ke dokumen PDF berkualitas cetak dengan layout terang (*light-mode*) yang bersih dan profesional.
 
 ### 9. 🎯 Goals & Focus (Prioritas Hidup Pro)
 Kelola tujuan jangka pendek dan jangka panjang tanpa merasa kewalahan:
@@ -91,6 +95,7 @@ Aplikasi ini menggunakan sistem desain premium yang terinspirasi dari estetika *
 * **Layout & Spacing**: Konsisten menggunakan grid berbasis kelipatan `8px` dengan margin yang sangat lega demi mencegah kelelahan kognitif (*cognitive overload*).
 * **Elevation & Corner**: Konsisten dengan sudut membulat elegan (`border-radius: 10.4px`) dan bayangan lembut (*subtle shadows*) untuk efek kedalaman visual yang premium.
 * **Smooth Transitions**: Animasi mikro yang sangat halus pada FAB speed-dial menggunakan transform dan dynamic `max-height` transition untuk merespon reflow mobile tanpa patah-patah.
+* **Bottom Bar Morph Animation**: Efek transisi bilah navigasi bawah (bottom bar) yang bermetamorfosis (*morph*) secara sangat halus dan interaktif untuk menghadirkan pengalaman pengguna yang dinamis dan premium.
 
 ---
 
@@ -104,7 +109,7 @@ Aplikasi ini menggunakan sistem desain premium yang terinspirasi dari estetika *
   - **Firebase Authentication**: Sistem masuk pengguna yang aman (Google Sign-In & Email/Password).
   - **Cloud Firestore**: Database NoSQL *real-time* dengan fitur *Offline Persistence* agar data tetap dapat dibaca/ditulis tanpa internet.
   - **Firebase Hosting**: Pengiriman PWA ultra-cepat dengan protokol HTTPS otomatis.
-- **AI Integrations**: Google Gemini API (`gemini-flash-latest`) untuk Cosmic Recap, dengan perlindungan server-only key & fallback client-side API parsing.
+- **AI Integrations**: Google Gemini API (`gemini-flash-latest` & `gemini-3.5-flash`) untuk Cosmic Recap, dengan rantai fallback model otomatis (model fallback chain) dan perlindungan server-only key.
 
 ---
 

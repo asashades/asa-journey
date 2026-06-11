@@ -674,7 +674,8 @@ export default function InsightsPage() {
       {/* Tab Content */}
       <div className="max-w-[640px] md:max-w-[850px] lg:max-w-[1100px] xl:max-w-[1280px] 2xl:max-w-[1440px] mx-auto px-6">
         {activeTab === 'journal' && (
-          <div className="space-y-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start space-y-0">
+            <div className="space-y-6">
             {/* Gamification Level & XP Progress Card */}
             <div className="bg-white rounded-3xl p-6 border border-[#CCD0CF] shadow-sm relative overflow-hidden">
               {/* Decorative pastel backdrop glow */}
@@ -742,7 +743,7 @@ export default function InsightsPage() {
               </div>
             </div>
 
-            {/* Advanced Metrics / Detailed Stats Card */}
+              {/* Advanced Metrics / Detailed Stats Card */}
             <div className="bg-white dark:bg-[#1E2022] rounded-3xl p-5 border border-[#CCD0CF] dark:border-[#2E3133] shadow-sm">
               <h3 className="font-bold text-[#2F3331] dark:text-[#FAFAFA] text-sm flex items-center gap-2 mb-4">
                 <FontAwesomeIcon icon={faChartLine} className="text-[#00DC7D]" />
@@ -783,8 +784,10 @@ export default function InsightsPage() {
 
             {/* Word Count Timeline Chart */}
             <WordCountTimelineChart entries={scopedEntries} />
+            </div>
 
-            {/* Daytime Distribution Chart */}
+            <div className="space-y-6">
+              {/* Daytime Distribution Chart */}
             <DaytimeDistributionChart entries={scopedEntries} />
 
             {/* Weekday Distribution Chart */}
@@ -892,66 +895,75 @@ export default function InsightsPage() {
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
         {activeTab === 'dreams' && (
-          <div className="space-y-8">
-            <MetricChips
-              items={[
-                { label: 'dreams', value: dreamStats.scopedRecords.length, color: '#FF9933' },
-                { label: 'avg / week', value: dreamStats.averagePerWeek.toFixed(1), color: '#2F3331' },
-                { label: 'dreams this month', value: dreamStats.thisMonthCount, color: '#6F7476' },
-              ]}
-            />
-            <ActivityHeatmap
-              title={heatmapTitle}
-              data={dreamHeatmap}
-              color={dreamColor}
-            />
-            <InsightLines lines={getInsightSentences('dreams', dreamStats, dreamStats.scopedRecords.length)} />
-            <BarChart
-              title="monthly variation"
-              rows={dreamStats.months.map(item => ({ label: formatChartMonth(item.month, dreamStats.months.length), value: item.count }))}
-              max={dreamStats.maxMonth}
-              color={dreamColor}
-            />
-            <WeekdayChart
-              title="weekday distribution"
-              counts={dreamStats.weekdays}
-            />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start space-y-0">
+            <div className="space-y-6">
+              <MetricChips
+                items={[
+                  { label: 'dreams', value: dreamStats.scopedRecords.length, color: '#FF9933' },
+                  { label: 'avg / week', value: dreamStats.averagePerWeek.toFixed(1), color: '#2F3331' },
+                  { label: 'dreams this month', value: dreamStats.thisMonthCount, color: '#6F7476' },
+                ]}
+              />
+              <ActivityHeatmap
+                title={heatmapTitle}
+                data={dreamHeatmap}
+                color={dreamColor}
+              />
+              <BarChart
+                title="monthly variation"
+                rows={dreamStats.months.map(item => ({ label: formatChartMonth(item.month, dreamStats.months.length), value: item.count }))}
+                max={dreamStats.maxMonth}
+                color={dreamColor}
+              />
+            </div>
+            <div className="space-y-6">
+              <InsightLines lines={getInsightSentences('dreams', dreamStats, dreamStats.scopedRecords.length)} />
+              <WeekdayChart
+                title="weekday distribution"
+                counts={dreamStats.weekdays}
+              />
+            </div>
           </div>
         )}
 
         {activeTab === 'stars' && (
-          <div className="space-y-8">
-            <MetricChips
-              items={[
-                { label: 'stars', value: starStats.scopedRecords.length, color: '#FF9933' },
-                { label: 'avg / week', value: starStats.averagePerWeek.toFixed(1), color: '#2F3331' },
-                { label: 'stars this month', value: starStats.thisMonthCount, color: '#6F7476' },
-              ]}
-            />
-            <ActivityHeatmap
-              title={heatmapTitle}
-              data={starHeatmap}
-              color="#FF9933"
-            />
-            <InsightLines lines={getInsightSentences('stars', starStats, starStats.scopedRecords.length)} />
-            <BarChart
-              title="monthly variation"
-              rows={starStats.months.map(item => ({ label: formatChartMonth(item.month, starStats.months.length), value: item.count }))}
-              max={starStats.maxMonth}
-              color="#FF9933"
-            />
-            <WeekdayChart
-              title="weekday distribution"
-              counts={starStats.weekdays}
-            />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start space-y-0">
+            <div className="space-y-6">
+              <MetricChips
+                items={[
+                  { label: 'stars', value: starStats.scopedRecords.length, color: '#FF9933' },
+                  { label: 'avg / week', value: starStats.averagePerWeek.toFixed(1), color: '#2F3331' },
+                  { label: 'stars this month', value: starStats.thisMonthCount, color: '#6F7476' },
+                ]}
+              />
+              <ActivityHeatmap
+                title={heatmapTitle}
+                data={starHeatmap}
+                color="#FF9933"
+              />
+              <BarChart
+                title="monthly variation"
+                rows={starStats.months.map(item => ({ label: formatChartMonth(item.month, starStats.months.length), value: item.count }))}
+                max={starStats.maxMonth}
+                color="#FF9933"
+              />
+            </div>
+            <div className="space-y-6">
+              <InsightLines lines={getInsightSentences('stars', starStats, starStats.scopedRecords.length)} />
+              <WeekdayChart
+                title="weekday distribution"
+                counts={starStats.weekdays}
+              />
+            </div>
           </div>
         )}
 
         {activeTab === 'tags' && (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start space-y-0">
             <div className="bg-white rounded-2xl p-5 border border-[#CCD0CF] shadow-sm">
               <h3 className="font-bold font-serif text-[#2F3331] mb-2">
                 tags {scopeLabel}
@@ -970,7 +982,7 @@ export default function InsightsPage() {
         )}
 
         {activeTab === 'people' && (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start space-y-0">
             <div className="bg-white rounded-2xl p-5 border border-[#CCD0CF] shadow-sm">
               <h3 className="font-bold font-serif text-[#2F3331] mb-2">
                 mentions {scopeLabel}
@@ -991,59 +1003,67 @@ export default function InsightsPage() {
         )}
 
         {activeTab === 'wisdom' && (
-          <div className="space-y-8">
-            <MetricChips
-              items={[
-                { label: 'wisdoms', value: wisdomStats.scopedRecords.length, color: '#C494FF' },
-                { label: 'avg / week', value: wisdomStats.averagePerWeek.toFixed(1), color: '#2F3331' },
-                { label: 'gems this month', value: wisdomStats.thisMonthCount, color: '#6F7476' },
-              ]}
-            />
-            <ActivityHeatmap
-              title={heatmapTitle}
-              data={wisdomHeatmap}
-              color="#C494FF"
-            />
-            <WisdomPolarChart counts={wisdomTypeCounts} />
-            <InsightLines lines={getInsightSentences('wisdoms', wisdomStats, wisdomStats.scopedRecords.length)} />
-            <BarChart
-              title="monthly variation"
-              rows={wisdomStats.months.map(item => ({ label: formatChartMonth(item.month, wisdomStats.months.length), value: item.count }))}
-              max={wisdomStats.maxMonth}
-              color="#C494FF"
-            />
-            <WeekdayChart
-              title="weekday distribution"
-              counts={wisdomStats.weekdays}
-            />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start space-y-0">
+            <div className="space-y-6">
+              <MetricChips
+                items={[
+                  { label: 'wisdoms', value: wisdomStats.scopedRecords.length, color: '#C494FF' },
+                  { label: 'avg / week', value: wisdomStats.averagePerWeek.toFixed(1), color: '#2F3331' },
+                  { label: 'gems this month', value: wisdomStats.thisMonthCount, color: '#6F7476' },
+                ]}
+              />
+              <ActivityHeatmap
+                title={heatmapTitle}
+                data={wisdomHeatmap}
+                color="#C494FF"
+              />
+              <WisdomPolarChart counts={wisdomTypeCounts} />
+              <BarChart
+                title="monthly variation"
+                rows={wisdomStats.months.map(item => ({ label: formatChartMonth(item.month, wisdomStats.months.length), value: item.count }))}
+                max={wisdomStats.maxMonth}
+                color="#C494FF"
+              />
+            </div>
+            <div className="space-y-6">
+              <InsightLines lines={getInsightSentences('wisdoms', wisdomStats, wisdomStats.scopedRecords.length)} />
+              <WeekdayChart
+                title="weekday distribution"
+                counts={wisdomStats.weekdays}
+              />
+            </div>
           </div>
         )}
 
         {activeTab === 'ideas' && (
-          <div className="space-y-8">
-            <MetricChips
-              items={[
-                { label: 'ideas', value: ideaStats.scopedRecords.length, color: '#FFCC33' },
-                { label: 'avg / week', value: ideaStats.averagePerWeek.toFixed(1), color: '#2F3331' },
-                { label: 'ideas this month', value: ideaStats.thisMonthCount, color: '#6F7476' },
-              ]}
-            />
-            <ActivityHeatmap
-              title={heatmapTitle}
-              data={ideaHeatmap}
-              color="#FFCC33"
-            />
-            <InsightLines lines={getInsightSentences('ideas', ideaStats, ideaStats.scopedRecords.length)} />
-            <BarChart
-              title="monthly variation"
-              rows={ideaStats.months.map(item => ({ label: formatChartMonth(item.month, ideaStats.months.length), value: item.count }))}
-              max={ideaStats.maxMonth}
-              color="#FFCC33"
-            />
-            <WeekdayChart
-              title="weekday distribution"
-              counts={ideaStats.weekdays}
-            />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start space-y-0">
+            <div className="space-y-6">
+              <MetricChips
+                items={[
+                  { label: 'ideas', value: ideaStats.scopedRecords.length, color: '#FFCC33' },
+                  { label: 'avg / week', value: ideaStats.averagePerWeek.toFixed(1), color: '#2F3331' },
+                  { label: 'ideas this month', value: ideaStats.thisMonthCount, color: '#6F7476' },
+                ]}
+              />
+              <ActivityHeatmap
+                title={heatmapTitle}
+                data={ideaHeatmap}
+                color="#FFCC33"
+              />
+              <BarChart
+                title="monthly variation"
+                rows={ideaStats.months.map(item => ({ label: formatChartMonth(item.month, ideaStats.months.length), value: item.count }))}
+                max={ideaStats.maxMonth}
+                color="#FFCC33"
+              />
+            </div>
+            <div className="space-y-6">
+              <InsightLines lines={getInsightSentences('ideas', ideaStats, ideaStats.scopedRecords.length)} />
+              <WeekdayChart
+                title="weekday distribution"
+                counts={ideaStats.weekdays}
+              />
+            </div>
           </div>
         )}
 
@@ -1254,48 +1274,55 @@ function OrbitTabContent({
         })}
       </div>
 
-      {/* Metric Chips */}
-      <MetricChips
-        items={[
-          { label: 'Avg Sleep', value: orbitData.avgSleep !== null ? `${orbitData.avgSleep}` : '-', color: '#5D8AFF' },
-          { label: 'Avg Energy', value: orbitData.avgEnergy !== null ? `${orbitData.avgEnergy}` : '-', color: '#00DC7D' },
-          { label: 'Common Mood', value: orbitData.mostCommonMood, color: '#FF9933' },
-          { label: 'Common Weather', value: orbitData.mostCommonWeather, color: '#FFB95C' },
-        ]}
-      />
+      {/* 2-Column Grid for Orbit Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start space-y-0">
+        <div className="space-y-6">
+          {/* Metric Chips */}
+          <MetricChips
+            items={[
+              { label: 'Avg Sleep', value: orbitData.avgSleep !== null ? `${orbitData.avgSleep}` : '-', color: '#5D8AFF' },
+              { label: 'Avg Energy', value: orbitData.avgEnergy !== null ? `${orbitData.avgEnergy}` : '-', color: '#00DC7D' },
+              { label: 'Common Mood', value: orbitData.mostCommonMood, color: '#FF9933' },
+              { label: 'Common Weather', value: orbitData.mostCommonWeather, color: '#FFB95C' },
+            ]}
+          />
 
-      {/* Activity Heatmap for Orbit */}
-      <ActivityHeatmap
-        title={heatmapTitle}
-        data={useMemo(() => {
-          const recordsMap = new Set(orbitData.orbitActivityRecords.map((r) => r.date));
-          const years = scopedEntries.map((e) => parseISO(e.date).getFullYear());
-          const year = years.length > 0 ? years[0] : new Date().getFullYear();
-          const start = startOfYear(new Date(year, 0, 1));
-          const end = new Date(year, 11, 31);
-          const totalDays = differenceInCalendarDays(end, start) + 1;
+          {/* Activity Heatmap for Orbit */}
+          <ActivityHeatmap
+            title={heatmapTitle}
+            data={useMemo(() => {
+              const recordsMap = new Set(orbitData.orbitActivityRecords.map((r) => r.date));
+              const years = scopedEntries.map((e) => parseISO(e.date).getFullYear());
+              const year = years.length > 0 ? years[0] : new Date().getFullYear();
+              const start = startOfYear(new Date(year, 0, 1));
+              const end = new Date(year, 11, 31);
+              const totalDays = differenceInCalendarDays(end, start) + 1;
 
-          return Array.from({ length: totalDays }, (_, index) => {
-            const date = addDays(start, index);
-            const dateKey = format(date, 'yyyy-MM-dd');
-            return {
-              date,
-              dateKey,
-              count: recordsMap.has(dateKey) ? 1 : 0,
-            };
-          });
-        }, [orbitData.orbitActivityRecords, scopedEntries])}
-        color="#00DC7D"
-      />
+              return Array.from({ length: totalDays }, (_, index) => {
+                const date = addDays(start, index);
+                const dateKey = format(date, 'yyyy-MM-dd');
+                return {
+                  date,
+                  dateKey,
+                  count: recordsMap.has(dateKey) ? 1 : 0,
+                };
+              });
+            }, [orbitData.orbitActivityRecords, scopedEntries])}
+            color="#00DC7D"
+          />
 
-      {/* Sleep & Energy Line Chart */}
-      <OrbitLineChart data={chartData} title={chartTitle} />
+          {/* Mood Distribution */}
+          <MoodBreakdownChart moodCounts={orbitData.moodCounts} />
+        </div>
 
-      {/* Mood Distribution */}
-      <MoodBreakdownChart moodCounts={orbitData.moodCounts} />
+        <div className="space-y-6">
+          {/* Sleep & Energy Line Chart */}
+          <OrbitLineChart data={chartData} title={chartTitle} />
 
-      {/* Weather Distribution */}
-      <WeatherBreakdownChart weatherCounts={orbitData.weatherCounts} />
+          {/* Weather Distribution */}
+          <WeatherBreakdownChart weatherCounts={orbitData.weatherCounts} />
+        </div>
+      </div>
     </div>
   );
 }
