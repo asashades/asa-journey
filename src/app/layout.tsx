@@ -53,6 +53,8 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
+import ClientLayout from "@/components/ClientLayout";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -61,7 +63,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${poppins.variable} ${montserrat.variable} ${inter.variable} ${fraunces.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable}`}>
       <body className="antialiased bg-white text-[#2F3331] min-h-screen">
-        {children}
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );
