@@ -60,7 +60,9 @@ export default function QuickEntrySpotlight() {
     }
     const el = inputRef.current;
     if (el) {
-      el.style.height = 'auto';
+      // Temporarily set height to 36px (single line height) to get accurate scrollHeight measurement
+      // This prevents height feedback loops in flex containers.
+      el.style.height = '36px';
       const sh = el.scrollHeight;
       // Keep it strictly single-line (36px) if scrollHeight is 40px or less (only expand if multiple lines / text wrapping occurs)
       const newHeight = sh > 40 ? Math.min(120, sh) : 36;
