@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import MarkdownRenderer from './MarkdownRenderer';
 import SlashCommandMenu from './SlashCommandMenu';
 import AIPreviewModal from './AIPreviewModal';
+import { refineNoteClientSide } from '@/lib/ai/aiClient';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -125,30 +126,48 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
     else setAiRefineStatus('Extracting wisdom callouts...');
 
     try {
-      const response = await fetch('/api/ai/refine-note', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          noteContent: contentMarkdown,
-          action,
-          userId: user?.uid || 'anonymous_user',
-          aiConfig: userProfile?.settings?.aiConfig
-        })
-      });
+      let data: any = null;
+      let success = false;
 
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.message || 'Gagal menyempurnakan catatan.');
+      try {
+        const response = await fetch('/api/ai/refine-note', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            noteContent: contentMarkdown,
+            action,
+            userId: user?.uid || 'anonymous_user',
+            aiConfig: userProfile?.settings?.aiConfig
+          })
+        });
+
+        const text = await response.text();
+        if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html') || response.status === 404) {
+          throw new Error('API route returned HTML or 404. Running client-side fallback.');
+        }
+
+        data = JSON.parse(text);
+        success = response.ok && data.success;
+      } catch (fetchErr) {
+        console.warn('[NoteEditor] API route failed or returned HTML. Refining note client-side...', fetchErr);
+        data = await refineNoteClientSide(
+          contentMarkdown,
+          action,
+          user?.uid || 'anonymous_user',
+          userProfile?.settings?.aiConfig
+        );
+        success = data.success;
       }
 
-      const data = await response.json();
-      if (data.success && data.refinedText) {
+      if (success && data && data.refinedText) {
         setAiPreview({
           isOpen: true,
           originalText: contentMarkdown,
           refinedText: data.refinedText,
           action
         });
+      } else {
+        throw new Error(data?.message || 'Gagal menyempurnakan catatan.');
       }
     } catch (err: any) {
       console.error('[AI Refine Error]:', err);
