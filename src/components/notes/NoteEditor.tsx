@@ -42,7 +42,8 @@ import {
   faItalic,
   faCode,
   faHeading,
-  faListUl
+  faListUl,
+  faEllipsis
 } from '@fortawesome/free-solid-svg-icons';
 
 interface NoteEditorProps {
@@ -90,6 +91,7 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
   const [localNoteId, setLocalNoteId] = useState<string | null>(noteId || null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showPDFMenu, setShowPDFMenu] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
 
   // Slash commands states
   const [showSlashMenu, setShowSlashMenu] = useState(false);
@@ -935,41 +937,108 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
               )}
             </div>
 
-            <button
-              onClick={handleExportMarkdown}
-              className="inline-flex h-8 px-2.5 items-center gap-1.5 rounded-lg border border-[#CCD0CF]/60 dark:border-[#2E3832]/60 text-xs font-bold text-[#6F7476] dark:text-[#A3A7A8] hover:bg-gray-50 hover:text-black transition-all"
-              title="Export to Markdown"
-            >
-              <FontAwesomeIcon icon={faDownload} className="w-3 h-3" />
-              .MD
-            </button>
-            <button
-              onClick={handleExportPDF}
-              className="inline-flex h-8 px-2.5 items-center gap-1.5 rounded-lg border border-[#CCD0CF]/60 dark:border-[#2E3832]/60 text-xs font-bold text-[#6F7476] dark:text-[#A3A7A8] hover:bg-gray-50 hover:text-black transition-all ml-1"
-              title="Export to PDF"
-            >
-              <FontAwesomeIcon icon={faFilePdf} className="w-3 h-3" />
-              <span>PDF</span>
-            </button>
-            <button
-              onClick={handleArchiveToggle}
-              className={`inline-flex h-8 px-2.5 items-center gap-1.5 rounded-lg border transition-all ml-1 ${
-                status === 'archived'
-                  ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100'
-                  : 'border-[#CCD0CF]/60 dark:border-[#2E3832]/60 text-[#6F7476] dark:text-[#A3A7A8] hover:bg-gray-50 hover:text-black'
-              }`}
-              title={status === 'archived' ? 'Unarchive Note' : 'Archive Note'}
-            >
-              <FontAwesomeIcon icon={faArchive} className="w-3.5 h-3.5" />
-              <span>{status === 'archived' ? 'Unarchive' : 'Archive'}</span>
-            </button>
-            <button
-              onClick={handleDeleteNote}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#CCD0CF]/60 dark:border-[#2E3832]/60 text-red-500 hover:bg-red-50 hover:border-red-200 transition-all ml-1"
-              title="Delete Note"
-            >
-              <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
-            </button>
+            {/* Desktop Actions (Hidden on Mobile) */}
+            <div className="hidden sm:inline-flex items-center gap-1.5">
+              <button
+                onClick={handleExportMarkdown}
+                className="inline-flex h-8 px-2.5 items-center gap-1.5 rounded-lg border border-[#CCD0CF]/60 dark:border-[#2E3832]/60 text-xs font-bold text-[#6F7476] dark:text-[#A3A7A8] hover:bg-gray-50 hover:text-black transition-all cursor-pointer"
+                title="Export to Markdown"
+              >
+                <FontAwesomeIcon icon={faDownload} className="w-3 h-3" />
+                .MD
+              </button>
+              <button
+                onClick={handleExportPDF}
+                className="inline-flex h-8 px-2.5 items-center gap-1.5 rounded-lg border border-[#CCD0CF]/60 dark:border-[#2E3832]/60 text-xs font-bold text-[#6F7476] dark:text-[#A3A7A8] hover:bg-gray-50 hover:text-black transition-all ml-1 cursor-pointer"
+                title="Export to PDF"
+              >
+                <FontAwesomeIcon icon={faFilePdf} className="w-3 h-3" />
+                <span>PDF</span>
+              </button>
+              <button
+                onClick={handleArchiveToggle}
+                className={`inline-flex h-8 px-2.5 items-center gap-1.5 rounded-lg border transition-all ml-1 cursor-pointer ${
+                  status === 'archived'
+                    ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100'
+                    : 'border-[#CCD0CF]/60 dark:border-[#2E3832]/60 text-[#6F7476] dark:text-[#A3A7A8] hover:bg-gray-50 hover:text-black'
+                }`}
+                title={status === 'archived' ? 'Unarchive Note' : 'Archive Note'}
+              >
+                <FontAwesomeIcon icon={faArchive} className="w-3.5 h-3.5" />
+                <span>{status === 'archived' ? 'Unarchive' : 'Archive'}</span>
+              </button>
+              <button
+                onClick={handleDeleteNote}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#CCD0CF]/60 dark:border-[#2E3832]/60 text-red-500 hover:bg-red-50 hover:border-red-200 transition-all ml-1 cursor-pointer"
+                title="Delete Note"
+              >
+                <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Mobile Actions Dropdown (Hidden on Desktop) */}
+            <div className="relative sm:hidden">
+              <button
+                onClick={() => setShowActionsMenu(!showActionsMenu)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#CCD0CF]/60 dark:border-[#2E3832]/60 text-[#6F7476] dark:text-[#A3A7A8] hover:bg-gray-50 transition-all cursor-pointer"
+                title="More Actions"
+              >
+                <FontAwesomeIcon icon={faEllipsis} className="w-3.5 h-3.5" />
+              </button>
+
+              {showActionsMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowActionsMenu(false)} />
+                  <div className="absolute right-0 mt-2 z-50 w-48 rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133] bg-white/95 dark:bg-[#1E2022]/95 backdrop-blur-md p-2 shadow-xl animate-in fade-in slide-in-from-top-2 duration-150">
+                    <button
+                      onClick={() => {
+                        setShowActionsMenu(false);
+                        handleExportMarkdown();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left hover:bg-gray-50 dark:hover:bg-neutral-800/40 text-xs font-semibold text-[#2F3331] dark:text-[#FAFAFA] cursor-pointer"
+                    >
+                      <FontAwesomeIcon icon={faDownload} className="w-3.5 h-3.5 text-[#A3A7A8]" />
+                      <span>Export to Markdown</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setShowActionsMenu(false);
+                        handleExportPDF();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left hover:bg-gray-50 dark:hover:bg-neutral-800/40 text-xs font-semibold text-[#2F3331] dark:text-[#FAFAFA] cursor-pointer mt-0.5"
+                    >
+                      <FontAwesomeIcon icon={faFilePdf} className="w-3.5 h-3.5 text-[#A3A7A8]" />
+                      <span>Export to PDF</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setShowActionsMenu(false);
+                        handleArchiveToggle();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left hover:bg-gray-50 dark:hover:bg-neutral-800/40 text-xs font-semibold text-[#2F3331] dark:text-[#FAFAFA] cursor-pointer mt-0.5"
+                    >
+                      <FontAwesomeIcon icon={faArchive} className="w-3.5 h-3.5 text-[#A3A7A8]" />
+                      <span>{status === 'archived' ? 'Unarchive' : 'Archive'}</span>
+                    </button>
+                    
+                    <div className="h-[1px] bg-[#EEF0EF]/60 dark:bg-[#2E3133]/60 my-1 mx-2" />
+                    
+                    <button
+                      onClick={() => {
+                        setShowActionsMenu(false);
+                        handleDeleteNote();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left hover:bg-red-50 dark:hover:bg-red-950/20 text-xs font-semibold text-red-500 cursor-pointer"
+                    >
+                      <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5 text-red-400" />
+                      <span>Delete Note</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 

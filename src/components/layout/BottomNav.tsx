@@ -55,7 +55,7 @@ export default function BottomNav({ className = '' }: { className?: string }) {
               }`}
             >
               <FontAwesomeIcon icon={icon} className="w-5 h-5" />
-              <span className="text-[10px] font-semibold max-h-0 opacity-0 overflow-hidden transition-all duration-300 ease-in-out group-hover:max-h-8 group-hover:opacity-100 group-hover:mt-1 group-focus:max-h-8 group-focus:opacity-100 group-focus:mt-1">
+              <span className="text-[10px] font-semibold max-h-0 opacity-0 overflow-hidden transition-all duration-300 ease-in-out group-hover:max-h-8 group-hover:opacity-100 group-hover:mt-1">
                 {label}
               </span>
             </Link>
@@ -87,7 +87,7 @@ export default function BottomNav({ className = '' }: { className?: string }) {
             aria-label="open collections and settings"
           >
             <FontAwesomeIcon icon={faEllipsis} className="h-5 w-5" />
-            <span className="text-[10px] font-semibold max-h-0 opacity-0 overflow-hidden transition-all duration-300 ease-in-out group-hover:max-h-8 group-hover:opacity-100 group-hover:mt-1 group-focus:max-h-8 group-focus:opacity-100 group-focus:mt-1">
+            <span className="text-[10px] font-semibold max-h-0 opacity-0 overflow-hidden transition-all duration-300 ease-in-out group-hover:max-h-8 group-hover:opacity-100 group-hover:mt-1">
               More
             </span>
           </button>
