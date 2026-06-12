@@ -36,7 +36,12 @@ import {
   faXmark,
   faArchive,
   faSun,
-  faMoon
+  faMoon,
+  faBold,
+  faItalic,
+  faCode,
+  faHeading,
+  faListUl
 } from '@fortawesome/free-solid-svg-icons';
 
 interface NoteEditorProps {
@@ -213,6 +218,74 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
     setSlashIndex(null);
     setSlashQuery('');
   }, [contentMarkdown, slashIndex]);
+
+  // Handle Bold, Italic, and other markdown formatting
+  const applyFormatting = useCallback((type: 'bold' | 'italic' | 'code' | 'heading' | 'bullet' | 'todo') => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = contentMarkdown;
+    const selectedText = text.substring(start, end);
+
+    let formatted = '';
+    let cursorOffset = 0;
+
+    switch (type) {
+      case 'bold':
+        formatted = `**${selectedText}**`;
+        cursorOffset = 2;
+        break;
+      case 'italic':
+        formatted = `*${selectedText}*`;
+        cursorOffset = 1;
+        break;
+      case 'code':
+        formatted = `\`${selectedText}\``;
+        cursorOffset = 1;
+        break;
+      case 'heading':
+        formatted = `\n### ${selectedText}`;
+        cursorOffset = 5;
+        break;
+      case 'bullet':
+        formatted = `\n- ${selectedText}`;
+        cursorOffset = 3;
+        break;
+      case 'todo':
+        formatted = `\n- [ ] ${selectedText}`;
+        cursorOffset = 7;
+        break;
+    }
+
+    const newContent = text.substring(0, start) + formatted + text.substring(end);
+    setContentMarkdown(newContent);
+    setIsDirty(true);
+
+    setTimeout(() => {
+      textarea.focus();
+      if (selectedText.length > 0) {
+        textarea.setSelectionRange(start + cursorOffset, end + cursorOffset);
+      } else {
+        textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
+      }
+    }, 0);
+  }, [contentMarkdown]);
+
+  // Handle hotkeys (Cmd+B/Ctrl+B, Cmd+I/Ctrl+I)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const isCmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+    if (isCmdOrCtrl && (e.key === 'b' || e.key === 'B')) {
+      e.preventDefault();
+      applyFormatting('bold');
+    } else if (isCmdOrCtrl && (e.key === 'i' || e.key === 'I')) {
+      e.preventDefault();
+      applyFormatting('italic');
+    }
+  };
 
   // Counters
   const wordCount = useMemo(() => {
@@ -910,12 +983,66 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
                 className="w-full bg-transparent text-3xl font-bold font-serif text-[#2F3331] dark:text-[#E4E7E6] placeholder-[#CCD0CF] focus:outline-none focus:ring-0 leading-snug border-none p-0"
               />
 
+              {/* Formatting Helper Toolbar */}
+              <div className="flex items-center gap-1.5 pb-2 border-b border-[#EEF0EF]/40 dark:border-[#2E3832]/20 overflow-x-auto scrollbar-none py-1 select-none">
+                <button
+                  type="button"
+                  onClick={() => applyFormatting('bold')}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-[#161B19]/50 text-[#6F7476] dark:text-[#A3A7A8] hover:text-[#2F3331] dark:hover:text-[#E4E7E6] transition-colors cursor-pointer"
+                  title="Bold (Cmd+B)"
+                >
+                  <FontAwesomeIcon icon={faBold} className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyFormatting('italic')}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-[#161B19]/50 text-[#6F7476] dark:text-[#A3A7A8] hover:text-[#2F3331] dark:hover:text-[#E4E7E6] transition-colors cursor-pointer"
+                  title="Italic (Cmd+I)"
+                >
+                  <FontAwesomeIcon icon={faItalic} className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyFormatting('heading')}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-[#161B19]/50 text-[#6F7476] dark:text-[#A3A7A8] hover:text-[#2F3331] dark:hover:text-[#E4E7E6] transition-colors cursor-pointer"
+                  title="Heading"
+                >
+                  <FontAwesomeIcon icon={faHeading} className="w-3.5 h-3.5" />
+                </button>
+                <div className="h-4 w-[1px] bg-[#EEF0EF] dark:bg-[#2E3832]/40 mx-1" />
+                <button
+                  type="button"
+                  onClick={() => applyFormatting('bullet')}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-[#161B19]/50 text-[#6F7476] dark:text-[#A3A7A8] hover:text-[#2F3331] dark:hover:text-[#E4E7E6] transition-colors cursor-pointer"
+                  title="Bullet List"
+                >
+                  <FontAwesomeIcon icon={faListUl} className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyFormatting('todo')}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-[#161B19]/50 text-[#6F7476] dark:text-[#A3A7A8] hover:text-[#2F3331] dark:hover:text-[#E4E7E6] transition-colors cursor-pointer"
+                  title="Checklist"
+                >
+                  <FontAwesomeIcon icon={faListCheck} className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyFormatting('code')}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-[#161B19]/50 text-[#6F7476] dark:text-[#A3A7A8] hover:text-[#2F3331] dark:hover:text-[#E4E7E6] transition-colors cursor-pointer"
+                  title="Inline Code"
+                >
+                  <FontAwesomeIcon icon={faCode} className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
               {/* Textarea Markdown */}
               <textarea
                 ref={textareaRef}
                 placeholder="Write your note in Markdown. Type '/' for format commands..."
                 value={contentMarkdown}
                 onChange={handleTextareaChange}
+                onKeyDown={handleKeyDown}
                 rows={18}
                 className="w-full bg-transparent text-base font-normal leading-relaxed text-[#2F3331] dark:text-[#E4E7E6] placeholder-[#A3A7A8] focus:outline-none focus:ring-0 resize-none border-none p-0 mt-2 flex-1 font-mono"
               />

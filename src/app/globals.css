@@ -830,6 +830,18 @@ html.dark .text-\[\#8B9390\] {
 
 /* Print layout styles for premium PDF export */
 @media print {
+  /* Force page background to white for printing, even in dark mode */
+  html,
+  body,
+  html.dark,
+  html.dark body,
+  html[class^="theme-"],
+  html[class*=" theme-"] {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
   /* Set document margin */
   @page {
     margin: 20mm;
