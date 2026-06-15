@@ -90,6 +90,12 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow write: if isOwner(userId);
       }
+
+      // User's tasks
+      match /tasks/{taskId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
     }
   }
 }

@@ -199,6 +199,8 @@ export interface SubGoal {
   id: string;
   content: string;
   isCompleted: boolean;
+  deadline?: string; // YYYY-MM-DD format
+  bulletId?: string; // Link to original task
 }
 
 export interface FocusGoal {
@@ -279,6 +281,18 @@ export interface WeeklyData {
   wisdom: number;
   notes: number;
   ideas: number;
+}
+
+export interface Task {
+  id: string; // matches bulletId
+  text: string;
+  isCompleted: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  scheduledAt?: Date;
+  entryDate: string; // YYYY-MM-DD
+  isFromNote: boolean;
+  noteId?: string;
 }
 
 export * from './ai';

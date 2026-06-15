@@ -32,6 +32,44 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { loadThemeFonts, type ThemeFontKey } from '@/lib/themeFonts';
+
+const THEME_OPTIONS = [
+  {
+    id: 'journalistic',
+    name: 'Orbital Dawn',
+    desc: 'Clean Starlight',
+    preview: 'bg-[#FAFAFA] border-[#CCD0CF]',
+    indicator: 'bg-[#00DC7D]',
+  },
+  {
+    id: 'cosmic',
+    name: 'Deep Nebula',
+    desc: 'Cosmic Observatory',
+    preview: 'bg-[#08090D] border-[#1F2433]',
+    indicator: 'bg-[#9CF6F6]',
+  },
+  {
+    id: 'moss',
+    name: 'Emerald Station',
+    desc: 'Verdant Outpost',
+    preview: 'bg-[#111412] border-[#2E3832]',
+    indicator: 'bg-[#00DC7D]',
+  },
+  {
+    id: 'nocturne',
+    name: 'Twilight Void',
+    desc: 'Luminous Darkspace',
+    preview: 'bg-[#08090D] border-[#202433]',
+    indicator: 'bg-[#B79CFF]',
+  },
+] as const satisfies ReadonlyArray<{
+  id: ThemeFontKey;
+  name: string;
+  desc: string;
+  preview: string;
+  indicator: string;
+}>;
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -44,6 +82,7 @@ export default function SettingsPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState('');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [loadingTheme, setLoadingTheme] = useState<ThemeFontKey | null>(null);
 
   const defaultSettings = {
     darkMode: true,
@@ -74,6 +113,7 @@ export default function SettingsPage() {
 
   const settings = userProfile?.settings || defaultSettings;
   const aiConfig = settings.aiConfig || defaultSettings.aiConfig;
+  const loadingThemeName = THEME_OPTIONS.find((theme) => theme.id === loadingTheme)?.name || 'theme';
 
   // Local AI Configuration states
   const [aiMode, setAiMode] = useState<'built_in' | 'bring_your_own_key'>(aiConfig.mode || 'built_in');
@@ -136,6 +176,21 @@ export default function SettingsPage() {
     } catch (error) {
       console.error('Error saving AI config:', error);
       setSaveStatus('idle');
+    }
+  };
+
+  const handleThemeChange = async (theme: ThemeFontKey) => {
+    if (loadingTheme || (settings.theme || 'journalistic') === theme) return;
+
+    setLoadingTheme(theme);
+    try {
+      await loadThemeFonts(theme);
+      await updateUserSettings({ theme });
+    } catch (error) {
+      console.error('Error changing theme:', error);
+      alert('Gagal mengganti tema. Coba lagi sebentar lagi.');
+    } finally {
+      setLoadingTheme(null);
     }
   };
 
@@ -371,6 +426,19 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {loadingTheme && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="flex w-full max-w-[280px] flex-col items-center rounded-3xl border border-[#EEF0EF] bg-white px-6 py-7 text-center shadow-2xl">
+            <div className="relative mb-4 flex h-12 w-12 items-center justify-center">
+              <span className="absolute h-full w-full animate-spin rounded-full border-2 border-t-[#00DC7D] border-r-transparent border-b-transparent border-l-transparent" />
+              <span className="h-2 w-2 rounded-full bg-[#00DC7D] shadow-[0_0_10px_#00DC7D]" />
+            </div>
+            <h3 className="font-serif text-lg font-bold text-[#2F3331]">Preparing {loadingThemeName}</h3>
+            <p className="mt-2 text-xs font-medium text-[#A3A7A8]">Loading theme typography...</p>
+          </div>
+        </div>
+      )}
+
       {showImportConfirm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl w-full max-w-[480px] p-6 shadow-2xl border border-[#EEF0EF] animate-in zoom-in-95 duration-150 relative">
@@ -516,42 +584,18 @@ export default function SettingsPage() {
             <div className="rounded-lg border border-[#EEF0EF] bg-white p-4">
               <p className="mb-3 text-sm font-semibold text-[#2F3331]">Select Theme</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {([
-                  {
-                    id: 'journalistic',
-                    name: 'Orbital Dawn',
-                    desc: 'Clean Starlight',
-                    preview: 'bg-[#FAFAFA] border-[#CCD0CF]',
-                    indicator: 'bg-[#00DC7D]'
-                  },
-                  {
-                    id: 'cosmic',
-                    name: 'Deep Nebula',
-                    desc: 'Cosmic Observatory',
-                    preview: 'bg-[#08090D] border-[#1F2433]',
-                    indicator: 'bg-[#9CF6F6]'
-                  },
-                  {
-                    id: 'moss',
-                    name: 'Emerald Station',
-                    desc: 'Verdant Outpost',
-                    preview: 'bg-[#111412] border-[#2E3832]',
-                    indicator: 'bg-[#00DC7D]'
-                  },
-                  {
-                    id: 'nocturne',
-                    name: 'Twilight Void',
-                    desc: 'Luminous Darkspace',
-                    preview: 'bg-[#08090D] border-[#202433]',
-                    indicator: 'bg-[#B79CFF]'
-                  }
-                ] as const).map((themeItem) => {
+                {THEME_OPTIONS.map((themeItem) => {
                   const isActive = (settings.theme || 'journalistic') === themeItem.id;
+                  const isLoadingThisTheme = loadingTheme === themeItem.id;
                   return (
                     <button
                       key={themeItem.id}
-                      onClick={() => updateUserSettings({ theme: themeItem.id })}
-                      className={`flex flex-col items-start gap-1.5 rounded-lg border-2 p-3 text-left transition-all ${
+                      type="button"
+                      disabled={loadingTheme !== null}
+                      aria-pressed={isActive}
+                      aria-busy={isLoadingThisTheme}
+                      onClick={() => handleThemeChange(themeItem.id)}
+                      className={`flex min-h-[112px] flex-col items-start gap-1.5 rounded-lg border-2 p-3 text-left transition-all disabled:cursor-wait disabled:opacity-75 ${
                         isActive
                           ? 'border-[#00DC7D] bg-[#E9FFF4]/20'
                           : 'border-[#EEF0EF] hover:border-[#CCD0CF] bg-white'
@@ -564,9 +608,14 @@ export default function SettingsPage() {
                           <div className="h-1 w-3 rounded bg-gray-400 opacity-40" />
                         </div>
                       </div>
-                      <div>
-                        <p className="text-xs font-bold text-[#2F3331]">{themeItem.name}</p>
-                        <p className="text-[10px] text-[#A3A7A8] leading-tight">{themeItem.desc}</p>
+                      <div className="flex w-full items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-bold text-[#2F3331]">{themeItem.name}</p>
+                          <p className="text-[10px] text-[#A3A7A8] leading-tight">{themeItem.desc}</p>
+                        </div>
+                        {isLoadingThisTheme && (
+                          <FontAwesomeIcon icon={faSpinner} className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-[#00DC7D]" />
+                        )}
                       </div>
                     </button>
                   );

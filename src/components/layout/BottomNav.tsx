@@ -17,7 +17,11 @@ import {
   faNoteSticky,
 } from '@fortawesome/free-solid-svg-icons';
 import { useData } from '@/contexts/DataContext';
-import QuickEntrySpotlight from './QuickEntrySpotlight';
+import dynamic from 'next/dynamic';
+
+const QuickEntrySpotlight = dynamic(() => import('./QuickEntrySpotlight'), {
+  ssr: false,
+});
 
 const navItems = [
   { href: '/write', label: 'Write', icon: faPen },

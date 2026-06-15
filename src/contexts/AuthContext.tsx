@@ -137,19 +137,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    await saveUserProfile(result.user);
+    await signInWithPopup(auth, provider);
   };
 
   const signInWithEmail = async (email: string, password: string) => {
-    const result = await signInWithEmailAndPassword(auth, email, password);
-    await saveUserProfile(result.user);
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
   const signUpWithEmail = async (email: string, password: string, displayName: string) => {
     const result = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(result.user, { displayName });
-    await saveUserProfile(result.user);
   };
 
   const signInAsGuest = async () => {

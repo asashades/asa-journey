@@ -175,8 +175,10 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
       console.error('[AI Refine Error]:', err);
       alert(err.message || 'Terjadi kesalahan saat memanggil AI.');
     } finally {
-      setIsAIRefining(false);
-      setAiRefineStatus('');
+      setTimeout(() => {
+        setIsAIRefining(false);
+        setAiRefineStatus('');
+      }, 150);
     }
   };
 
@@ -348,9 +350,16 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
     return [...list].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   }, [notebooks, notes]);
 
-  // Sync state with existing note
+  const isInitializedRef = useRef(false);
+
+  // Reset initialization when noteId changes
   useEffect(() => {
-    if (existingNote) {
+    isInitializedRef.current = false;
+  }, [noteId]);
+
+  // Sync state with existing note (initial load only)
+  useEffect(() => {
+    if (existingNote && !isInitializedRef.current) {
       setTitle(existingNote.title || '');
       setContentMarkdown(existingNote.contentMarkdown || existingNote.content || '');
       setSelectedNotebookId(existingNote.notebookId || '');
@@ -358,6 +367,7 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
       setFavorite(existingNote.favorite || false);
       setLinkedJournalDate(existingNote.linkedJournalDate || '');
       setStatus(existingNote.status || 'saved');
+      isInitializedRef.current = true;
     }
   }, [existingNote]);
 

@@ -48,11 +48,19 @@ import {
   faBed,
 } from '@fortawesome/free-solid-svg-icons';
 import { playGoalJingle } from '@/lib/audio';
-import ImageUpload from '@/components/ui/ImageUpload';
+import dynamic from 'next/dynamic';
 import { HighlightedText } from '@/components/ui/HighlightedText';
 import { MentionTextarea } from '@/components/ui/MentionTextarea';
-import { ConfirmModal } from '@/components/ui/ConfirmModal';
-import SuggestedTagChips from '@/components/ai/SuggestedTagChips';
+
+const ImageUpload = dynamic(() => import('@/components/ui/ImageUpload'), {
+  ssr: false,
+});
+const ConfirmModal = dynamic(() => import('@/components/ui/ConfirmModal').then(mod => mod.ConfirmModal), {
+  ssr: false,
+});
+const SuggestedTagChips = dynamic(() => import('@/components/ai/SuggestedTagChips'), {
+  ssr: false,
+});
 import { generateStructuredAI } from '@/lib/ai/aiClient';
 import { DAILY_INSIGHT_PROMPT } from '@/lib/ai/prompts';
 import { getEntryNumberForDate, sortBullets } from '@/lib/entryUtils';

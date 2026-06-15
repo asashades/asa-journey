@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef, useMemo } from 'react';
 import {
   collection,
   doc,
@@ -14,10 +14,11 @@ import {
   deleteDoc,
   increment,
   deleteField,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Entry, Bullet, Wisdom, Note, Idea, Highlight, Tag, Person, FocusGoal, WeeklyData, TagGroup, PersonGroup, Notebook } from '@/types';
+import { Entry, Bullet, Wisdom, Note, Idea, Highlight, Tag, Person, FocusGoal, WeeklyData, TagGroup, PersonGroup, Notebook, Task } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { format, addDays, parseISO, differenceInDays } from 'date-fns';
 import { playChecklistJingle } from '@/lib/audio';
@@ -30,6 +31,7 @@ interface DataContextType {
   currentDate: string;
   setCurrentDate: (date: string) => void;
   entries: Entry[];
+  tasks: Task[];
   getEntryByDate: (date: string) => Promise<Entry | null>;
   saveEntry: (entry: Entry) => Promise<void>;
   getEntriesForDateRange: (startDate: string, endDate: string) => Promise<Entry[]>;
@@ -209,6 +211,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [currentDate, setCurrentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [currentEntry, setCurrentEntry] = useState<Entry | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [wisdoms, setWisdoms] = useState<Wisdom[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
@@ -226,6 +229,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === 'undefined' ? true : navigator.onLine
   );
+
+  const tagsRef = useRef<Tag[]>(tags);
+  const peopleRef = useRef<Person[]>(people);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    tagsRef.current = tags;
+  }, [tags]);
+
+  useEffect(() => {
+    peopleRef.current = people;
+  }, [people]);
+
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -278,6 +301,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     let isActive = true;
     const cacheKey = `asa_journey_${user.uid}`;
     const cachedData = localStorage.getItem(cacheKey);
+    let hasLoadedFromCache = false;
+
     if (cachedData) {
       try {
         const parsed = JSON.parse(cachedData);
@@ -320,12 +345,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
           setTags((revived.tags || []) as Tag[]);
           setPeople((revived.people || []) as Person[]);
           setGoals((revived.goals || []) as FocusGoal[]);
+          setLoading(false);
         });
+        hasLoadedFromCache = true;
       } catch {
         localStorage.removeItem(cacheKey);
       }
     }
 
+    const unsubs: (() => void)[] = [];
+    let entriesLoaded = false;
+    let goalsLoaded = false;
+    let tasksLoaded = false;
+
+    const checkInitialLoadComplete = () => {
+      if (entriesLoaded && goalsLoaded && tasksLoaded && !hasLoadedFromCache) {
+        setLoading(false);
+      }
+    };
+
+    // --- PHASE 1: Immediate Listeners (Entries, Goals, Tasks) ---
     const entriesRef = collection(db, 'users', user.uid, 'entries');
     const unsubEntries = onSnapshot(
       query(entriesRef, orderBy('date', 'desc')),
@@ -333,201 +372,266 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const entriesData = snapshot.docs.map(doc => entryFromDoc(doc.id, doc.data()));
         setEntries(entriesData);
         updateLocalCache({ entries: entriesData });
+        if (!entriesLoaded) {
+          entriesLoaded = true;
+          checkInitialLoadComplete();
+        }
       },
       (error) => {
         console.error('[DataContext] Error listening to entries:', error);
+        if (!entriesLoaded) {
+          entriesLoaded = true;
+          checkInitialLoadComplete();
+        }
       }
     );
+    unsubs.push(unsubEntries);
 
-    const wisdomsRef = collection(db, 'users', user.uid, 'wisdoms');
-    const unsubWisdoms = onSnapshot(
-      query(wisdomsRef, orderBy('createdAt', 'desc')),
+    const tasksRef = collection(db, 'users', user.uid, 'tasks');
+    const unsubTasks = onSnapshot(
+      query(tasksRef, orderBy('createdAt', 'desc')),
       (snapshot) => {
-        const wisdomsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        })) as Wisdom[];
-        setWisdoms(wisdomsData);
-        updateLocalCache({ wisdoms: wisdomsData });
-      },
-      (error) => {
-        console.error('[DataContext] Error listening to wisdoms:', error);
-      }
-    );
-
-    const notesRef = collection(db, 'users', user.uid, 'notes');
-    const unsubNotes = onSnapshot(
-      query(notesRef, orderBy('createdAt', 'desc')),
-      (snapshot) => {
-        const notesData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        })) as Note[];
-        setNotes(notesData);
-        updateLocalCache({ notes: notesData });
-      },
-      (error) => {
-        console.error('[DataContext] Error listening to notes:', error);
-      }
-    );
-
-    const notebooksRef = collection(db, 'users', user.uid, 'notebooks');
-    const unsubNotebooks = onSnapshot(
-      notebooksRef,
-      (snapshot) => {
-        const notebooksData = snapshot.docs.map(doc => {
-          const data = doc.data();
+        const tasksData = snapshot.docs.map(doc => {
+          const revived = reviveFirestoreValue(doc.data()) as Record<string, any>;
           return {
             id: doc.id,
-            ...data,
-            sortOrder: data.sortOrder ?? 0,
-            createdAt: typeof data.createdAt?.toDate === 'function' ? data.createdAt.toDate() : new Date(data.createdAt || Date.now()),
-            updatedAt: typeof data.updatedAt?.toDate === 'function' ? data.updatedAt.toDate() : new Date(data.updatedAt || Date.now()),
-          };
-        }) as Notebook[];
-        notebooksData.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-        setNotebooks(notebooksData);
-        updateLocalCache({ notebooks: notebooksData });
+            ...revived,
+            createdAt: revived.createdAt instanceof Date ? revived.createdAt : new Date(),
+            updatedAt: revived.updatedAt instanceof Date ? revived.updatedAt : new Date(),
+            scheduledAt: revived.scheduledAt instanceof Date ? revived.scheduledAt : undefined,
+          } as Task;
+        });
+        setTasks(tasksData);
+        if (!tasksLoaded) {
+          tasksLoaded = true;
+          checkInitialLoadComplete();
+        }
       },
       (error) => {
-        console.error('[DataContext] Error listening to notebooks:', error);
+        console.error('[DataContext] Error listening to tasks:', error);
+        if (!tasksLoaded) {
+          tasksLoaded = true;
+          checkInitialLoadComplete();
+        }
       }
     );
-
-    const ideasRef = collection(db, 'users', user.uid, 'ideas');
-    const unsubIdeas = onSnapshot(
-      query(ideasRef, orderBy('createdAt', 'desc')),
-      (snapshot) => {
-        const ideasData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        })) as Idea[];
-        setIdeas(ideasData);
-        updateLocalCache({ ideas: ideasData });
-      },
-      (error) => {
-        console.error('[DataContext] Error listening to ideas:', error);
-      }
-    );
-
-    const tagGroupsRef = collection(db, 'users', user.uid, 'tagGroups');
-    const unsubTagGroups = onSnapshot(
-      query(tagGroupsRef, orderBy('createdAt', 'desc')),
-      (snapshot) => {
-        const tagGroupsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        })) as TagGroup[];
-        setTagGroups(tagGroupsData);
-        updateLocalCache({ tagGroups: tagGroupsData });
-      },
-      (error) => {
-        console.error('[DataContext] Error listening to tagGroups:', error);
-      }
-    );
-
-    const tagsRef = collection(db, 'users', user.uid, 'tags');
-    const unsubTags = onSnapshot(
-      query(tagsRef),
-      (snapshot) => {
-        const tagsData = snapshot.docs
-          .map(doc => ({
-            id: doc.data().id || doc.id,
-            ...doc.data(),
-            name: doc.data().name || doc.id,
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
-            firstMentioned: doc.data().firstMentioned?.toDate?.() || doc.data().firstMentioned || undefined,
-          })) as Tag[];
-        const sortedTags = tagsData.sort((a, b) => (b.count || 0) - (a.count || 0));
-        setTags(sortedTags);
-        updateLocalCache({ tags: sortedTags });
-      },
-      (error) => {
-        console.error('[DataContext] Error listening to tags:', error);
-      }
-    );
-
-    const peopleRef = collection(db, 'users', user.uid, 'people');
-    const unsubPeople = onSnapshot(
-      query(peopleRef),
-      (snapshot) => {
-        const peopleData = snapshot.docs
-          .map(doc => ({
-            id: doc.data().id || doc.id,
-            ...doc.data(),
-            name: doc.data().name || doc.id,
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
-            firstMentioned: doc.data().firstMentioned?.toDate?.() || doc.data().firstMentioned || undefined,
-          })) as Person[];
-        const sortedPeople = peopleData.sort((a, b) => (b.mentions || 0) - (a.mentions || 0));
-        setPeople(sortedPeople);
-        updateLocalCache({ people: sortedPeople });
-      },
-      (error) => {
-        console.error('[DataContext] Error listening to people:', error);
-      }
-    );
-
-    const personGroupsRef = collection(db, 'users', user.uid, 'personGroups');
-    const unsubPersonGroups = onSnapshot(
-      query(personGroupsRef, orderBy('createdAt', 'desc')),
-      (snapshot) => {
-        const personGroupsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        })) as PersonGroup[];
-        setPersonGroups(personGroupsData);
-        updateLocalCache({ personGroups: personGroupsData });
-      },
-      (error) => {
-        console.error('[DataContext] Error listening to personGroups:', error);
-      }
-    );
+    unsubs.push(unsubTasks);
 
     const goalsRef = collection(db, 'users', user.uid, 'goals');
     const unsubGoals = onSnapshot(
       query(goalsRef, orderBy('priority', 'asc')),
       (snapshot) => {
-        const goalsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        })) as FocusGoal[];
+        const goalsData = snapshot.docs.map(doc => {
+          const revived = reviveFirestoreValue(doc.data()) as Record<string, any>;
+          return {
+            id: doc.id,
+            ...revived,
+            createdAt: revived.createdAt instanceof Date ? revived.createdAt : new Date(),
+            updatedAt: revived.updatedAt instanceof Date ? revived.updatedAt : new Date(),
+          } as FocusGoal;
+        });
         setGoals(goalsData);
         updateLocalCache({ goals: goalsData });
+        if (!goalsLoaded) {
+          goalsLoaded = true;
+          checkInitialLoadComplete();
+        }
       },
       (error) => {
         console.error('[DataContext] Error listening to goals:', error);
+        if (!goalsLoaded) {
+          goalsLoaded = true;
+          checkInitialLoadComplete();
+        }
       }
     );
+    unsubs.push(unsubGoals);
 
-    queueMicrotask(() => {
-      if (isActive) setLoading(false);
-    });
+    // --- PHASE 2: Deferred Listeners (Wisdoms, Notes, Notebooks, Ideas) (500ms delay) ---
+    const phase2Timeout = setTimeout(() => {
+      if (!isActive) return;
+
+      const wisdomsRef = collection(db, 'users', user.uid, 'wisdoms');
+      const unsubWisdoms = onSnapshot(
+        query(wisdomsRef, orderBy('createdAt', 'desc')),
+        (snapshot) => {
+          const wisdomsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date(),
+            updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+          })) as Wisdom[];
+          setWisdoms(wisdomsData);
+          updateLocalCache({ wisdoms: wisdomsData });
+        },
+        (error) => {
+          console.error('[DataContext] Error listening to wisdoms:', error);
+        }
+      );
+      unsubs.push(unsubWisdoms);
+
+      const notesRef = collection(db, 'users', user.uid, 'notes');
+      const unsubNotes = onSnapshot(
+        query(notesRef, orderBy('createdAt', 'desc')),
+        (snapshot) => {
+          const notesData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date(),
+            updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+          })) as Note[];
+          setNotes(notesData);
+          updateLocalCache({ notes: notesData });
+        },
+        (error) => {
+          console.error('[DataContext] Error listening to notes:', error);
+        }
+      );
+      unsubs.push(unsubNotes);
+
+      const notebooksRef = collection(db, 'users', user.uid, 'notebooks');
+      const unsubNotebooks = onSnapshot(
+        notebooksRef,
+        (snapshot) => {
+          const notebooksData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              sortOrder: data.sortOrder ?? 0,
+              createdAt: typeof data.createdAt?.toDate === 'function' ? data.createdAt.toDate() : new Date(data.createdAt || Date.now()),
+              updatedAt: typeof data.updatedAt?.toDate === 'function' ? data.updatedAt.toDate() : new Date(data.updatedAt || Date.now()),
+            };
+          }) as Notebook[];
+          notebooksData.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+          setNotebooks(notebooksData);
+          updateLocalCache({ notebooks: notebooksData });
+        },
+        (error) => {
+          console.error('[DataContext] Error listening to notebooks:', error);
+        }
+      );
+      unsubs.push(unsubNotebooks);
+
+      const ideasRef = collection(db, 'users', user.uid, 'ideas');
+      const unsubIdeas = onSnapshot(
+        query(ideasRef, orderBy('createdAt', 'desc')),
+        (snapshot) => {
+          const ideasData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date(),
+            updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+          })) as Idea[];
+          setIdeas(ideasData);
+          updateLocalCache({ ideas: ideasData });
+        },
+        (error) => {
+          console.error('[DataContext] Error listening to ideas:', error);
+        }
+      );
+      unsubs.push(unsubIdeas);
+    }, 500);
+
+    // --- PHASE 3: Deeply Deferred Listeners (Tags, People, TagGroups, PersonGroups) (1500ms delay) ---
+    const phase3Timeout = setTimeout(() => {
+      if (!isActive) return;
+
+      const tagGroupsRef = collection(db, 'users', user.uid, 'tagGroups');
+      const unsubTagGroups = onSnapshot(
+        query(tagGroupsRef, orderBy('createdAt', 'desc')),
+        (snapshot) => {
+          const tagGroupsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date(),
+            updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+          })) as TagGroup[];
+          setTagGroups(tagGroupsData);
+          updateLocalCache({ tagGroups: tagGroupsData });
+        },
+        (error) => {
+          console.error('[DataContext] Error listening to tagGroups:', error);
+        }
+      );
+      unsubs.push(unsubTagGroups);
+
+      const tagsRef = collection(db, 'users', user.uid, 'tags');
+      const unsubTags = onSnapshot(
+        query(tagsRef),
+        (snapshot) => {
+          const tagsData = snapshot.docs
+            .map(doc => ({
+              id: doc.data().id || doc.id,
+              ...doc.data(),
+              name: doc.data().name || doc.id,
+              createdAt: doc.data().createdAt?.toDate() || new Date(),
+              firstMentioned: doc.data().firstMentioned?.toDate?.() || doc.data().firstMentioned || undefined,
+            })) as Tag[];
+          const sortedTags = tagsData.sort((a, b) => (b.count || 0) - (a.count || 0));
+          setTags(sortedTags);
+          updateLocalCache({ tags: sortedTags });
+        },
+        (error) => {
+          console.error('[DataContext] Error listening to tags:', error);
+        }
+      );
+      unsubs.push(unsubTags);
+
+      const peopleRef = collection(db, 'users', user.uid, 'people');
+      const unsubPeople = onSnapshot(
+        query(peopleRef),
+        (snapshot) => {
+          const peopleData = snapshot.docs
+            .map(doc => ({
+              id: doc.data().id || doc.id,
+              ...doc.data(),
+              name: doc.data().name || doc.id,
+              createdAt: doc.data().createdAt?.toDate() || new Date(),
+              firstMentioned: doc.data().firstMentioned?.toDate?.() || doc.data().firstMentioned || undefined,
+            })) as Person[];
+          const sortedPeople = peopleData.sort((a, b) => (b.mentions || 0) - (a.mentions || 0));
+          setPeople(sortedPeople);
+          updateLocalCache({ people: sortedPeople });
+        },
+        (error) => {
+          console.error('[DataContext] Error listening to people:', error);
+        }
+      );
+      unsubs.push(unsubPeople);
+
+      const personGroupsRef = collection(db, 'users', user.uid, 'personGroups');
+      const unsubPersonGroups = onSnapshot(
+        query(personGroupsRef, orderBy('createdAt', 'desc')),
+        (snapshot) => {
+          const personGroupsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date(),
+            updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+          })) as PersonGroup[];
+          setPersonGroups(personGroupsData);
+          updateLocalCache({ personGroups: personGroupsData });
+        },
+        (error) => {
+          console.error('[DataContext] Error listening to personGroups:', error);
+        }
+      );
+      unsubs.push(unsubPersonGroups);
+    }, 1500);
+
+    const fallbackTimeout = setTimeout(() => {
+      if (isActive && !hasLoadedFromCache) {
+        setLoading(false);
+      }
+    }, 3000);
 
     return () => {
       isActive = false;
-      unsubEntries();
-      unsubWisdoms();
-      unsubNotes();
-      unsubNotebooks();
-      unsubIdeas();
-      unsubTagGroups();
-      unsubTags();
-      unsubPeople();
-      unsubPersonGroups();
-      unsubGoals();
+      clearTimeout(phase2Timeout);
+      clearTimeout(phase3Timeout);
+      clearTimeout(fallbackTimeout);
+      unsubs.forEach(unsub => unsub());
     };
   }, [user, updateLocalCache]);
 
@@ -559,10 +663,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     nextEntries.forEach((entry) => {
       entry.bullets.forEach((bullet) => {
         extractTagNames(bullet.text).forEach((tagName) => {
-          addUsage(tagUsage, findCanonicalName(tagName, tags), entry.date);
+          addUsage(tagUsage, findCanonicalName(tagName, tagsRef.current), entry.date);
         });
         extractMentionNames(bullet.text).forEach((personName) => {
-          addUsage(peopleUsage, findCanonicalName(personName, people), entry.date);
+          addUsage(peopleUsage, findCanonicalName(personName, peopleRef.current), entry.date);
         });
       });
     });
@@ -572,7 +676,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     await Promise.all([
       ...Array.from(tagUsage.entries()).map(async ([tagName, usage]) => {
-        const existing = tags.find(tag => tag.name.toLowerCase() === tagName);
+        const existing = tagsRef.current.find(tag => tag.name.toLowerCase() === tagName);
         const updatedTag: Tag = {
           ...(existing || {
             id: uuidv4(),
@@ -590,7 +694,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         nextTags.push(updatedTag);
         await setDoc(doc(db, 'users', user.uid, 'tags', updatedTag.name), removeUndefinedFields(updatedTag), { merge: true });
       }),
-      ...tags
+      ...tagsRef.current
         .filter(tag => !tagUsage.has(tag.name.toLowerCase()))
         .map(async (tag) => {
           touchedTagNames.add(tag.name.toLowerCase());
@@ -598,7 +702,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }),
     ]);
 
-    const untouchedTags = tags.filter(tag => !touchedTagNames.has(tag.name.toLowerCase()));
+    const untouchedTags = tagsRef.current.filter(tag => !touchedTagNames.has(tag.name.toLowerCase()));
     const sortedTags = [...nextTags, ...untouchedTags]
       .filter(tag => tag.count > 0)
       .sort((a, b) => (b.count || 0) - (a.count || 0));
@@ -610,7 +714,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     await Promise.all([
       ...Array.from(peopleUsage.entries()).map(async ([personName, usage]) => {
-        const existing = people.find(person => person.name.toLowerCase() === personName);
+        const existing = peopleRef.current.find(person => person.name.toLowerCase() === personName);
         const updatedPerson: Person = {
           ...(existing || {
             id: uuidv4(),
@@ -628,7 +732,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         nextPeople.push(updatedPerson);
         await setDoc(doc(db, 'users', user.uid, 'people', updatedPerson.name.toLowerCase()), removeUndefinedFields(updatedPerson), { merge: true });
       }),
-      ...people
+      ...peopleRef.current
         .filter(person => !peopleUsage.has(person.name.toLowerCase()))
         .map(async (person) => {
           touchedPersonNames.add(person.name.toLowerCase());
@@ -636,16 +740,74 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }),
     ]);
 
-    const untouchedPeople = people.filter(person => !touchedPersonNames.has(person.name.toLowerCase()));
+    const untouchedPeople = peopleRef.current.filter(person => !touchedPersonNames.has(person.name.toLowerCase()));
     const sortedPeople = [...nextPeople, ...untouchedPeople]
       .filter(person => person.mentions > 0)
       .sort((a, b) => (b.mentions || 0) - (a.mentions || 0));
     setPeople(sortedPeople);
     updateLocalCache({ people: sortedPeople });
-  }, [people, tags, updateLocalCache, user]);
+  }, [updateLocalCache, user]);
+
+  const runSyncTokenCollections = useCallback((nextEntries: Entry[]) => {
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+    syncTimeoutRef.current = setTimeout(() => {
+      syncTokenCollections(nextEntries).catch(() => undefined);
+    }, 2000);
+  }, [syncTokenCollections]);
+
+  const syncEntryTasksInFirestore = async (entry: Entry, oldEntry?: Entry) => {
+    if (!user) return;
+    const oldChecklistBullets = oldEntry 
+      ? (oldEntry.bullets || []).filter(b => b.style === 'checklist') 
+      : [];
+    const newChecklistBullets = (entry.bullets || []).filter(b => b.style === 'checklist');
+
+    const oldIds = oldChecklistBullets.map(b => b.id);
+    const newIds = newChecklistBullets.map(b => b.id);
+
+    // 1. Delete tasks that are no longer checklists or were deleted
+    const idsToDelete = oldIds.filter(id => !newIds.includes(id));
+    for (const id of idsToDelete) {
+      try {
+        await deleteDoc(doc(db, 'users', user.uid, 'tasks', id));
+      } catch (err) {
+        console.error('[DataContext] Error deleting task doc:', err);
+      }
+    }
+
+    // 2. Upsert tasks that are new or changed
+    for (const bullet of newChecklistBullets) {
+      const oldBullet = oldChecklistBullets.find(b => b.id === bullet.id);
+      const isChanged = !oldBullet || 
+        oldBullet.text !== bullet.text || 
+        oldBullet.isCompleted !== bullet.isCompleted || 
+        String(oldBullet.scheduledAt) !== String(bullet.scheduledAt);
+
+      if (isChanged) {
+        try {
+          const taskRef = doc(db, 'users', user.uid, 'tasks', bullet.id);
+          await setDoc(taskRef, {
+            id: bullet.id,
+            text: bullet.text,
+            isCompleted: bullet.isCompleted,
+            createdAt: bullet.createdAt instanceof Date ? bullet.createdAt : new Date(bullet.createdAt),
+            updatedAt: new Date(),
+            entryDate: entry.date,
+            isFromNote: false,
+            ...(bullet.scheduledAt ? { scheduledAt: bullet.scheduledAt instanceof Date ? bullet.scheduledAt : new Date(bullet.scheduledAt) } : {})
+          });
+        } catch (err) {
+          console.error('[DataContext] Error setting task doc:', err);
+        }
+      }
+    }
+  };
 
   const saveEntry = async (entry: Entry) => {
     if (!user) return;
+    const oldEntry = entries.find(e => e.id === entry.id || e.date === entry.date);
     const nextEntries = (() => {
       const idx = entries.findIndex(e => e.id === entry.id || e.date === entry.date);
       if (idx >= 0) {
@@ -670,8 +832,81 @@ export function DataProvider({ children }: { children: ReactNode }) {
       ...(!entry.dailyInsight ? { dailyInsight: deleteField() } : {}),
       updatedAt: serverTimestamp(),
     }, { merge: true });
-    await syncTokenCollections(nextEntries).catch(() => undefined);
+
+    // Sync tasks in tasks subcollection
+    await syncEntryTasksInFirestore(entry, oldEntry);
+
+    runSyncTokenCollections(nextEntries);
   };
+
+  // One-time tasks migration effect
+  useEffect(() => {
+    if (!user || loading) return;
+
+    const migrationFlag = `tasks_migrated_v1_${user.uid}`;
+    if (localStorage.getItem(migrationFlag) === 'true') return;
+
+    const runMigration = async () => {
+      console.log('[DataContext] Starting tasks migration...');
+      try {
+        if (entries.length === 0) {
+          console.log('[DataContext] No entries found, marking migration as complete.');
+          localStorage.setItem(migrationFlag, 'true');
+          return;
+        }
+
+        // Collect all checklist tasks from all entries
+        const allChecklistTasks: { id: string; bullet: Bullet; entryDate: string }[] = [];
+        for (const entry of entries) {
+          const checklists = (entry.bullets || []).filter(b => b.style === 'checklist');
+          for (const bullet of checklists) {
+            allChecklistTasks.push({
+              id: bullet.id,
+              bullet,
+              entryDate: entry.date
+            });
+          }
+        }
+
+        if (allChecklistTasks.length === 0) {
+          console.log('[DataContext] No old tasks to migrate.');
+          localStorage.setItem(migrationFlag, 'true');
+          return;
+        }
+
+        console.log(`[DataContext] Found ${allChecklistTasks.length} tasks to migrate.`);
+
+        // Migrate in batches of 500
+        const BATCH_LIMIT = 500;
+        for (let i = 0; i < allChecklistTasks.length; i += BATCH_LIMIT) {
+          const batch = writeBatch(db);
+          const chunk = allChecklistTasks.slice(i, i + BATCH_LIMIT);
+          for (const item of chunk) {
+            const taskRef = doc(db, 'users', user.uid, 'tasks', item.id);
+            batch.set(taskRef, {
+              id: item.id,
+              text: item.bullet.text,
+              isCompleted: !!item.bullet.isCompleted,
+              createdAt: item.bullet.createdAt instanceof Date ? item.bullet.createdAt : new Date(item.bullet.createdAt),
+              updatedAt: item.bullet.updatedAt instanceof Date ? item.bullet.updatedAt : new Date(item.bullet.updatedAt),
+              entryDate: item.entryDate,
+              isFromNote: false,
+              ...(item.bullet.scheduledAt ? { scheduledAt: item.bullet.scheduledAt instanceof Date ? item.bullet.scheduledAt : new Date(item.bullet.scheduledAt) } : {})
+            }, { merge: true });
+          }
+          await batch.commit();
+          console.log(`[DataContext] Migrated batch ${Math.floor(i / BATCH_LIMIT) + 1}`);
+        }
+
+        localStorage.setItem(migrationFlag, 'true');
+        console.log('[DataContext] Tasks migration completed successfully.');
+      } catch (err) {
+        console.error('[DataContext] Tasks migration failed:', err);
+      }
+    };
+
+    runMigration();
+  }, [user, loading, entries]);
 
   useEffect(() => {
     if (!user || loading) return;
@@ -684,8 +919,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (signature === lastTokenSyncSignatureRef.current) return;
     lastTokenSyncSignatureRef.current = signature;
 
-    syncTokenCollections(entries).catch(() => undefined);
-  }, [entries, loading, syncTokenCollections, user]);
+    runSyncTokenCollections(entries);
+  }, [entries, loading, runSyncTokenCollections, user]);
 
   useEffect(() => {
     if (loading) return;
@@ -911,6 +1146,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           ...(b.scheduledAt ? { scheduledAt: b.scheduledAt instanceof Date ? b.scheduledAt : new Date(b.scheduledAt) } : {})
         }))
       });
+      await syncEntryTasksInFirestore(updatedEntry, targetEntry);
     }
 
     // Sync text change to the linked collection item (wisdom/note/idea)
@@ -939,13 +1175,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteBullet = async (bulletId: string) => {
-    if (!currentEntry) return;
-    const bullet = currentEntry.bullets.find(b => b.id === bulletId);
-    const sourceId = bullet?.sourceId || (() => {
-      if (!bullet?.source) return undefined;
+    let bullet = currentEntry?.bullets.find(b => b.id === bulletId);
+    let targetEntry = currentEntry;
+
+    if (!bullet) {
+      for (const entry of entries) {
+        const found = entry.bullets.find(b => b.id === bulletId);
+        if (found) {
+          bullet = found;
+          targetEntry = entry;
+          break;
+        }
+      }
+    }
+
+    if (!bullet || !targetEntry) return;
+
+    const sourceId = bullet.sourceId || (() => {
+      if (!bullet.source) return undefined;
       if (bullet.source === 'wisdom') {
         return wisdoms.find(w =>
-          w.linkedEntryId === currentEntry.date &&
+          w.linkedEntryId === targetEntry.date &&
           w.content === bullet.text &&
           (!bullet.sourceType || w.type === bullet.sourceType)
         )?.id;
@@ -953,12 +1203,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (bullet.source === 'note') {
         return notes.find(note => {
           const noteBulletText = note.content ? (note.title ? `${note.title}: ${note.content}` : note.content) : note.title;
-          return (note.linkedEntryId === currentEntry.date || note.linkedDate === currentEntry.date) && noteBulletText === bullet.text;
+          return (note.linkedEntryId === targetEntry.date || note.linkedDate === targetEntry.date) && noteBulletText === bullet.text;
         })?.id;
       }
       if (bullet.source === 'idea') {
         return ideas.find(idea =>
-          idea.linkedEntries?.includes(currentEntry.date) &&
+          idea.linkedEntries?.includes(targetEntry.date) &&
           idea.content === bullet.text
         )?.id;
       }
@@ -966,7 +1216,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     })();
 
     // If bullet has source, delete the source data too
-    if (bullet?.source && sourceId) {
+    if (bullet.source && sourceId) {
       if (bullet.source === 'wisdom') {
         await deleteWisdom(sourceId);
       } else if (bullet.source === 'note') {
@@ -976,8 +1226,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const updatedBullets = currentEntry.bullets.filter(b => b.id !== bulletId);
-    const updatedEntry = { ...currentEntry, bullets: updatedBullets, updatedAt: new Date() };
+    const updatedBullets = targetEntry.bullets.filter(b => b.id !== bulletId);
+    const updatedEntry = { ...targetEntry, bullets: updatedBullets, updatedAt: new Date() };
     await saveEntry(updatedEntry);
   };
 
@@ -1041,10 +1291,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
         bullets: updatedEntry.bullets.map(b => ({
           ...b,
           createdAt: b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt),
-          updatedAt: b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt)
+          updatedAt: b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt),
+          ...(b.scheduledAt ? { scheduledAt: b.scheduledAt instanceof Date ? b.scheduledAt : new Date(b.scheduledAt) } : {})
         }))
       });
+      await syncEntryTasksInFirestore(updatedEntry, targetEntry);
     }
+
+    // Synchronize bullet status with goals containing this as a sub-goal
+    await syncBulletToSubGoals(bulletId, nextCompleted);
 
     // Play soft ascending done jingle
     if (nextCompleted) {
@@ -1246,8 +1501,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     const lines = (note.contentMarkdown || '').split('\n');
     let updated = false;
+    let bulletId = '';
+    let isCompleted = false;
 
-    const updatedLines = lines.map(line => {
+    const updatedLines = lines.map((line, index) => {
       const match = line.match(/^(\s*[-*]\s+\[\s*([ xX]?)\s*\]\s+)(.+)$/);
       if (match) {
         const text = match[3].trim();
@@ -1255,6 +1512,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
           const currentStatus = match[2].toLowerCase() === 'x';
           const newStatus = currentStatus ? ' ' : 'x';
           updated = true;
+          bulletId = `note_${noteId}_line_${index}`;
+          isCompleted = !currentStatus;
           const prefix = match[1].replace(/\[\s*[ xX]?\s*\]/, `[${newStatus}]`);
           return `${prefix}${match[3]}`;
         }
@@ -1268,6 +1527,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         contentMarkdown: newMarkdown,
         content: newMarkdown
       });
+      if (bulletId) {
+        await syncBulletToSubGoals(bulletId, isCompleted);
+      }
     }
   };
 
@@ -1482,6 +1744,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return highlights.filter(h => h.entryDate >= startDate && h.entryDate <= endDate);
   };
 
+  const syncBulletToSubGoals = async (bulletId: string, isCompleted: boolean) => {
+    if (!user) return;
+    const updatedGoals = goals.map(goal => {
+      if (!goal.subGoals || goal.subGoals.length === 0) return goal;
+      const hasMatchingSubGoal = goal.subGoals.some(s => s.bulletId === bulletId);
+      if (!hasMatchingSubGoal) return goal;
+      
+      const updatedSubs = goal.subGoals.map(s => 
+        s.bulletId === bulletId ? { ...s, isCompleted } : s
+      );
+      const progress = Math.round((updatedSubs.filter(s => s.isCompleted).length / updatedSubs.length) * 100);
+      return {
+        ...goal,
+        subGoals: updatedSubs,
+        progress,
+        updatedAt: new Date()
+      };
+    });
+
+    const changedGoals = updatedGoals.filter((g, i) => g !== goals[i]);
+    if (changedGoals.length === 0) return;
+
+    setGoals(updatedGoals);
+    
+    for (const goal of changedGoals) {
+      const goalRef = doc(db, 'users', user.uid, 'goals', goal.id);
+      await setDoc(goalRef, removeUndefinedFields(goal), { merge: true });
+    }
+  };
+
   const addGoal = async (content: string, data?: Partial<FocusGoal>) => {
     if (!user) return;
     const maxPriority = goals.reduce((max, g) => Math.max(max, g.priority), 0);
@@ -1610,8 +1902,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const totalTags = tags.length;
   const totalMentions = people.reduce((sum, p) => sum + p.mentions, 0);
 
-  const calculateStreak = () => {
-    if (entries.length === 0) return { current: 0, longest: 0 };
+  const { currentStreak, longestStreak } = useMemo(() => {
+    if (entries.length === 0) return { currentStreak: 0, longestStreak: 0 };
     let current = 0, longest = 0, tempStreak = 0;
     let checkDate = new Date();
     while (true) {
@@ -1631,10 +1923,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
     }
     longest = Math.max(longest, tempStreak);
-    return { current, longest };
-  };
-
-  const { current: currentStreak, longest: longestStreak } = calculateStreak();
+    return { currentStreak: current, longestStreak: longest };
+  }, [entries]);
 
   // Tag CRUD
   const updateTag = async (tagName: string, data: Partial<Tag>) => {
@@ -1715,7 +2005,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   return (
     <DataContext.Provider value={{
-      currentEntry, currentDate, setCurrentDate, entries, getEntryByDate, saveEntry, getEntriesForDateRange,
+      currentEntry, currentDate, setCurrentDate, entries, tasks, getEntryByDate, saveEntry, getEntriesForDateRange,
       addBullet, updateBullet, deleteBullet, toggleHighlight, toggleBulletComplete, updateDream,
       wisdoms, addWisdom, updateWisdom, deleteWisdom, getWisdomOfTheDay,
       notes, addNote, updateNote, deleteNote, toggleNoteChecklist,

@@ -2,9 +2,17 @@
 
 :root {
   /* Default Typography */
+  --font-poppins: "Poppins";
+  --font-montserrat: "Montserrat";
+  --font-inter: "Inter";
+  --font-fraunces: "Fraunces";
+  --font-space-grotesk: "Space Grotesk";
   --font-sans-active: var(--font-poppins);
   --font-display-active: var(--font-montserrat);
-  --font-mono-active: monospace;
+  --font-mono-active: var(--font-display-active);
+  --font-sans: var(--font-sans-active), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: var(--font-display-active), Georgia, serif;
+  --font-mono: var(--font-mono-active), "SFMono-Regular", Consolas, monospace;
 
   /* Classic Journalistic Design System - Light Theme */
   --background: #FAFAFA;
@@ -85,7 +93,7 @@
 .theme-cosmic-light {
   --font-sans-active: var(--font-inter);
   --font-display-active: var(--font-fraunces);
-  --font-mono-active: var(--font-jetbrains-mono);
+  --font-mono-active: var(--font-sans-active);
 
   --background: #FFFDF6;
   --foreground: #201D19;
@@ -107,7 +115,7 @@
 .theme-cosmic-dark {
   --font-sans-active: var(--font-inter);
   --font-display-active: var(--font-fraunces);
-  --font-mono-active: var(--font-jetbrains-mono);
+  --font-mono-active: var(--font-sans-active);
 
   --background: #08090D;
   --foreground: #F8F4E8;
@@ -129,7 +137,7 @@
 .theme-moss-light {
   --font-sans-active: var(--font-inter);
   --font-display-active: var(--font-fraunces);
-  --font-mono-active: var(--font-jetbrains-mono);
+  --font-mono-active: var(--font-sans-active);
 
   --background: #F7F1E6;
   --foreground: #111412;
@@ -151,7 +159,7 @@
 .theme-moss-dark {
   --font-sans-active: var(--font-inter);
   --font-display-active: var(--font-fraunces);
-  --font-mono-active: var(--font-jetbrains-mono);
+  --font-mono-active: var(--font-sans-active);
 
   --background: #111412;
   --foreground: #F7F1E6;
@@ -173,7 +181,7 @@
 .theme-nocturne-light {
   --font-sans-active: var(--font-inter);
   --font-display-active: var(--font-space-grotesk);
-  --font-mono-active: var(--font-jetbrains-mono);
+  --font-mono-active: var(--font-sans-active);
 
   --background: #F5F7FA;
   --foreground: #1C202E;
@@ -195,7 +203,7 @@
 .theme-nocturne-dark {
   --font-sans-active: var(--font-inter);
   --font-display-active: var(--font-space-grotesk);
-  --font-mono-active: var(--font-jetbrains-mono);
+  --font-mono-active: var(--font-sans-active);
 
   --background: #08090D;
   --foreground: #F7F4EA;
@@ -673,19 +681,40 @@ input, textarea {
    THEME FONT OVERRIDES (Forces display/UI fonts globally when customized theme is active)
    ========================================================================== */
 
-/* Overrides the .font-sans utility class on headings to correctly use the editorial display font (Fraunces / Space Grotesk) */
+html[class^="theme-"],
+html[class*=" theme-"],
+html[class^="theme-"] body,
+html[class*=" theme-"] body,
+html[class^="theme-"] .font-sans,
+html[class*=" theme-"] .font-sans {
+  font-family: var(--font-sans) !important;
+}
+
+/* Overrides font utilities on headings to correctly use the theme display font (Montserrat / Fraunces / Space Grotesk) */
 html[class^="theme-"] h1,
 html[class^="theme-"] h2,
 html[class^="theme-"] h3,
 html[class^="theme-"] h4,
 html[class^="theme-"] h5,
 html[class^="theme-"] h6,
+html[class^="theme-"] h1.font-sans,
+html[class^="theme-"] h2.font-sans,
+html[class^="theme-"] h3.font-sans,
+html[class^="theme-"] h4.font-sans,
+html[class^="theme-"] h5.font-sans,
+html[class^="theme-"] h6.font-sans,
 html[class*=" theme-"] h1,
 html[class*=" theme-"] h2,
 html[class*=" theme-"] h3,
 html[class*=" theme-"] h4,
 html[class*=" theme-"] h5,
-html[class*=" theme-"] h6 {
+html[class*=" theme-"] h6,
+html[class*=" theme-"] h1.font-sans,
+html[class*=" theme-"] h2.font-sans,
+html[class*=" theme-"] h3.font-sans,
+html[class*=" theme-"] h4.font-sans,
+html[class*=" theme-"] h5.font-sans,
+html[class*=" theme-"] h6.font-sans {
   font-family: var(--font-serif) !important;
 }
 
@@ -1109,5 +1138,3 @@ html.dark .text-\[\#8B9390\] {
     height: 16px !important;
   }
 }
-
-

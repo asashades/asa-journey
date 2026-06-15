@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faWandMagicSparkles, faChevronDown, faChevronUp, faShieldHalved, faCompass, faRotateRight } from '@fortawesome/free-solid-svg-icons';
-import { format, subDays, parseISO } from 'date-fns';
+import { faWandMagicSparkles, faChevronDown, faChevronUp, faShieldHalved, faCompass, faRotateRight, faClockRotateLeft } from '@fortawesome/free-solid-svg-icons';
+import { format, subDays, parseISO, startOfWeek, addDays } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { AIInsight } from '@/types/ai';
@@ -21,6 +22,7 @@ interface QuietInsightCardProps {
 }
 
 export default function QuietInsightCard({ onToggleOpen }: QuietInsightCardProps) {
+  const router = useRouter();
   const { user, userProfile } = useAuth();
   const { addGoal } = useData();
   const [insight, setInsight] = useState<AIInsight | null>(null);
@@ -32,8 +34,10 @@ export default function QuietInsightCard({ onToggleOpen }: QuietInsightCardProps
   const [showMockOption, setShowMockOption] = useState(false);
 
   const today = new Date();
-  const weekEnd = format(today, 'yyyy-MM-dd');
-  const weekStart = format(subDays(today, 6), 'yyyy-MM-dd');
+  const weekStartMonday = startOfWeek(today, { weekStartsOn: 1 });
+  const weekEndSunday = addDays(weekStartMonday, 6);
+  const weekStart = format(weekStartMonday, 'yyyy-MM-dd');
+  const weekEnd = format(weekEndSunday, 'yyyy-MM-dd');
   const docId = `${weekStart}_${weekEnd}`;
 
   useEffect(() => {
@@ -407,6 +411,15 @@ export default function QuietInsightCard({ onToggleOpen }: QuietInsightCardProps
         {/* Cosmos subtle gradient background hook */}
         <div className="absolute top-0 right-0 -z-10 h-32 w-32 rounded-full bg-[#B79CFF]/5 blur-2xl" />
 
+        {/* History Recap icon button in top right corner */}
+        <button
+          onClick={() => router.push('/reflect/archive')}
+          className="absolute top-5 right-5 flex h-9 w-9 items-center justify-center rounded-full border border-[#EEF0EF] dark:border-[#2E3133] bg-white/80 dark:bg-[#1E2022]/80 text-[#6F7476] dark:text-[#A3A7A8] hover:bg-[#F2F2F3] dark:hover:bg-[#282A2D] hover:text-[#2F3331] dark:hover:text-[#FAFAFA] shadow-sm hover:shadow transition-all duration-300 active:scale-95 cursor-pointer z-10"
+          title="History Recap Archive"
+        >
+          <FontAwesomeIcon icon={faClockRotateLeft} className="h-4 w-4" />
+        </button>
+
         <div className="flex items-start gap-4">
           <span className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E9FFF4] dark:bg-[#00DC7D]/10 text-[#00DC7D] shadow-sm shadow-[#00DC7D]/10">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 animate-pulse">
@@ -421,7 +434,7 @@ export default function QuietInsightCard({ onToggleOpen }: QuietInsightCardProps
               Discover patterns, themes, and life lessons from your past 7 days of writing.
             </p>
 
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap items-center gap-3">
               {insight ? (
                 <button
                   onClick={() => {

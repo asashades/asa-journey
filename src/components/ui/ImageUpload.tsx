@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { PhotoIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faImage, faXmark } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -136,7 +137,7 @@ export default function ImageUpload({
                 onClick={() => removeUpload(upload.id)}
                 className="absolute -top-2 -right-2 w-6 h-6 bg-[#EF4444] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
               >
-                <XMarkIcon className="w-4 h-4 text-white" />
+                <FontAwesomeIcon icon={faXmark} className="w-4 h-4 text-white" />
               </button>
             </div>
           ))}
@@ -168,7 +169,7 @@ export default function ImageUpload({
             </div>
           ) : (
             <div className="space-y-2">
-              <PhotoIcon className="w-8 h-8 mx-auto text-[#8B8AA0]" />
+              <FontAwesomeIcon icon={faImage} className="w-8 h-8 mx-auto text-[#8B8AA0]" />
               <p className="text-sm text-[#8B8AA0]">
                 drop files here or click to upload
               </p>
