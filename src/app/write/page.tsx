@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, KeyboardEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState, KeyboardEvent, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { format, isValid } from 'date-fns';
@@ -435,7 +435,7 @@ const getLocationErrorMessage = (error: unknown) => {
   return 'could not capture current location';
 };
 
-export default function WritePage() {
+function WritePageContent() {
   const {
     currentEntry,
     currentDate,
@@ -459,6 +459,8 @@ export default function WritePage() {
     tags,
   } = useData();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const dateParam = searchParams.get('date');
 
   const { userProfile } = useAuth();
   const settings = userProfile?.settings || {
@@ -706,33 +708,32 @@ export default function WritePage() {
 
   const isFirstRender = useRef(true);
 
-  // Synchronize URL date parameter with currentDate state on initial mount
+  // Synchronize URL date parameter with currentDate state
   useEffect(() => {
-    const dateParam = new URLSearchParams(window.location.search).get('date');
     if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
       const parsedDate = toLocalDate(dateParam);
       if (isValid(parsedDate) && dateParam !== currentDate) {
         setCurrentDate(dateParam);
       }
     }
-  }, []); // Run strictly once on mount
+  }, [dateParam, currentDate, setCurrentDate]);
 
   // Sync state to URL parameter when currentDate changes
   useEffect(() => {
     const url = new URL(window.location.href);
-    const dateParam = url.searchParams.get('date');
+    const currentUrlParam = url.searchParams.get('date');
     
     if (isFirstRender.current) {
       isFirstRender.current = false;
       // If URL doesn't have a date parameter, initialize it to currentDate
-      if (!dateParam && currentDate) {
+      if (!currentUrlParam && currentDate) {
         url.searchParams.set('date', currentDate);
         window.history.replaceState(null, '', url.pathname + url.search);
       }
       return;
     }
 
-    if (currentDate && dateParam !== currentDate) {
+    if (currentDate && currentUrlParam !== currentDate) {
       url.searchParams.set('date', currentDate);
       window.history.replaceState(null, '', url.pathname + url.search);
     }
@@ -2482,5 +2483,23 @@ export default function WritePage() {
         />
       )}
     </div>
+  );
+}
+
+export default function WritePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-white dark:bg-[#151719] flex flex-col items-center justify-center transition-colors duration-300">
+        <div className="relative mb-6 flex h-16 w-16 items-center justify-center">
+          <span className="absolute h-full w-full rounded-full border-2 border-[#00DC7D]/10" />
+          <span className="absolute h-full w-full animate-spin rounded-full border-2 border-t-[#00DC7D] border-r-transparent border-b-transparent border-l-transparent" />
+          <div className="h-3 w-3 animate-ping rounded-full bg-[#00DC7D] opacity-75" />
+        </div>
+        <h3 className="font-serif text-base font-bold text-[#2F3331] dark:text-[#FAFAFA]">Loading Editor</h3>
+        <p className="mt-1 text-xs text-[#A3A7A8] dark:text-[#6F7476] font-mono animate-pulse">Prepping your workspace...</p>
+      </div>
+    }>
+      <WritePageContent />
+    </Suspense>
   );
 }
