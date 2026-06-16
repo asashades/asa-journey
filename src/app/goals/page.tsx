@@ -35,6 +35,9 @@ import {
   faFilter,
   faSort,
   faCircleInfo,
+  faExpand,
+  faCompress,
+  faFlag,
 } from '@fortawesome/free-solid-svg-icons';
 import { useData } from '@/contexts/DataContext';
 import { FocusGoal, SubGoal } from '@/types';
@@ -137,7 +140,8 @@ export default function GoalsPage() {
   const [isCompletedExpanded, setIsCompletedExpanded] = useState(false);
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(new Date());
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
+  const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
   const [showCompletedTasksInCalendar, setShowCompletedTasksInCalendar] = useState<boolean>(true);
 
   // States for Inbox Tasks rescheduling & filtering
@@ -1714,7 +1718,28 @@ export default function GoalsPage() {
                               )}
 
                               {/* Scrollable checklist of benchmark capsule bars (calm styling: bg stays standard gray!) */}
-                              <div className="space-y-1.5 max-h-[85px] overflow-y-auto pr-0.5 mb-1.5 scrollbar-thin scrollbar-thumb-gray-200">
+                              {hasSubGoals && (
+                                <div className="flex justify-between items-center mb-1 px-1">
+                                  <span className="text-[9px] font-extrabold text-[#A3A7A8] dark:text-[#888D8F] uppercase tracking-wider flex items-center gap-1 select-none">
+                                    Steps
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setExpandedGoalId(expandedGoalId === goal.id ? null : goal.id);
+                                      }}
+                                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-0.5 transition-colors cursor-pointer"
+                                      title={expandedGoalId === goal.id ? "Collapse steps" : "Expand steps"}
+                                    >
+                                      <FontAwesomeIcon icon={expandedGoalId === goal.id ? faCompress : faExpand} className="h-2.5 w-2.5" />
+                                    </button>
+                                  </span>
+                                </div>
+                              )}
+
+                              <div className={`space-y-1.5 overflow-y-auto pr-0.5 mb-1.5 scrollbar-thin scrollbar-thumb-gray-200 transition-all duration-300 ${
+                                expandedGoalId === goal.id ? 'max-h-[400px]' : 'max-h-[85px]'
+                              }`}>
                                 {goal.subGoals?.map((sub) => {
                                   return sub.isCompleted ? (
                                     /* Completed Sub-goal Capsule: Calm background (no color block), colored check button */
@@ -1819,6 +1844,22 @@ export default function GoalsPage() {
                                   );
                                 })}
                               </div>
+
+                              {goal.subGoals && goal.subGoals.length > 2 && (
+                                <div className="flex justify-center mb-2">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedGoalId(expandedGoalId === goal.id ? null : goal.id);
+                                    }}
+                                    className="text-[9px] font-bold text-gray-500 hover:text-[#00DC7D] dark:text-gray-400 dark:hover:text-[#00DC7D] flex items-center gap-1 transition-colors py-0.5 px-2 rounded hover:bg-gray-50 dark:hover:bg-zinc-800 cursor-pointer"
+                                  >
+                                    <FontAwesomeIcon icon={expandedGoalId === goal.id ? faCompress : faExpand} className="w-2.5 h-2.5" />
+                                    {expandedGoalId === goal.id ? 'Collapse Steps' : 'Expand Steps'}
+                                  </button>
+                                </div>
+                              )}
 
                               {/* Extremely compact quick add sub-goal input */}
                               <form
@@ -2606,14 +2647,14 @@ export default function GoalsPage() {
           </div>
 
           {/* Monthly Grid */}
-          <div className="flex flex-col bg-[#EEF0EF] dark:bg-[#2E3133] gap-[1px] border border-[#EEF0EF] dark:border-[#2E3133] rounded-3xl overflow-hidden shadow-sm">
+          <div className="flex flex-col bg-[#EEF0EF] dark:bg-[#1E2022] gap-[1px] border border-[#EEF0EF] dark:border-[#1E2022] rounded-none overflow-hidden shadow-sm">
             {calendarWeeks.map((week, weekIdx) => {
               const selectedCell = selectedCalendarDate && week.find(cell => 
                 format(cell.date, 'yyyy-MM-dd') === format(selectedCalendarDate, 'yyyy-MM-dd')
               );
 
               return (
-                <div key={weekIdx} className="flex flex-col bg-[#EEF0EF] dark:bg-[#2E3133] gap-[1px]">
+                <div key={weekIdx} className="flex flex-col bg-[#EEF0EF] dark:bg-[#1E2022] gap-[1px]">
                   {/* Week Row */}
                   <div className="grid grid-cols-7 gap-[1px]">
                     {week.map((cell) => {
@@ -2632,12 +2673,18 @@ export default function GoalsPage() {
                       return (
                         <button
                           key={cell.key}
-                          onClick={() => setSelectedCalendarDate(cell.date)}
+                          onClick={() => {
+                            if (selectedCalendarDate && format(selectedCalendarDate, 'yyyy-MM-dd') === dateStr) {
+                              setSelectedCalendarDate(null);
+                            } else {
+                              setSelectedCalendarDate(cell.date);
+                            }
+                          }}
                           className={`p-2 rounded-none flex flex-col justify-between items-center transition-all cursor-pointer ${
                             !cell.isCurrentMonth ? 'opacity-35 hover:opacity-100' : ''
                           } ${
                             isSelected
-                              ? 'bg-[#E9FFF4] text-[#00A963] dark:bg-[#00DC7D]/10 dark:text-[#00DC7D] z-10 ring-2 ring-[#00DC7D] ring-inset'
+                              ? 'bg-[#E9FFF4] text-[#00A963] dark:bg-[#0A2E1A] dark:text-[#55FFB4] z-10 ring-2 ring-[#00DC7D] ring-inset'
                               : isCurrentToday
                               ? 'bg-white dark:bg-[#1E2022] font-black text-[#2F3331] dark:text-[#FAFAFA] z-10 ring-2 ring-[#00DC7D] ring-inset'
                               : 'bg-white dark:bg-[#1E2022] text-[#2F3331] dark:text-[#FAFAFA] hover:bg-gray-50/70 dark:hover:bg-zinc-800/40'
@@ -2670,35 +2717,37 @@ export default function GoalsPage() {
                             {cellEvents.goals.slice(0, 1).map((g) => (
                               <div
                                 key={g.id}
-                                className="px-1.5 py-0.5 rounded-lg bg-[#F8F5FF] text-[#8B00D4] dark:bg-[#8B00D4]/30 dark:text-[#E2D5FF] truncate border border-[#F2EDFF]/40 dark:border-[#C494FF]/35"
+                                className="px-1.5 py-0.5 rounded-lg bg-[#F8F5FF] text-[#8B00D4] dark:bg-[#8B00D4]/30 dark:text-[#E2D5FF] truncate border border-[#F2EDFF]/40 dark:border-[#C494FF]/35 flex items-center gap-1"
                                 title={`Goal Deadline: ${g.content}`}
                               >
-                                🏁 {g.content}
+                                <FontAwesomeIcon icon={faFlag} className="text-[7px] shrink-0" />
+                                <span className="truncate">{g.content}</span>
                               </div>
                             ))}
                             {/* Sub-goal deadlines */}
                             {cellEvents.subgoals.slice(0, 1).map((sub) => (
                               <div
                                 key={sub.id}
-                                className="px-1.5 py-0.5 rounded-lg bg-[#F8F5FF] text-[#8B00D4] dark:bg-[#8B00D4]/30 dark:text-[#E2D5FF] truncate border border-[#F2EDFF]/40 dark:border-[#C494FF]/35"
+                                className="px-1.5 py-0.5 rounded-lg bg-[#F8F5FF] text-[#8B00D4] dark:bg-[#8B00D4]/30 dark:text-[#E2D5FF] truncate border border-[#F2EDFF]/40 dark:border-[#C494FF]/35 flex items-center gap-1"
                                 title={`Sub-goal Deadline: ${sub.content}`}
                               >
-                                🏁 {sub.content}
+                                <FontAwesomeIcon icon={faFlag} className="text-[7px] shrink-0" />
+                                <span className="truncate">{sub.content}</span>
                               </div>
                             ))}
                             {/* Tasks (up to 2 pending or completed) */}
                             {visibleTasks.slice(0, 2).map((t) => (
                               <div
                                 key={t.id}
-                                className={`px-1.5 py-0.5 rounded-lg truncate border ${
+                                className={`px-1.5 py-0.5 rounded-lg truncate border flex items-center gap-1 ${
                                   t.isCompleted
                                     ? 'bg-[#E9FFF4] text-[#00A963] border-[#D6FADB] dark:bg-[#00DC7D]/25 dark:text-[#55FFB4] dark:border-[#55FFB4]/30 line-through opacity-85'
                                     : 'bg-gray-50 text-gray-600 border-gray-200/50 dark:bg-[#2F3331]/90 dark:text-[#E4E7E6] dark:border-zinc-700/80'
                                 }`}
                                 title={t.text}
                               >
-                                {t.isCompleted ? '✓ ' : '• '}
-                                {t.text}
+                                <FontAwesomeIcon icon={t.isCompleted ? faCheck : faStar} className="text-[6.5px] shrink-0" />
+                                <span className="truncate">{t.text}</span>
                               </div>
                             ))}
                             {/* +X More Indicator */}
@@ -2723,8 +2772,8 @@ export default function GoalsPage() {
                     const totalEventsCount = dayEvents.goals.length + dayEvents.subgoals.length + visibleDayTasks.length;
 
                     return (
-                      <div className="bg-[#FAFAFA] dark:bg-[#202324]/50 border-t border-b border-[#EEF0EF] dark:border-[#2E3133] p-6 space-y-4 animate-in slide-in-from-top duration-300">
-                        <div className="flex justify-between items-center border-b border-[#EEF0EF] dark:border-[#2E3133] pb-3">
+                      <div className="bg-[#FAFAFA] dark:bg-[#161819] border-t border-b border-[#EEF0EF] dark:border-[#1E2022] p-6 space-y-4 animate-in slide-in-from-top duration-300">
+                        <div className="flex justify-between items-center border-b border-[#EEF0EF] dark:border-[#1E2022] pb-3">
                           <div>
                             <h3 className="text-sm font-bold text-[#2F3331] dark:text-[#FAFAFA]">
                               Details for {format(selectedCalendarDate, 'EEEE, MMM d, yyyy')}
@@ -2751,21 +2800,29 @@ export default function GoalsPage() {
                           {/* Deadlines Section */}
                           {(dayEvents.goals.length > 0 || dayEvents.subgoals.length > 0) && (
                             <div className="space-y-2.5">
-                              <span className="text-[10px] font-bold text-[#8B00D4] dark:text-[#D6B2FF] uppercase tracking-widest block">
-                                🏁 Goal Deadlines
+                              <span className="text-[10px] font-bold text-[#8B00D4] dark:text-[#D6B2FF] uppercase tracking-widest flex items-center gap-1.5 select-none">
+                                <FontAwesomeIcon icon={faFlag} className="w-3 h-3 text-[#8B00D4] dark:text-[#D6B2FF]" />
+                                Goal Deadlines
                               </span>
                               <div className="space-y-2">
                                 {dayEvents.goals.map((g) => (
-                                  <div key={g.id} className="flex items-center gap-2.5 bg-[#F8F5FF] dark:bg-[#8B00D4]/12 p-3 rounded-2xl border border-[#F2EDFF] dark:border-[#8B00D4]/25">
+                                  <div 
+                                    key={g.id} 
+                                    onClick={() => {
+                                      setActiveSubTab('goals');
+                                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }}
+                                    className="flex items-center gap-2.5 bg-[#F8F5FF] hover:bg-[#F2EAFF] dark:bg-[#1A0F2E] dark:hover:bg-[#22133D] p-3 rounded-2xl border border-[#F2EDFF] dark:border-[#3D2A5C] cursor-pointer transition-colors"
+                                  >
                                     <div className="h-6 w-6 rounded-full bg-[#8B00D4] text-white flex items-center justify-center text-xs shrink-0 shadow-sm shadow-[#8B00D4]/20">
                                       <FontAwesomeIcon icon={faCrosshairs} className="w-3.5 h-3.5" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <p className="text-xs font-bold text-[#2F3331] dark:text-[#FAFAFA] truncate">
+                                      <p className="text-xs font-bold text-[#2F3331] dark:text-[#E2D5FF] truncate">
                                         {g.content}
                                       </p>
                                       <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="text-[8px] font-extrabold uppercase tracking-wider text-gray-500 bg-white dark:bg-zinc-800 px-1.5 py-0.2 rounded border border-gray-200 dark:border-zinc-700">
+                                        <span className="text-[8px] font-extrabold uppercase tracking-wider text-gray-500 bg-white dark:bg-zinc-800 px-1.5 py-0.2 rounded border border-gray-200 dark:border-zinc-700 dark:text-gray-300">
                                           {g.category || 'General'}
                                         </span>
                                         <span className="text-[9px] font-semibold text-[#8B00D4] dark:text-[#D6B2FF]">
@@ -2777,16 +2834,23 @@ export default function GoalsPage() {
                                 ))}
                                 
                                 {dayEvents.subgoals.map((sub) => (
-                                  <div key={sub.id} className="flex items-center gap-2.5 bg-[#F8F5FF] dark:bg-[#8B00D4]/12 p-3 rounded-2xl border border-[#F2EDFF] dark:border-[#8B00D4]/25">
+                                  <div 
+                                    key={sub.id} 
+                                    onClick={() => {
+                                      setActiveSubTab('goals');
+                                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }}
+                                    className="flex items-center gap-2.5 bg-[#F8F5FF] hover:bg-[#F2EAFF] dark:bg-[#1A0F2E] dark:hover:bg-[#22133D] p-3 rounded-2xl border border-[#F2EDFF] dark:border-[#3D2A5C] cursor-pointer transition-colors"
+                                  >
                                     <div className="h-6 w-6 rounded-full bg-[#8B00D4]/15 dark:bg-[#8B00D4]/30 text-[#8B00D4] dark:text-[#E2D5FF] flex items-center justify-center text-xs shrink-0">
                                       <FontAwesomeIcon icon={faStar} className="w-3.5 h-3.5" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <p className="text-xs font-bold text-[#2F3331] dark:text-[#FAFAFA] truncate">
+                                      <p className="text-xs font-bold text-[#2F3331] dark:text-[#E2D5FF] truncate">
                                         {sub.content}
                                       </p>
-                                      <p className="text-[9px] text-[#A3A7A8] truncate">
-                                        Parent Goal: <span className="font-semibold text-gray-600 dark:text-gray-400">{sub.goalContent}</span>
+                                      <p className="text-[9px] text-[#A3A7A8] dark:text-[#B3B7B8] truncate">
+                                        Parent Goal: <span className="font-semibold text-gray-600 dark:text-gray-300">{sub.goalContent}</span>
                                       </p>
                                     </div>
                                   </div>
@@ -2798,12 +2862,13 @@ export default function GoalsPage() {
                           {/* Tasks Section */}
                           {visibleDayTasks.length > 0 && (
                             <div className="space-y-2.5">
-                              <span className="text-[10px] font-bold text-[#00A963] uppercase tracking-widest block">
-                                📋 Tasks on this Day
+                              <span className="text-[10px] font-bold text-[#00A963] uppercase tracking-widest flex items-center gap-1.5 select-none">
+                                <FontAwesomeIcon icon={faListCheck} className="w-3 h-3 text-[#00A963]" />
+                                Tasks on this Day
                               </span>
                               <div className="space-y-2">
                                 {visibleDayTasks.map((task) => (
-                                  <div key={task.id} className="flex items-center justify-between gap-3 bg-[#FAFAFA] dark:bg-[#202324] p-3 rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133]">
+                                  <div key={task.id} className="flex items-center justify-between gap-3 bg-[#FAFAFA] dark:bg-[#202324] p-3 rounded-2xl border border-[#EEF0EF] dark:border-[#1E2022]">
                                     <div className="flex items-center gap-3 min-w-0 flex-1">
                                       <button
                                         onClick={() => {
