@@ -11,6 +11,7 @@ import {
   faCheck,
   faCrosshairs,
   faCalendar,
+  faCalendarPlus,
   faChartSimple,
   faGripVertical,
   faXmark,
@@ -131,6 +132,8 @@ export default function GoalsPage() {
   const [flippedCardId, setFlippedCardId] = useState<string | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'goals' | 'inbox' | 'calendar'>('goals');
   const [showStats, setShowStats] = useState(false);
+  const [showGoalsFilters, setShowGoalsFilters] = useState(false);
+  const [showInboxFilters, setShowInboxFilters] = useState(false);
   const [isCompletedExpanded, setIsCompletedExpanded] = useState(false);
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
@@ -471,6 +474,28 @@ export default function GoalsPage() {
     setShowAddTaskForm(false);
   };
 
+
+  // Overdue tasks
+  const overdueTasks = useMemo(() => {
+    return pendingTasks.filter(task => {
+      if (!task.scheduledAt) return false;
+      return isPast(new Date(task.scheduledAt)) && !isToday(new Date(task.scheduledAt));
+    });
+  }, [pendingTasks]);
+
+  const handlePostponeAllOverdue = async () => {
+    if (overdueTasks.length === 0) return;
+    const todayNoon = new Date();
+    todayNoon.setHours(12, 0, 0, 0); // default to 12 PM today
+    try {
+      const promises = overdueTasks.map(task =>
+        updateBullet(task.id, { scheduledAt: todayNoon })
+      );
+      await Promise.all(promises);
+    } catch (e) {
+      console.error('Failed to postpone overdue tasks', e);
+    }
+  };
 
   // Filtered and Sorted pending tasks
   const filteredPendingTasks = useMemo(() => {
@@ -981,16 +1006,38 @@ export default function GoalsPage() {
           </button>
         </div>
 
-        {/* Toggle Button for Stats Dashboard */}
-        <div className="mt-4 flex justify-end select-none">
-          <button
-            onClick={() => setShowStats(prev => !prev)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-[#1E2022] border border-[#EEF0EF] dark:border-[#2E3133] hover:border-[#CCD0CF] dark:hover:border-zinc-700 text-[10px] font-extrabold uppercase tracking-wider text-[#6F7476] dark:text-[#A3A7A8] transition-all hover:bg-gray-50 dark:hover:bg-zinc-800 cursor-pointer shadow-sm"
-          >
-            <FontAwesomeIcon icon={faChartSimple} className={`h-3 w-3 ${showStats ? 'text-[#00DC7D]' : 'text-gray-400'}`} />
-            <span>{showStats ? 'Hide Dashboard' : 'Show Dashboard'}</span>
-            <FontAwesomeIcon icon={faChevronDown} className={`h-2.5 w-2.5 transition-transform duration-300 ${showStats ? 'rotate-180' : ''}`} />
-          </button>
+        {/* Toggle Button for Stats Dashboard / Filters */}
+        <div className="mt-4 flex justify-end gap-2 select-none">
+          {activeSubTab === 'goals' && (
+            <button
+              onClick={() => setShowGoalsFilters(prev => !prev)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-[#1E2022] border border-[#EEF0EF] dark:border-[#2E3133] hover:border-[#CCD0CF] dark:hover:border-zinc-700 text-[10px] font-extrabold uppercase tracking-wider text-[#6F7476] dark:text-[#A3A7A8] transition-all hover:bg-gray-50 dark:hover:bg-zinc-800 cursor-pointer shadow-sm"
+            >
+              <FontAwesomeIcon icon={faFilter} className={`h-3 w-3 ${showGoalsFilters ? 'text-[#00DC7D]' : 'text-gray-400'}`} />
+              <span>{showGoalsFilters ? 'Hide Filters' : 'Show Filters'}</span>
+              <FontAwesomeIcon icon={faChevronDown} className={`h-2.5 w-2.5 transition-transform duration-300 ${showGoalsFilters ? 'rotate-180' : ''}`} />
+            </button>
+          )}
+          {activeSubTab === 'inbox' && (
+            <button
+              onClick={() => setShowInboxFilters(prev => !prev)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-[#1E2022] border border-[#EEF0EF] dark:border-[#2E3133] hover:border-[#CCD0CF] dark:hover:border-zinc-700 text-[10px] font-extrabold uppercase tracking-wider text-[#6F7476] dark:text-[#A3A7A8] transition-all hover:bg-gray-50 dark:hover:bg-zinc-800 cursor-pointer shadow-sm"
+            >
+              <FontAwesomeIcon icon={faFilter} className={`h-3 w-3 ${showInboxFilters ? 'text-[#00DC7D]' : 'text-gray-400'}`} />
+              <span>{showInboxFilters ? 'Hide Filters' : 'Show Filters'}</span>
+              <FontAwesomeIcon icon={faChevronDown} className={`h-2.5 w-2.5 transition-transform duration-300 ${showInboxFilters ? 'rotate-180' : ''}`} />
+            </button>
+          )}
+          {activeSubTab === 'goals' && (
+            <button
+              onClick={() => setShowStats(prev => !prev)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-[#1E2022] border border-[#EEF0EF] dark:border-[#2E3133] hover:border-[#CCD0CF] dark:hover:border-zinc-700 text-[10px] font-extrabold uppercase tracking-wider text-[#6F7476] dark:text-[#A3A7A8] transition-all hover:bg-gray-50 dark:hover:bg-zinc-800 cursor-pointer shadow-sm"
+            >
+              <FontAwesomeIcon icon={faChartSimple} className={`h-3 w-3 ${showStats ? 'text-[#00DC7D]' : 'text-gray-400'}`} />
+              <span>{showStats ? 'Hide Dashboard' : 'Show Dashboard'}</span>
+              <FontAwesomeIcon icon={faChevronDown} className={`h-2.5 w-2.5 transition-transform duration-300 ${showStats ? 'rotate-180' : ''}`} />
+            </button>
+          )}
         </div>
 
         {/* Collapsible Stats Dashboard */}
@@ -1243,70 +1290,76 @@ export default function GoalsPage() {
         {activeSubTab === 'goals' && (
           <>
             {/* Global Focus View Selector Tray */}
-            <div className="mt-6 bg-[#FAFAFA] dark:bg-[#202324] rounded-2xl p-4.5 border border-[#EEF0EF] dark:border-[#2E3133] select-none flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] uppercase tracking-widest flex items-center gap-1.5">
-                  <FontAwesomeIcon icon={faCrosshairs} className="text-gray-400" /> Focus View Filter
-                </span>
-                <div className="flex items-center gap-2 mt-2 bg-[#F2F2F3]/60 dark:bg-zinc-800/40 p-1.5 rounded-full border border-[#EEF0EF] dark:border-[#2E3133] max-w-full">
-                  {(['none', 'hyperfocus', 'top3', 'pareto'] as const).map(mode => {
-                    const isActive = focusMode === mode;
-                    const icon = mode === 'none' ? faEye : mode === 'hyperfocus' ? faCrosshairs : mode === 'top3' ? faStar : faChartSimple;
-                    const label = mode === 'none' ? 'All' : focusModeInfo[mode].label;
-                    
-                    if (isActive) {
-                      return (
-                        <button
-                          key={mode}
-                          onClick={() => setFocusMode(mode)}
-                          className="flex items-center gap-1.5 py-1.5 px-4 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all duration-300 shadow-sm border border-transparent cursor-pointer active:scale-95 text-white bg-[#2F3331] dark:bg-zinc-700"
-                          style={mode !== 'none' ? {
-                            backgroundColor: focusModeInfo[mode].color,
-                          } : {}}
-                        >
-                          <FontAwesomeIcon icon={icon} className="h-3.5 w-3.5" />
-                          <span>{label}</span>
-                        </button>
-                      );
-                    } else {
-                      return (
-                        <button
-                          key={mode}
-                          onClick={() => setFocusMode(mode)}
-                          className="flex items-center justify-center w-8.5 h-8.5 rounded-full bg-white dark:bg-[#1E2022] text-[#6F7476] dark:text-[#A3A7A8] border border-[#EEF0EF] dark:border-[#2E3133] hover:bg-gray-50 dark:hover:bg-zinc-800 hover:text-black dark:hover:text-white transition-all duration-300 cursor-pointer active:scale-95"
-                          title={label}
-                        >
-                          <FontAwesomeIcon icon={icon} className="h-3.5 w-3.5" />
-                        </button>
-                      );
-                    }
-                  })}
+            <div
+              className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                showGoalsFilters ? 'max-h-[500px] opacity-100 mt-6' : 'max-h-0 opacity-0 pointer-events-none mt-0'
+              }`}
+            >
+              <div className="bg-[#FAFAFA] dark:bg-[#202324] rounded-2xl p-4.5 border border-[#EEF0EF] dark:border-[#2E3133] select-none flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex flex-col items-start gap-1">
+                  <span className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] uppercase tracking-widest flex items-center gap-1.5">
+                    <FontAwesomeIcon icon={faCrosshairs} className="text-gray-400" /> Focus View Filter
+                  </span>
+                  <div className="flex items-center gap-2 mt-2 bg-[#F2F2F3]/60 dark:bg-zinc-800/40 p-1.5 rounded-full border border-[#EEF0EF] dark:border-[#2E3133] max-w-full">
+                    {(['none', 'hyperfocus', 'top3', 'pareto'] as const).map(mode => {
+                      const isActive = focusMode === mode;
+                      const icon = mode === 'none' ? faEye : mode === 'hyperfocus' ? faCrosshairs : mode === 'top3' ? faStar : faChartSimple;
+                      const label = mode === 'none' ? 'All' : focusModeInfo[mode].label;
+                      
+                      if (isActive) {
+                        return (
+                          <button
+                            key={mode}
+                            onClick={() => setFocusMode(mode)}
+                            className="flex items-center gap-1.5 py-1.5 px-4 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all duration-300 shadow-sm border border-transparent cursor-pointer active:scale-95 text-white bg-[#2F3331] dark:bg-zinc-700"
+                            style={mode !== 'none' ? {
+                              backgroundColor: focusModeInfo[mode].color,
+                            } : {}}
+                          >
+                            <FontAwesomeIcon icon={icon} className="h-3.5 w-3.5" />
+                            <span>{label}</span>
+                          </button>
+                        );
+                      } else {
+                        return (
+                          <button
+                            key={mode}
+                            onClick={() => setFocusMode(mode)}
+                            className="flex items-center justify-center w-8.5 h-8.5 rounded-full bg-white dark:bg-[#1E2022] text-[#6F7476] dark:text-[#A3A7A8] border border-[#EEF0EF] dark:border-[#2E3133] hover:bg-gray-50 dark:hover:bg-zinc-800 hover:text-black dark:hover:text-white transition-all duration-300 cursor-pointer active:scale-95"
+                            title={label}
+                          >
+                            <FontAwesomeIcon icon={icon} className="h-3.5 w-3.5" />
+                          </button>
+                        );
+                      }
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-start md:items-end gap-1">
+                  <span className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] uppercase tracking-widest flex items-center gap-1.5">
+                    <FontAwesomeIcon icon={faFilter} className="text-gray-400" /> Time Horizon
+                  </span>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    className="mt-2 bg-white dark:bg-[#1E2022] border border-[#EEF0EF] dark:border-[#2E3133] rounded-full px-4 py-2 text-xs font-bold text-[#6F7476] dark:text-[#A3A7A8] focus:outline-none focus:border-[#00DC7D] transition-colors cursor-pointer shadow-sm"
+                  >
+                    <option value="all">All Time</option>
+                    {availableYears.map(yr => (
+                      <option key={yr} value={yr}>{yr}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div className="flex flex-col items-start md:items-end gap-1">
-                <span className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] uppercase tracking-widest flex items-center gap-1.5">
-                  <FontAwesomeIcon icon={faFilter} className="text-gray-400" /> Time Horizon
-                </span>
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className="mt-2 bg-white dark:bg-[#1E2022] border border-[#EEF0EF] dark:border-[#2E3133] rounded-full px-4 py-2 text-xs font-bold text-[#6F7476] dark:text-[#A3A7A8] focus:outline-none focus:border-[#00DC7D] transition-colors cursor-pointer shadow-sm"
-                >
-                  <option value="all">All Time</option>
-                  {availableYears.map(yr => (
-                    <option key={yr} value={yr}>{yr}</option>
-                  ))}
-                </select>
-              </div>
+              <p className="text-[10px] text-[#A3A7A8] dark:text-[#888D8F] mt-3 font-light text-center leading-normal max-w-full">
+                {focusMode === 'none' && "Showing all active goals in your custom priority order. Drag to reorder!"}
+                {focusMode === 'hyperfocus' && "Hyperfocus: Showing ONLY your single highest priority goal. Crush it first! 🔥"}
+                {focusMode === 'top3' && "Top 3: Displaying your top 3 prioritized milestones. Keep it simple! ⭐"}
+                {focusMode === 'pareto' && "Pareto View: Showing the top 20% most impactful goals. Focus on the vital few! 📊"}
+              </p>
             </div>
-
-            <p className="text-[10px] text-[#A3A7A8] dark:text-[#888D8F] mt-3 font-light text-center leading-normal max-w-full">
-              {focusMode === 'none' && "Showing all active goals in your custom priority order. Drag to reorder!"}
-              {focusMode === 'hyperfocus' && "Hyperfocus: Showing ONLY your single highest priority goal. Crush it first! 🔥"}
-              {focusMode === 'top3' && "Top 3: Displaying your top 3 prioritized milestones. Keep it simple! ⭐"}
-              {focusMode === 'pareto' && "Pareto View: Showing the top 20% most impactful goals. Focus on the vital few! 📊"}
-            </p>
 
         {showAddForm && (
           <div className="mt-6 rounded-3xl bg-white p-6 border border-[#EEF0EF] shadow-md transition-all duration-300">
@@ -1998,19 +2051,92 @@ export default function GoalsPage() {
     {activeSubTab === 'inbox' && (
       /* Inbox Tasks detailed view */
       <main className="mt-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-none">
-          <div>
-            <h2 className="font-sans text-xl font-bold text-[#2F3331] dark:text-[#FAFAFA]">Pending Tasks</h2>
-            <p className="mt-1 text-sm text-[#6F7476] dark:text-[#A3A7A8]">Checklist items captured dynamically from your daily journals and notes. Tapping an item marks it completed.</p>
+        
+        {/* Collapsible Header, Postpone/Clear tools, and Filter/Sort Bar */}
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-in-out ${
+            showInboxFilters ? 'max-h-[500px] opacity-100 mb-6' : 'max-h-0 opacity-0 pointer-events-none mb-0'
+          }`}
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-none mb-6">
+            <div>
+              <h2 className="font-sans text-xl font-bold text-[#2F3331] dark:text-[#FAFAFA]">Pending Tasks</h2>
+              <p className="mt-1 text-sm text-[#6F7476] dark:text-[#A3A7A8]">Checklist items captured dynamically from your daily journals and notes. Tapping an item marks it completed.</p>
+            </div>
+            
+            <div className="flex flex-wrap gap-2 self-start sm:self-center">
+              {overdueTasks.length > 0 && (
+                <button
+                  onClick={handlePostponeAllOverdue}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#E9FFF4] dark:bg-[#00DC7D]/10 hover:bg-[#D6FADB] dark:hover:bg-[#00DC7D]/20 text-[#00A963] dark:text-[#00DC7D] border border-[#00DC7D]/25 dark:border-transparent text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-95 animate-pulse"
+                  title="Reschedule all overdue tasks to today"
+                >
+                  <FontAwesomeIcon icon={faCalendarPlus} className="w-3.5 h-3.5" />
+                  <span>Postpone Overdue ({overdueTasks.length})</span>
+                </button>
+              )}
+              {stats.totalCompletedTasks > 0 && (
+                <button
+                  onClick={handleClearCompletedTasks}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200/45 dark:border-transparent text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-95"
+                >
+                  <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
+                  <span>Clear Checked ({stats.totalCompletedTasks})</span>
+                </button>
+              )}
+            </div>
           </div>
-          {stats.totalCompletedTasks > 0 && (
-            <button
-              onClick={handleClearCompletedTasks}
-              className="self-start sm:self-center flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200/45 dark:border-transparent text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-95"
-            >
-              <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
-              <span>Clear Checked ({stats.totalCompletedTasks})</span>
-            </button>
+
+          {/* Filter and Sort Bar */}
+          {pendingTasks.length > 0 && (
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#1E2022] p-4 rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133]/60 shadow-sm select-none mb-6">
+              {/* Filters */}
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <span className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] uppercase tracking-wider mr-1.5 flex items-center gap-1">
+                  <FontAwesomeIcon icon={faFilter} className="w-3 h-3 text-gray-400" /> Filter:
+                </span>
+                {(['all', 'today', 'overdue', 'week', 'journal', 'notes'] as const).map((filter) => {
+                  const active = inboxFilter === filter;
+                  const labels = {
+                    all: 'All',
+                    today: 'Today',
+                    overdue: 'Overdue',
+                    week: 'This Week',
+                    journal: 'Journals',
+                    notes: 'Notes'
+                  };
+                  return (
+                    <button
+                      key={filter}
+                      onClick={() => setInboxFilter(filter)}
+                      className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border ${
+                        active
+                          ? 'bg-[#E9FFF4] border-[#00DC7D]/25 text-[#00A963] shadow-sm'
+                          : 'bg-[#FAFAFA] dark:bg-[#202324] border-[#EEF0EF] dark:border-[#2E3133] text-[#6F7476] dark:text-[#A3A7A8] hover:bg-[#F2F2F3] dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      {labels[filter]}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Sort Selection */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] uppercase tracking-wider flex items-center gap-1">
+                  <FontAwesomeIcon icon={faSort} className="w-3 h-3 text-gray-400" /> Sort:
+                </span>
+                <select
+                  value={inboxSort}
+                  onChange={(e) => setInboxSort(e.target.value as any)}
+                  className="bg-[#FAFAFA] dark:bg-[#202324] border border-[#EEF0EF] dark:border-[#2E3133] rounded-full px-3 py-1 text-xs font-bold text-[#6F7476] dark:text-[#A3A7A8] focus:outline-none focus:border-[#00DC7D] transition-colors cursor-pointer"
+                >
+                  <option value="time-asc">Scheduled (Nearest)</option>
+                  <option value="time-desc">Scheduled (Furthest)</option>
+                  <option value="created-desc">Created Date (Newest)</option>
+                </select>
+              </div>
+            </div>
           )}
         </div>
 
@@ -2053,58 +2179,6 @@ export default function GoalsPage() {
               >
                 <FontAwesomeIcon icon={faCheck} className="h-4 w-4" />
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* Filter and Sort Bar */}
-        {pendingTasks.length > 0 && (
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#1E2022] p-4 rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133]/60 shadow-sm select-none">
-            {/* Filters */}
-            <div className="flex flex-wrap gap-1.5 items-center">
-              <span className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] uppercase tracking-wider mr-1.5 flex items-center gap-1">
-                <FontAwesomeIcon icon={faFilter} className="w-3 h-3 text-gray-400" /> Filter:
-              </span>
-              {(['all', 'today', 'overdue', 'week', 'journal', 'notes'] as const).map((filter) => {
-                const active = inboxFilter === filter;
-                const labels = {
-                  all: 'All',
-                  today: 'Today',
-                  overdue: 'Overdue',
-                  week: 'This Week',
-                  journal: 'Journals',
-                  notes: 'Notes'
-                };
-                return (
-                  <button
-                    key={filter}
-                    onClick={() => setInboxFilter(filter)}
-                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border ${
-                      active
-                        ? 'bg-[#E9FFF4] border-[#00DC7D]/25 text-[#00A963] shadow-sm'
-                        : 'bg-[#FAFAFA] dark:bg-[#202324] border-[#EEF0EF] dark:border-[#2E3133] text-[#6F7476] dark:text-[#A3A7A8] hover:bg-[#F2F2F3] dark:hover:bg-zinc-800'
-                    }`}
-                  >
-                    {labels[filter]}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Sort Selection */}
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] uppercase tracking-wider flex items-center gap-1">
-                <FontAwesomeIcon icon={faSort} className="w-3 h-3 text-gray-400" /> Sort:
-              </span>
-              <select
-                value={inboxSort}
-                onChange={(e) => setInboxSort(e.target.value as any)}
-                className="bg-[#FAFAFA] dark:bg-[#202324] border border-[#EEF0EF] dark:border-[#2E3133] rounded-full px-3 py-1 text-xs font-bold text-[#6F7476] dark:text-[#A3A7A8] focus:outline-none focus:border-[#00DC7D] transition-colors cursor-pointer"
-              >
-                <option value="time-asc">Scheduled (Nearest)</option>
-                <option value="time-desc">Scheduled (Furthest)</option>
-                <option value="created-desc">Created Date (Newest)</option>
-              </select>
             </div>
           </div>
         )}
@@ -2542,7 +2616,7 @@ export default function GoalsPage() {
                 <button
                   key={cell.key}
                   onClick={() => setSelectedCalendarDate(cell.date)}
-                  className={`p-2 rounded-2xl flex flex-col justify-between items-center transition-all cursor-pointer border hover:scale-105 active:scale-95 ${
+                  className={`p-2 rounded-none flex flex-col justify-between items-center transition-all cursor-pointer border hover:scale-105 active:scale-95 ${
                     !cell.isCurrentMonth ? 'opacity-35 hover:opacity-100' : ''
                   } ${
                     isSelected

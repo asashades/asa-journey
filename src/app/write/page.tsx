@@ -720,24 +720,24 @@ function WritePageContent() {
 
   // Sync state to URL parameter when currentDate changes
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const currentUrlParam = url.searchParams.get('date');
+    const params = new URLSearchParams(window.location.search);
+    const currentUrlParam = params.get('date');
     
     if (isFirstRender.current) {
       isFirstRender.current = false;
       // If URL doesn't have a date parameter, initialize it to currentDate
       if (!currentUrlParam && currentDate) {
-        url.searchParams.set('date', currentDate);
-        window.history.replaceState(null, '', url.pathname + url.search);
+        params.set('date', currentDate);
+        router.replace(`/write?${params.toString()}`);
       }
       return;
     }
 
     if (currentDate && currentUrlParam !== currentDate) {
-      url.searchParams.set('date', currentDate);
-      window.history.replaceState(null, '', url.pathname + url.search);
+      params.set('date', currentDate);
+      router.replace(`/write?${params.toString()}`);
     }
-  }, [currentDate]);
+  }, [currentDate, router]);
 
   const selectedDate = useMemo(() => {
     const parsedDate = toLocalDate(currentDate);
@@ -753,10 +753,16 @@ function WritePageContent() {
 
   const handlePrevDay = () => {
     try {
-      const parts = currentDate.split('-');
+      const activeDate = currentDate || format(new Date(), 'yyyy-MM-dd');
+      const parts = activeDate.split('-');
       const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-      d.setDate(d.getDate() - 1);
-      setCurrentDate(format(d, 'yyyy-MM-dd'));
+      if (!isNaN(d.getTime())) {
+        d.setDate(d.getDate() - 1);
+        const newDateStr = format(d, 'yyyy-MM-dd');
+        const params = new URLSearchParams(window.location.search);
+        params.set('date', newDateStr);
+        router.replace(`/write?${params.toString()}`);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -764,10 +770,16 @@ function WritePageContent() {
 
   const handleNextDay = () => {
     try {
-      const parts = currentDate.split('-');
+      const activeDate = currentDate || format(new Date(), 'yyyy-MM-dd');
+      const parts = activeDate.split('-');
       const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-      d.setDate(d.getDate() + 1);
-      setCurrentDate(format(d, 'yyyy-MM-dd'));
+      if (!isNaN(d.getTime())) {
+        d.setDate(d.getDate() + 1);
+        const newDateStr = format(d, 'yyyy-MM-dd');
+        const params = new URLSearchParams(window.location.search);
+        params.set('date', newDateStr);
+        router.replace(`/write?${params.toString()}`);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -1383,7 +1395,9 @@ function WritePageContent() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setCurrentDate(todayDate);
+                  const params = new URLSearchParams(window.location.search);
+                  params.set('date', todayDate);
+                  router.replace(`/write?${params.toString()}`);
                 }}
                 className="pointer-events-auto flex h-5 w-5 items-center justify-center cursor-pointer"
                 title="Go to Today"
