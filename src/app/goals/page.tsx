@@ -2312,7 +2312,7 @@ export default function GoalsPage() {
                       <button
                         onClick={() => {
                           setCurrentDate(task.date);
-                          router.push('/write');
+                          router.push(`/write?date=${task.date}`);
                         }}
                         className="inline-flex items-center gap-1.5 rounded-full bg-[#E9FFF4] hover:bg-[#D6FADB] text-[#00A963] px-2.5 py-0.5 text-[9px] font-extrabold transition-colors cursor-pointer"
                         title={`Go to ${dateStr}`}
@@ -2772,9 +2772,11 @@ export default function GoalsPage() {
                     const totalEventsCount = dayEvents.goals.length + dayEvents.subgoals.length + visibleDayTasks.length;
 
                     return (
-                      <div className="bg-[#FAFAFA] dark:bg-[#161819] border-t border-b border-[#EEF0EF] dark:border-[#1E2022] p-6 space-y-4 animate-in slide-in-from-top duration-300">
-                        <div className="flex justify-between items-center border-b border-[#EEF0EF] dark:border-[#1E2022] pb-3">
-                          <div>
+                      <div className="bg-[#FAFAFA] dark:bg-[#161819] border-t border-b border-[#EEF0EF] dark:border-[#1E2022] p-3 md:p-6 space-y-3 md:space-y-4 animate-in slide-in-from-top duration-300">
+                        {/* Header: compact on mobile, full on desktop */}
+                        <div className="flex justify-between items-center border-b border-[#EEF0EF] dark:border-[#1E2022] pb-2 md:pb-3">
+                          {/* Desktop: full header text */}
+                          <div className="hidden md:block">
                             <h3 className="text-sm font-bold text-[#2F3331] dark:text-[#FAFAFA]">
                               Details for {format(selectedCalendarDate, 'EEEE, MMM d, yyyy')}
                             </h3>
@@ -2782,24 +2784,28 @@ export default function GoalsPage() {
                               {totalEventsCount} scheduled items
                             </p>
                           </div>
-                          {/* Quick Add Task button for selected day */}
+                          {/* Mobile: compact date */}
+                          <span className="md:hidden text-[10px] font-bold text-[#A3A7A8] dark:text-[#888D8F] uppercase tracking-wider">
+                            {format(selectedCalendarDate, 'MMM d')} &middot; {totalEventsCount} items
+                          </span>
+                          {/* Quick Add Task button */}
                           <button
                             onClick={() => {
                               setCurrentDate(dateStr);
-                              router.push('/write');
+                              router.push(`/write?date=${dateStr}`);
                             }}
                             className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[#00DC7D] text-white rounded-xl hover:bg-[#00B866] transition-all cursor-pointer active:scale-95 shadow-sm shadow-[#00DC7D]/10"
                             title="Add task in journal for this day"
                           >
-                            <FontAwesomeIcon icon={faPlus} className="mr-1 w-2.5 h-2.5" />
-                            Add Journal Bullet
+                            <FontAwesomeIcon icon={faPlus} className="md:mr-1 w-2.5 h-2.5" />
+                            <span className="hidden md:inline">Add Journal Bullet</span>
                           </button>
                         </div>
 
-                        <div className="space-y-4">
+                        <div className="space-y-3 md:space-y-4">
                           {/* Deadlines Section */}
                           {(dayEvents.goals.length > 0 || dayEvents.subgoals.length > 0) && (
-                            <div className="space-y-2.5">
+                            <div className="space-y-2 md:space-y-2.5">
                               <span className="text-[10px] font-bold text-[#8B00D4] dark:text-[#D6B2FF] uppercase tracking-widest flex items-center gap-1.5 select-none">
                                 <FontAwesomeIcon icon={faFlag} className="w-3 h-3 text-[#8B00D4] dark:text-[#D6B2FF]" />
                                 Goal Deadlines
@@ -2812,10 +2818,10 @@ export default function GoalsPage() {
                                       setActiveSubTab('goals');
                                       window.scrollTo({ top: 0, behavior: 'smooth' });
                                     }}
-                                    className="flex items-center gap-2.5 bg-[#F8F5FF] hover:bg-[#F2EAFF] dark:bg-[#1A0F2E] dark:hover:bg-[#22133D] p-3 rounded-2xl border border-[#F2EDFF] dark:border-[#3D2A5C] cursor-pointer transition-colors"
+                                    className="flex items-center gap-2.5 bg-[#F8F5FF] hover:bg-[#F2EAFF] dark:bg-[#1A0F2E] dark:hover:bg-[#22133D] p-2.5 md:p-3 rounded-2xl border border-[#F2EDFF] dark:border-[#3D2A5C] cursor-pointer transition-colors"
                                   >
-                                    <div className="h-6 w-6 rounded-full bg-[#8B00D4] text-white flex items-center justify-center text-xs shrink-0 shadow-sm shadow-[#8B00D4]/20">
-                                      <FontAwesomeIcon icon={faCrosshairs} className="w-3.5 h-3.5" />
+                                    <div className="h-5 w-5 md:h-6 md:w-6 rounded-full bg-[#8B00D4] text-white flex items-center justify-center text-xs shrink-0 shadow-sm shadow-[#8B00D4]/20">
+                                      <FontAwesomeIcon icon={faCrosshairs} className="w-2.5 h-2.5 md:w-3.5 md:h-3.5" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <p className="text-xs font-bold text-[#2F3331] dark:text-[#E2D5FF] truncate">
@@ -2840,10 +2846,10 @@ export default function GoalsPage() {
                                       setActiveSubTab('goals');
                                       window.scrollTo({ top: 0, behavior: 'smooth' });
                                     }}
-                                    className="flex items-center gap-2.5 bg-[#F8F5FF] hover:bg-[#F2EAFF] dark:bg-[#1A0F2E] dark:hover:bg-[#22133D] p-3 rounded-2xl border border-[#F2EDFF] dark:border-[#3D2A5C] cursor-pointer transition-colors"
+                                    className="flex items-center gap-2.5 bg-[#F8F5FF] hover:bg-[#F2EAFF] dark:bg-[#1A0F2E] dark:hover:bg-[#22133D] p-2.5 md:p-3 rounded-2xl border border-[#F2EDFF] dark:border-[#3D2A5C] cursor-pointer transition-colors"
                                   >
-                                    <div className="h-6 w-6 rounded-full bg-[#8B00D4]/15 dark:bg-[#8B00D4]/30 text-[#8B00D4] dark:text-[#E2D5FF] flex items-center justify-center text-xs shrink-0">
-                                      <FontAwesomeIcon icon={faStar} className="w-3.5 h-3.5" />
+                                    <div className="h-5 w-5 md:h-6 md:w-6 rounded-full bg-[#8B00D4]/15 dark:bg-[#8B00D4]/30 text-[#8B00D4] dark:text-[#E2D5FF] flex items-center justify-center text-xs shrink-0">
+                                      <FontAwesomeIcon icon={faStar} className="w-2.5 h-2.5 md:w-3.5 md:h-3.5" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <p className="text-xs font-bold text-[#2F3331] dark:text-[#E2D5FF] truncate">
@@ -2861,15 +2867,22 @@ export default function GoalsPage() {
 
                           {/* Tasks Section */}
                           {visibleDayTasks.length > 0 && (
-                            <div className="space-y-2.5">
+                            <div className="space-y-2 md:space-y-2.5">
                               <span className="text-[10px] font-bold text-[#00A963] uppercase tracking-widest flex items-center gap-1.5 select-none">
                                 <FontAwesomeIcon icon={faListCheck} className="w-3 h-3 text-[#00A963]" />
                                 Tasks on this Day
                               </span>
-                              <div className="space-y-2">
+                              <div className="space-y-1.5 md:space-y-2">
                                 {visibleDayTasks.map((task) => (
-                                  <div key={task.id} className="flex items-center justify-between gap-3 bg-[#FAFAFA] dark:bg-[#202324] p-3 rounded-2xl border border-[#EEF0EF] dark:border-[#1E2022]">
-                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  <div 
+                                    key={task.id} 
+                                    className={`bg-[#FAFAFA] dark:bg-[#202324] p-2.5 md:p-3 rounded-2xl border border-[#EEF0EF] dark:border-[#1E2022] border-l-[3px] ${
+                                      task.isFromNote
+                                        ? 'border-l-[#8B00D4] dark:border-l-[#C494FF]'
+                                        : 'border-l-[#00DC7D] dark:border-l-[#00DC7D]'
+                                    }`}
+                                  >
+                                    <div className="flex items-start gap-2.5 md:gap-3">
                                       <button
                                         onClick={() => {
                                           playClickSound();
@@ -2879,7 +2892,7 @@ export default function GoalsPage() {
                                             toggleBulletComplete(task.id);
                                           }
                                         }}
-                                        className={`flex h-5 w-5 items-center justify-center rounded-full border transition-all cursor-pointer ${
+                                        className={`flex h-5 w-5 items-center justify-center rounded-full border transition-all cursor-pointer shrink-0 mt-0.5 ${
                                           task.isCompleted
                                             ? 'bg-[#00DC7D] border-[#00DC7D] text-white shadow-sm shadow-[#00DC7D]/25 hover:scale-105 active:scale-90'
                                             : 'border-[#CCD0CF] text-transparent hover:border-[#00DC7D] hover:text-[#00DC7D] hover:scale-105 active:scale-90'
@@ -2887,26 +2900,19 @@ export default function GoalsPage() {
                                       >
                                         <FontAwesomeIcon icon={faCheck} className="w-2.5 h-2.5 text-white" />
                                       </button>
-                                      <p className={`text-xs font-semibold leading-relaxed break-words truncate pr-2 ${
-                                        task.isCompleted ? 'line-through text-[#A3A7A8] font-normal' : 'text-[#2F3331] dark:text-[#FAFAFA]'
-                                      }`}>
-                                        <HighlightedText text={task.text} />
-                                      </p>
-                                    </div>
-                                    
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      {task.scheduledAt && (
-                                        <span className="text-[8.5px] font-bold text-[#8C6B00] bg-[#FFF3C4] dark:bg-[#FFA952]/10 dark:text-[#FFA952] px-2 py-0.5 rounded-full select-none">
-                                          {format(new Date(task.scheduledAt), 'h:mm a')}
-                                        </span>
-                                      )}
-                                      <span className={`text-[8.5px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                                        task.isFromNote
-                                          ? 'bg-[#F2EFFE] border-[#EDD6FF] text-[#8B00D4] dark:bg-[#C494FF]/10 dark:text-[#C494FF] dark:border-transparent'
-                                          : 'bg-[#E9FFF4] border-[#D6FADB] text-[#00A963] dark:bg-[#00DC7D]/10 dark:text-[#00DC7D] dark:border-transparent'
-                                      }`}>
-                                        {task.isFromNote ? 'Note' : 'Journal'}
-                                      </span>
+                                      <div className="flex-1 min-w-0">
+                                        <p className={`text-xs font-semibold leading-relaxed break-words ${
+                                          task.isCompleted ? 'line-through text-[#A3A7A8] font-normal' : 'text-[#2F3331] dark:text-[#FAFAFA]'
+                                        }`}>
+                                          <HighlightedText text={task.text} />
+                                        </p>
+                                        {task.scheduledAt && (
+                                          <span className="inline-block mt-1 text-[8.5px] font-bold text-[#8C6B00] bg-[#FFF3C4] dark:bg-[#FFA952]/10 dark:text-[#FFA952] px-2 py-0.5 rounded-full select-none">
+                                            <FontAwesomeIcon icon={faClock} className="w-2 h-2 mr-0.5" />
+                                            {format(new Date(task.scheduledAt), 'h:mm a')}
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 ))}
@@ -2915,7 +2921,7 @@ export default function GoalsPage() {
                           )}
 
                           {totalEventsCount === 0 && (
-                            <div className="text-center py-10">
+                            <div className="text-center py-6 md:py-10">
                               <p className="text-xs text-[#A3A7A8] dark:text-[#888D8F] italic">
                                 No deadlines or tasks scheduled for this day.
                               </p>
