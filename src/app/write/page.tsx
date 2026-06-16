@@ -707,37 +707,42 @@ function WritePageContent() {
   }, []);
 
   const isFirstRender = useRef(true);
+  const currentDateRef = useRef(currentDate);
 
-  // Synchronize URL date parameter with currentDate state
+  useEffect(() => {
+    currentDateRef.current = currentDate;
+  }, [currentDate]);
+
+  // Synchronize URL date parameter with currentDate state when dateParam changes
   useEffect(() => {
     if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
       const parsedDate = toLocalDate(dateParam);
-      if (isValid(parsedDate) && dateParam !== currentDate) {
+      if (isValid(parsedDate) && dateParam !== currentDateRef.current) {
         setCurrentDate(dateParam);
       }
     }
-  }, [dateParam, currentDate, setCurrentDate]);
+  }, [dateParam, setCurrentDate]);
 
-  // Sync state to URL parameter when currentDate changes
+  // Sync state to URL parameter silently when currentDate changes
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const currentUrlParam = params.get('date');
+    const url = new URL(window.location.href);
+    const currentUrlParam = url.searchParams.get('date');
     
     if (isFirstRender.current) {
       isFirstRender.current = false;
       // If URL doesn't have a date parameter, initialize it to currentDate
       if (!currentUrlParam && currentDate) {
-        params.set('date', currentDate);
-        router.replace(`/write?${params.toString()}`);
+        url.searchParams.set('date', currentDate);
+        window.history.replaceState(null, '', url.pathname + url.search);
       }
       return;
     }
 
     if (currentDate && currentUrlParam !== currentDate) {
-      params.set('date', currentDate);
-      router.replace(`/write?${params.toString()}`);
+      url.searchParams.set('date', currentDate);
+      window.history.replaceState(null, '', url.pathname + url.search);
     }
-  }, [currentDate, router]);
+  }, [currentDate]);
 
   const selectedDate = useMemo(() => {
     const parsedDate = toLocalDate(currentDate);
@@ -759,9 +764,7 @@ function WritePageContent() {
       if (!isNaN(d.getTime())) {
         d.setDate(d.getDate() - 1);
         const newDateStr = format(d, 'yyyy-MM-dd');
-        const params = new URLSearchParams(window.location.search);
-        params.set('date', newDateStr);
-        router.replace(`/write?${params.toString()}`);
+        setCurrentDate(newDateStr);
       }
     } catch (e) {
       console.error(e);
@@ -776,9 +779,7 @@ function WritePageContent() {
       if (!isNaN(d.getTime())) {
         d.setDate(d.getDate() + 1);
         const newDateStr = format(d, 'yyyy-MM-dd');
-        const params = new URLSearchParams(window.location.search);
-        params.set('date', newDateStr);
-        router.replace(`/write?${params.toString()}`);
+        setCurrentDate(newDateStr);
       }
     } catch (e) {
       console.error(e);
@@ -1395,9 +1396,7 @@ function WritePageContent() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  const params = new URLSearchParams(window.location.search);
-                  params.set('date', todayDate);
-                  router.replace(`/write?${params.toString()}`);
+                  setCurrentDate(todayDate);
                 }}
                 className="pointer-events-auto flex h-5 w-5 items-center justify-center cursor-pointer"
                 title="Go to Today"

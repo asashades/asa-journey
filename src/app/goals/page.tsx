@@ -153,6 +153,7 @@ export default function GoalsPage() {
   const [inboxSort, setInboxSort] = useState<'time-asc' | 'time-desc' | 'created-desc'>('time-asc');
   const [showAddTaskForm, setShowAddTaskForm] = useState(false);
   const [newTaskContent, setNewTaskContent] = useState('');
+  const [showCalendarAddChoice, setShowCalendarAddChoice] = useState(false);
 
 
   // Aggregate unresolved checklist bullets across all logs and notes for full-page detailed view
@@ -473,7 +474,17 @@ export default function GoalsPage() {
 
   const handleAddTask = async () => {
     if (!newTaskContent.trim()) return;
-    await addQuickJournalBullet(newTaskContent.trim(), 'checklist');
+    
+    const bullet = await addQuickJournalBullet(newTaskContent.trim(), 'checklist');
+    
+    if (bullet && activeSubTab === 'calendar' && selectedCalendarDate) {
+      if (!bullet.scheduledAt) {
+        const scheduledDate = new Date(selectedCalendarDate);
+        scheduledDate.setHours(12, 0, 0, 0); // default to 12 PM
+        await updateBullet(bullet.id, { scheduledAt: scheduledDate });
+      }
+    }
+    
     setNewTaskContent('');
     setShowAddTaskForm(false);
   };
@@ -966,12 +977,22 @@ export default function GoalsPage() {
             onClick={() => {
               if (activeSubTab === 'goals') {
                 setShowAddForm(current => !current);
-              } else {
+              } else if (activeSubTab === 'inbox') {
                 setShowAddTaskForm(current => !current);
+              } else if (activeSubTab === 'calendar') {
+                setShowCalendarAddChoice(current => !current);
+                setShowAddTaskForm(false);
+                setShowAddForm(false);
               }
             }}
             className="mt-1 flex h-11 w-11 items-center justify-center rounded-full bg-[#00DC7D] text-white shadow-sm transition-transform duration-200 hover:scale-105 active:scale-95 hover:bg-[#00B866]"
-            title={activeSubTab === 'goals' ? 'add goal' : 'add task'}
+            title={
+              activeSubTab === 'goals' 
+                ? 'add goal' 
+                : activeSubTab === 'inbox' 
+                ? 'add task' 
+                : 'tambah item'
+            }
           >
             <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />
           </button>
@@ -2593,6 +2614,211 @@ export default function GoalsPage() {
 
     {activeSubTab === 'calendar' && (
       <main className="mt-8 space-y-6">
+        {/* Choice Menu for adding items in Calendar tab */}
+        {showCalendarAddChoice && (
+          <div className="bg-white dark:bg-[#1E2022] rounded-3xl p-6 border border-[#EEF0EF] dark:border-[#2E3133]/60 shadow-md transition-all duration-300 animate-in fade-in slide-in-from-top-5 duration-200">
+            <h3 className="text-[10px] font-bold text-[#2F3331] dark:text-[#FAFAFA] mb-4 flex items-center gap-1.5 uppercase tracking-wider">
+              ✨ Tambah apa hari ini?
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => {
+                  playClickSound();
+                  setShowAddTaskForm(true);
+                  setShowAddForm(false);
+                  setShowCalendarAddChoice(false);
+                }}
+                className="flex flex-col items-center gap-2 p-4 bg-[#F2FDF6] hover:bg-[#E2FBEB] dark:bg-[#0E2719] dark:hover:bg-[#153B26] border border-[#D6FADB] dark:border-[#1E4D34] rounded-2xl cursor-pointer text-[#00A963] dark:text-[#00FF8C] transition-all duration-300 active:scale-95 shadow-sm"
+              >
+                <FontAwesomeIcon icon={faListCheck} className="w-6 h-6" />
+                <span className="text-xs font-bold uppercase tracking-wider">Task Baru</span>
+              </button>
+              <button
+                onClick={() => {
+                  playClickSound();
+                  setShowAddForm(true);
+                  setShowAddTaskForm(false);
+                  setShowCalendarAddChoice(false);
+                  if (selectedCalendarDate) {
+                    setNewGoalDeadline(format(selectedCalendarDate, 'yyyy-MM-dd'));
+                  } else {
+                    setNewGoalDeadline('');
+                  }
+                }}
+                className="flex flex-col items-center gap-2 p-4 bg-[#F9F5FF] hover:bg-[#F2EAFF] dark:bg-[#160E2A] dark:hover:bg-[#251842] border border-[#F2EDFF] dark:border-[#3E2A5D] rounded-2xl cursor-pointer text-[#8B00D4] dark:text-[#E2D5FF] transition-all duration-300 active:scale-95 shadow-sm"
+              >
+                <FontAwesomeIcon icon={faFlag} className="w-6 h-6" />
+                <span className="text-xs font-bold uppercase tracking-wider">Goal Baru</span>
+              </button>
+            </div>
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={() => {
+                  playClickSound();
+                  setShowCalendarAddChoice(false);
+                }}
+                className="px-4 py-1.5 text-xs font-bold text-[#6F7476] hover:text-[#2F3331] dark:text-[#A3A7A8] dark:hover:text-[#FAFAFA] border border-[#CCD0CF] dark:border-[#2E3133] rounded-xl hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* New Task Form in Calendar tab */}
+        {showAddTaskForm && (
+          <div className="rounded-3xl bg-white dark:bg-[#1E2022] p-6 border border-[#EEF0EF] dark:border-[#2E3133]/60 shadow-md transition-all duration-300 animate-in fade-in slide-in-from-top-5 duration-200">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-sm font-bold text-[#2F3331] dark:text-[#FAFAFA] flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                ✨ Task Baru {selectedCalendarDate ? `untuk ${format(selectedCalendarDate, 'MMM d, yyyy')}` : '(Hari Ini)'}
+              </h3>
+              <span className="text-[9px] font-extrabold uppercase bg-[#E9FFF4] text-[#00A963] dark:bg-[#00DC7D]/15 dark:text-[#00DC7D] px-2 py-0.5 rounded-full select-none">
+                Auto-Schedule
+              </span>
+            </div>
+            
+            <MentionTextarea
+              value={newTaskContent}
+              onChange={setNewTaskContent}
+              onEnter={handleAddTask}
+              placeholder={selectedCalendarDate 
+                ? `Tulis task untuk tanggal ini... (misal: 'Beli susu jam 3 sore')` 
+                : "Tulis task... (misal: 'Beli susu besok sore')"
+              }
+              className="mb-4 w-full bg-transparent border-b border-[#CCD0CF]/40 focus:border-[#00DC7D] rounded-none py-2 text-[#2F3331] dark:text-[#FAFAFA] placeholder-[#A3A7A8] font-sans text-base font-semibold focus:outline-none transition-all duration-300 resize-none overflow-hidden"
+              autoFocus
+              style={{ minHeight: '38px', height: 'auto' }}
+            />
+            
+            <p className="text-[10px] text-[#A3A7A8] dark:text-[#888D8F] mb-4 leading-relaxed">
+              💡 <strong>Info:</strong> Task akan otomatis dijadwalkan pada hari yang kamu pilih di kalender. Kamu juga bisa mengetikkan waktu (misal: "jam 9 pagi").
+            </p>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  playClickSound();
+                  setShowAddTaskForm(false);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#CCD0CF] dark:border-zinc-700 bg-white dark:bg-[#1E2022] text-[#6F7476] hover:bg-[#F2F2F3] hover:text-[#2F3331] dark:hover:bg-zinc-800 dark:hover:text-white transition-all cursor-pointer active:scale-95"
+                title="Batal"
+              >
+                <FontAwesomeIcon icon={faXmark} className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleAddTask}
+                disabled={!newTaskContent.trim()}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00DC7D] text-white hover:bg-[#00B866] disabled:opacity-50 transition-all cursor-pointer active:scale-95 shadow-sm shadow-[#00DC7D]/10"
+                title="Simpan"
+              >
+                <FontAwesomeIcon icon={faCheck} className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* New Goal Form in Calendar tab */}
+        {showAddForm && (
+          <div className="rounded-3xl bg-white dark:bg-[#1E2022] p-6 border border-[#EEF0EF] dark:border-[#2E3133]/60 shadow-md transition-all duration-300 animate-in fade-in slide-in-from-top-5 duration-200">
+            <h3 className="text-sm font-bold text-[#2F3331] dark:text-[#FAFAFA] mb-4 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+              ✨ Goal Baru
+            </h3>
+            
+            <textarea
+              value={newGoalContent}
+              onChange={(e) => setNewGoalContent(e.target.value)}
+              placeholder="Apa yang ingin kamu capai?"
+              rows={2}
+              className="mb-4 w-full resize-none bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-2 text-[#2F3331] dark:text-[#FAFAFA] placeholder-[#A3A7A8] font-sans text-base font-semibold focus:outline-none transition-all duration-300"
+              autoFocus
+            />
+            
+            <div className="mb-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#6F7476] dark:text-[#A3A7A8]">Deadline (opsional)</label>
+                  <input
+                    type="date"
+                    value={newGoalDeadline}
+                    onChange={(e) => setNewGoalDeadline(e.target.value)}
+                    className="w-full bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-1.5 text-sm text-[#2F3331] dark:text-[#FAFAFA] focus:outline-none transition-all duration-300"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#6F7476] dark:text-[#A3A7A8]">Kategori</label>
+                  <select
+                    value={categorySelectOption}
+                    onChange={(e) => setCategorySelectOption(e.target.value)}
+                    className="w-full bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-1.5 text-sm text-[#2F3331] dark:text-[#FAFAFA] focus:outline-none transition-all duration-300"
+                  >
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                    <option value="__custom__">➕ Buat baru...</option>
+                  </select>
+                  {categorySelectOption === '__custom__' && (
+                    <input
+                      type="text"
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      placeholder="Masukkan nama kategori"
+                      className="mt-2 w-full bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-1 text-xs text-[#2F3331] dark:text-[#FAFAFA] placeholder-[#CCD0CF]/80 focus:outline-none transition-all duration-300"
+                    />
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3 select-none">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#6F7476] dark:text-[#A3A7A8]">Prioritas:</span>
+                <div className="flex gap-1.5">
+                  {(['high', 'medium', 'low'] as const).map(prio => (
+                    <button
+                      key={prio}
+                      type="button"
+                      onClick={() => {
+                        playClickSound();
+                        setNewGoalPriority(prio);
+                      }}
+                      className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border transition-all cursor-pointer ${
+                        newGoalPriority === prio
+                          ? prio === 'high'
+                            ? 'bg-[#FF453A]/10 border-[#FF453A] text-[#FF453A] shadow-sm shadow-[#FF453A]/10'
+                            : prio === 'medium'
+                            ? 'bg-[#FF9F0A]/10 border-[#FF9F0A] text-[#FF9F0A] shadow-sm shadow-[#FF9F0A]/10'
+                            : 'bg-[#00DC7D]/10 border-[#00DC7D] text-[#00DC7D] shadow-sm shadow-[#00DC7D]/10'
+                          : 'border-[#CCD0CF]/50 text-[#8E8E93] dark:border-zinc-700/50 hover:bg-gray-50 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      {prio}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  playClickSound();
+                  setShowAddForm(false);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#CCD0CF] bg-white dark:bg-[#1E2022] text-[#6F7476] hover:bg-[#F2F2F3] hover:text-[#2F3331] transition-all cursor-pointer active:scale-95"
+                title="Batal"
+              >
+                <FontAwesomeIcon icon={faXmark} className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleAddGoal}
+                disabled={!newGoalContent.trim()}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00DC7D] text-white hover:bg-[#00B866] disabled:opacity-50 transition-all cursor-pointer active:scale-95 shadow-sm shadow-[#00DC7D]/10"
+                title="Simpan"
+              >
+                <FontAwesomeIcon icon={faCheck} className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white dark:bg-[#1E2022] rounded-3xl p-6 border border-[#EEF0EF] dark:border-[#2E3133] shadow-sm select-none">
           {/* Calendar Header */}
           <div className="flex items-center justify-between mb-6">
