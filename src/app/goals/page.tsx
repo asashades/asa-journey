@@ -653,6 +653,14 @@ export default function GoalsPage() {
     return cells;
   }, [calendarDate]);
 
+  const calendarWeeks = useMemo(() => {
+    const weeks = [];
+    for (let i = 0; i < calendarGrid.length; i += 7) {
+      weeks.push(calendarGrid.slice(i, i + 7));
+    }
+    return weeks;
+  }, [calendarGrid]);
+
   const calendarEvents = useMemo(() => {
     const eventsMap: { [dateStr: string]: {
       tasks: any[];
@@ -2598,252 +2606,265 @@ export default function GoalsPage() {
           </div>
 
           {/* Monthly Grid */}
-          <div className="grid grid-cols-7 gap-2">
-            {calendarGrid.map((cell) => {
-              const dateStr = format(cell.date, 'yyyy-MM-dd');
-              const cellEvents = calendarEvents[dateStr] || { tasks: [], goals: [], subgoals: [] };
-              const hasGoals = cellEvents.goals.length > 0 || cellEvents.subgoals.length > 0;
-              const visibleTasks = showCompletedTasksInCalendar
-                ? cellEvents.tasks
-                : cellEvents.tasks.filter(t => !t.isCompleted);
-              const hasCompletedTasks = showCompletedTasksInCalendar && cellEvents.tasks.some(t => t.isCompleted);
-              const hasPendingTasks = cellEvents.tasks.some(t => !t.isCompleted);
-
-              const isCurrentToday = isToday(cell.date);
-              const isSelected = selectedCalendarDate && format(selectedCalendarDate, 'yyyy-MM-dd') === dateStr;
+          <div className="flex flex-col bg-[#EEF0EF] dark:bg-[#2E3133] gap-[1px] border border-[#EEF0EF] dark:border-[#2E3133] rounded-3xl overflow-hidden shadow-sm">
+            {calendarWeeks.map((week, weekIdx) => {
+              const selectedCell = selectedCalendarDate && week.find(cell => 
+                format(cell.date, 'yyyy-MM-dd') === format(selectedCalendarDate, 'yyyy-MM-dd')
+              );
 
               return (
-                <button
-                  key={cell.key}
-                  onClick={() => setSelectedCalendarDate(cell.date)}
-                  className={`p-2 rounded-none flex flex-col justify-between items-center transition-all cursor-pointer border hover:scale-105 active:scale-95 ${
-                    !cell.isCurrentMonth ? 'opacity-35 hover:opacity-100' : ''
-                  } ${
-                    isSelected
-                      ? 'bg-[#E9FFF4] border-[#00DC7D] text-[#00A963] dark:bg-[#00DC7D]/10 dark:text-[#00DC7D]'
-                      : isCurrentToday
-                      ? 'bg-white dark:bg-[#1E2022] border-2 border-[#00DC7D] font-black text-[#2F3331] dark:text-[#FAFAFA]'
-                      : 'bg-white dark:bg-[#1E2022] border-[#EEF0EF] dark:border-[#2E3133] text-[#2F3331] dark:text-[#FAFAFA] hover:bg-gray-50 dark:hover:bg-zinc-800'
-                  } aspect-square md:aspect-auto md:min-h-[100px] lg:min-h-[120px] md:items-stretch md:justify-start md:p-2.5`}
-                >
-                  <span className={`text-xs font-bold ${
-                    isCurrentToday 
-                      ? 'text-[#00A963] dark:text-[#00DC7D] md:bg-[#E9FFF4] md:dark:bg-[#00DC7D]/15 md:px-1.5 md:py-0.5 md:rounded-md md:self-start' 
-                      : 'md:self-start'
-                  }`}>
-                    {cell.date.getDate()}
-                  </span>
+                <div key={weekIdx} className="flex flex-col bg-[#EEF0EF] dark:bg-[#2E3133] gap-[1px]">
+                  {/* Week Row */}
+                  <div className="grid grid-cols-7 gap-[1px]">
+                    {week.map((cell) => {
+                      const dateStr = format(cell.date, 'yyyy-MM-dd');
+                      const cellEvents = calendarEvents[dateStr] || { tasks: [], goals: [], subgoals: [] };
+                      const hasGoals = cellEvents.goals.length > 0 || cellEvents.subgoals.length > 0;
+                      const visibleTasks = showCompletedTasksInCalendar
+                        ? cellEvents.tasks
+                        : cellEvents.tasks.filter(t => !t.isCompleted);
+                      const hasCompletedTasks = showCompletedTasksInCalendar && cellEvents.tasks.some(t => t.isCompleted);
+                      const hasPendingTasks = cellEvents.tasks.some(t => !t.isCompleted);
 
-                  {/* Event Indicators (Mobile only) */}
-                  <div className="flex gap-1 justify-center mt-1 w-full overflow-hidden md:hidden">
-                    {hasGoals && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#8B00D4] shrink-0" title="Goal / Sub-goal deadline" />
-                    )}
-                    {hasCompletedTasks && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#00DC7D] shrink-0" title="Completed tasks" />
-                    )}
-                    {hasPendingTasks && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-gray-400 dark:bg-zinc-600 shrink-0" title="Pending tasks" />
-                    )}
+                      const isCurrentToday = isToday(cell.date);
+                      const isSelected = selectedCalendarDate && format(selectedCalendarDate, 'yyyy-MM-dd') === dateStr;
+
+                      return (
+                        <button
+                          key={cell.key}
+                          onClick={() => setSelectedCalendarDate(cell.date)}
+                          className={`p-2 rounded-none flex flex-col justify-between items-center transition-all cursor-pointer ${
+                            !cell.isCurrentMonth ? 'opacity-35 hover:opacity-100' : ''
+                          } ${
+                            isSelected
+                              ? 'bg-[#E9FFF4] text-[#00A963] dark:bg-[#00DC7D]/10 dark:text-[#00DC7D] z-10 ring-2 ring-[#00DC7D] ring-inset'
+                              : isCurrentToday
+                              ? 'bg-white dark:bg-[#1E2022] font-black text-[#2F3331] dark:text-[#FAFAFA] z-10 ring-2 ring-[#00DC7D] ring-inset'
+                              : 'bg-white dark:bg-[#1E2022] text-[#2F3331] dark:text-[#FAFAFA] hover:bg-gray-50/70 dark:hover:bg-zinc-800/40'
+                          } aspect-square md:aspect-auto md:min-h-[100px] lg:min-h-[120px] md:items-stretch md:justify-start md:p-2.5`}
+                        >
+                          <span className={`text-xs font-bold ${
+                            isCurrentToday 
+                              ? 'text-[#00A963] dark:text-[#00DC7D] md:bg-[#E9FFF4] md:dark:bg-[#00DC7D]/15 md:px-1.5 md:py-0.5 md:rounded-md md:self-start' 
+                              : 'md:self-start'
+                          }`}>
+                            {cell.date.getDate()}
+                          </span>
+
+                          {/* Event Indicators (Mobile only) */}
+                          <div className="flex gap-1 justify-center mt-1 w-full overflow-hidden md:hidden">
+                            {hasGoals && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#8B00D4] shrink-0" title="Goal / Sub-goal deadline" />
+                            )}
+                            {hasCompletedTasks && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#00DC7D] shrink-0" title="Completed tasks" />
+                            )}
+                            {hasPendingTasks && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-gray-400 dark:bg-zinc-600 shrink-0" title="Pending tasks" />
+                            )}
+                          </div>
+
+                          {/* Event Chips (Desktop only) */}
+                          <div className="hidden md:flex flex-col gap-1 mt-1.5 w-full text-[9px] font-bold text-left overflow-hidden">
+                            {/* Goal deadlines */}
+                            {cellEvents.goals.slice(0, 1).map((g) => (
+                              <div
+                                key={g.id}
+                                className="px-1.5 py-0.5 rounded-lg bg-[#F8F5FF] text-[#8B00D4] dark:bg-[#8B00D4]/30 dark:text-[#E2D5FF] truncate border border-[#F2EDFF]/40 dark:border-[#C494FF]/35"
+                                title={`Goal Deadline: ${g.content}`}
+                              >
+                                🏁 {g.content}
+                              </div>
+                            ))}
+                            {/* Sub-goal deadlines */}
+                            {cellEvents.subgoals.slice(0, 1).map((sub) => (
+                              <div
+                                key={sub.id}
+                                className="px-1.5 py-0.5 rounded-lg bg-[#F8F5FF] text-[#8B00D4] dark:bg-[#8B00D4]/30 dark:text-[#E2D5FF] truncate border border-[#F2EDFF]/40 dark:border-[#C494FF]/35"
+                                title={`Sub-goal Deadline: ${sub.content}`}
+                              >
+                                🏁 {sub.content}
+                              </div>
+                            ))}
+                            {/* Tasks (up to 2 pending or completed) */}
+                            {visibleTasks.slice(0, 2).map((t) => (
+                              <div
+                                key={t.id}
+                                className={`px-1.5 py-0.5 rounded-lg truncate border ${
+                                  t.isCompleted
+                                    ? 'bg-[#E9FFF4] text-[#00A963] border-[#D6FADB] dark:bg-[#00DC7D]/25 dark:text-[#55FFB4] dark:border-[#55FFB4]/30 line-through opacity-85'
+                                    : 'bg-gray-50 text-gray-600 border-gray-200/50 dark:bg-[#2F3331]/90 dark:text-[#E4E7E6] dark:border-zinc-700/80'
+                                }`}
+                                title={t.text}
+                              >
+                                {t.isCompleted ? '✓ ' : '• '}
+                                {t.text}
+                              </div>
+                            ))}
+                            {/* +X More Indicator */}
+                            {cellEvents.goals.length + cellEvents.subgoals.length + visibleTasks.length > 3 && (
+                              <div className="text-[8px] text-[#A3A7A8] dark:text-[#A3A7A8] font-extrabold pl-1 select-none">
+                                +{cellEvents.goals.length + cellEvents.subgoals.length + visibleTasks.length - 3} more
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
 
-                  {/* Event Chips (Desktop only) */}
-                  <div className="hidden md:flex flex-col gap-1 mt-1.5 w-full text-[9px] font-bold text-left overflow-hidden">
-                    {/* Goal deadlines */}
-                    {cellEvents.goals.slice(0, 1).map((g) => (
-                      <div
-                        key={g.id}
-                        className="px-1.5 py-0.5 rounded-lg bg-[#F8F5FF] text-[#8B00D4] dark:bg-[#8B00D4]/30 dark:text-[#E2D5FF] truncate border border-[#F2EDFF]/40 dark:border-[#C494FF]/35"
-                        title={`Goal Deadline: ${g.content}`}
-                      >
-                        🏁 {g.content}
+                  {/* Inline Selected Date Details Panel (appears below the calendar week line) */}
+                  {selectedCell && (() => {
+                    const dateStr = format(selectedCalendarDate, 'yyyy-MM-dd');
+                    const dayEvents = calendarEvents[dateStr] || { tasks: [], goals: [], subgoals: [] };
+                    const visibleDayTasks = showCompletedTasksInCalendar
+                      ? dayEvents.tasks
+                      : dayEvents.tasks.filter(t => !t.isCompleted);
+                    const totalEventsCount = dayEvents.goals.length + dayEvents.subgoals.length + visibleDayTasks.length;
+
+                    return (
+                      <div className="bg-[#FAFAFA] dark:bg-[#202324]/50 border-t border-b border-[#EEF0EF] dark:border-[#2E3133] p-6 space-y-4 animate-in slide-in-from-top duration-300">
+                        <div className="flex justify-between items-center border-b border-[#EEF0EF] dark:border-[#2E3133] pb-3">
+                          <div>
+                            <h3 className="text-sm font-bold text-[#2F3331] dark:text-[#FAFAFA]">
+                              Details for {format(selectedCalendarDate, 'EEEE, MMM d, yyyy')}
+                            </h3>
+                            <p className="text-[10px] text-[#A3A7A8] dark:text-[#888D8F] uppercase tracking-wider font-semibold">
+                              {totalEventsCount} scheduled items
+                            </p>
+                          </div>
+                          {/* Quick Add Task button for selected day */}
+                          <button
+                            onClick={() => {
+                              setCurrentDate(dateStr);
+                              router.push('/write');
+                            }}
+                            className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[#00DC7D] text-white rounded-xl hover:bg-[#00B866] transition-all cursor-pointer active:scale-95 shadow-sm shadow-[#00DC7D]/10"
+                            title="Add task in journal for this day"
+                          >
+                            <FontAwesomeIcon icon={faPlus} className="mr-1 w-2.5 h-2.5" />
+                            Add Journal Bullet
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          {/* Deadlines Section */}
+                          {(dayEvents.goals.length > 0 || dayEvents.subgoals.length > 0) && (
+                            <div className="space-y-2.5">
+                              <span className="text-[10px] font-bold text-[#8B00D4] dark:text-[#D6B2FF] uppercase tracking-widest block">
+                                🏁 Goal Deadlines
+                              </span>
+                              <div className="space-y-2">
+                                {dayEvents.goals.map((g) => (
+                                  <div key={g.id} className="flex items-center gap-2.5 bg-[#F8F5FF] dark:bg-[#8B00D4]/12 p-3 rounded-2xl border border-[#F2EDFF] dark:border-[#8B00D4]/25">
+                                    <div className="h-6 w-6 rounded-full bg-[#8B00D4] text-white flex items-center justify-center text-xs shrink-0 shadow-sm shadow-[#8B00D4]/20">
+                                      <FontAwesomeIcon icon={faCrosshairs} className="w-3.5 h-3.5" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-bold text-[#2F3331] dark:text-[#FAFAFA] truncate">
+                                        {g.content}
+                                      </p>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <span className="text-[8px] font-extrabold uppercase tracking-wider text-gray-500 bg-white dark:bg-zinc-800 px-1.5 py-0.2 rounded border border-gray-200 dark:border-zinc-700">
+                                          {g.category || 'General'}
+                                        </span>
+                                        <span className="text-[9px] font-semibold text-[#8B00D4] dark:text-[#D6B2FF]">
+                                          {g.progress}% completed
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                                
+                                {dayEvents.subgoals.map((sub) => (
+                                  <div key={sub.id} className="flex items-center gap-2.5 bg-[#F8F5FF] dark:bg-[#8B00D4]/12 p-3 rounded-2xl border border-[#F2EDFF] dark:border-[#8B00D4]/25">
+                                    <div className="h-6 w-6 rounded-full bg-[#8B00D4]/15 dark:bg-[#8B00D4]/30 text-[#8B00D4] dark:text-[#E2D5FF] flex items-center justify-center text-xs shrink-0">
+                                      <FontAwesomeIcon icon={faStar} className="w-3.5 h-3.5" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-bold text-[#2F3331] dark:text-[#FAFAFA] truncate">
+                                        {sub.content}
+                                      </p>
+                                      <p className="text-[9px] text-[#A3A7A8] truncate">
+                                        Parent Goal: <span className="font-semibold text-gray-600 dark:text-gray-400">{sub.goalContent}</span>
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Tasks Section */}
+                          {visibleDayTasks.length > 0 && (
+                            <div className="space-y-2.5">
+                              <span className="text-[10px] font-bold text-[#00A963] uppercase tracking-widest block">
+                                📋 Tasks on this Day
+                              </span>
+                              <div className="space-y-2">
+                                {visibleDayTasks.map((task) => (
+                                  <div key={task.id} className="flex items-center justify-between gap-3 bg-[#FAFAFA] dark:bg-[#202324] p-3 rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133]">
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                      <button
+                                        onClick={() => {
+                                          playClickSound();
+                                          if (task.isFromNote) {
+                                            toggleNoteChecklist(task.noteId, task.text);
+                                          } else {
+                                            toggleBulletComplete(task.id);
+                                          }
+                                        }}
+                                        className={`flex h-5 w-5 items-center justify-center rounded-full border transition-all cursor-pointer ${
+                                          task.isCompleted
+                                            ? 'bg-[#00DC7D] border-[#00DC7D] text-white shadow-sm shadow-[#00DC7D]/25 hover:scale-105 active:scale-90'
+                                            : 'border-[#CCD0CF] text-transparent hover:border-[#00DC7D] hover:text-[#00DC7D] hover:scale-105 active:scale-90'
+                                        }`}
+                                      >
+                                        <FontAwesomeIcon icon={faCheck} className="w-2.5 h-2.5 text-white" />
+                                      </button>
+                                      <p className={`text-xs font-semibold leading-relaxed break-words truncate pr-2 ${
+                                        task.isCompleted ? 'line-through text-[#A3A7A8] font-normal' : 'text-[#2F3331] dark:text-[#FAFAFA]'
+                                      }`}>
+                                        <HighlightedText text={task.text} />
+                                      </p>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {task.scheduledAt && (
+                                        <span className="text-[8.5px] font-bold text-[#8C6B00] bg-[#FFF3C4] dark:bg-[#FFA952]/10 dark:text-[#FFA952] px-2 py-0.5 rounded-full select-none">
+                                          {format(new Date(task.scheduledAt), 'h:mm a')}
+                                        </span>
+                                      )}
+                                      <span className={`text-[8.5px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                                        task.isFromNote
+                                          ? 'bg-[#F2EFFE] border-[#EDD6FF] text-[#8B00D4] dark:bg-[#C494FF]/10 dark:text-[#C494FF] dark:border-transparent'
+                                          : 'bg-[#E9FFF4] border-[#D6FADB] text-[#00A963] dark:bg-[#00DC7D]/10 dark:text-[#00DC7D] dark:border-transparent'
+                                      }`}>
+                                        {task.isFromNote ? 'Note' : 'Journal'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {totalEventsCount === 0 && (
+                            <div className="text-center py-10">
+                              <p className="text-xs text-[#A3A7A8] dark:text-[#888D8F] italic">
+                                No deadlines or tasks scheduled for this day.
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    ))}
-                    {/* Sub-goal deadlines */}
-                    {cellEvents.subgoals.slice(0, 1).map((sub) => (
-                      <div
-                        key={sub.id}
-                        className="px-1.5 py-0.5 rounded-lg bg-[#F8F5FF] text-[#8B00D4] dark:bg-[#8B00D4]/30 dark:text-[#E2D5FF] truncate border border-[#F2EDFF]/40 dark:border-[#C494FF]/35"
-                        title={`Sub-goal Deadline: ${sub.content}`}
-                      >
-                        🏁 {sub.content}
-                      </div>
-                    ))}
-                    {/* Tasks (up to 2 pending or completed) */}
-                    {visibleTasks.slice(0, 2).map((t) => (
-                      <div
-                        key={t.id}
-                        className={`px-1.5 py-0.5 rounded-lg truncate border ${
-                          t.isCompleted
-                            ? 'bg-[#E9FFF4] text-[#00A963] border-[#D6FADB] dark:bg-[#00DC7D]/25 dark:text-[#55FFB4] dark:border-[#55FFB4]/30 line-through opacity-85'
-                            : 'bg-gray-50 text-gray-600 border-gray-200/50 dark:bg-[#2F3331]/90 dark:text-[#E4E7E6] dark:border-zinc-700/80'
-                        }`}
-                        title={t.text}
-                      >
-                        {t.isCompleted ? '✓ ' : '• '}
-                        {t.text}
-                      </div>
-                    ))}
-                    {/* +X More Indicator */}
-                    {cellEvents.goals.length + cellEvents.subgoals.length + visibleTasks.length > 3 && (
-                      <div className="text-[8px] text-[#A3A7A8] dark:text-[#A3A7A8] font-extrabold pl-1 select-none">
-                        +{cellEvents.goals.length + cellEvents.subgoals.length + visibleTasks.length - 3} more
-                      </div>
-                    )}
-                  </div>
-                </button>
+                    );
+                  })()}
+                </div>
               );
             })}
           </div>
         </div>
-
-        {/* Selected Date Details Panel */}
-        {selectedCalendarDate && (() => {
-          const dateStr = format(selectedCalendarDate, 'yyyy-MM-dd');
-          const dayEvents = calendarEvents[dateStr] || { tasks: [], goals: [], subgoals: [] };
-          const visibleDayTasks = showCompletedTasksInCalendar
-            ? dayEvents.tasks
-            : dayEvents.tasks.filter(t => !t.isCompleted);
-          const totalEventsCount = dayEvents.goals.length + dayEvents.subgoals.length + visibleDayTasks.length;
-
-          return (
-            <div className="bg-white dark:bg-[#1E2022] rounded-3xl p-6 border border-[#EEF0EF] dark:border-[#2E3133] shadow-sm space-y-4">
-              <div className="flex justify-between items-center border-b border-[#EEF0EF] dark:border-[#2E3133] pb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-[#2F3331] dark:text-[#FAFAFA]">
-                    Details for {format(selectedCalendarDate, 'EEEE, MMM d, yyyy')}
-                  </h3>
-                  <p className="text-[10px] text-[#A3A7A8] dark:text-[#888D8F] uppercase tracking-wider font-semibold">
-                    {totalEventsCount} scheduled items
-                  </p>
-                </div>
-                {/* Quick Add Task button for selected day */}
-                <button
-                  onClick={() => {
-                    setCurrentDate(dateStr);
-                    router.push('/write');
-                  }}
-                  className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[#00DC7D] text-white rounded-xl hover:bg-[#00B866] transition-all cursor-pointer active:scale-95 shadow-sm shadow-[#00DC7D]/10"
-                  title="Add task in journal for this day"
-                >
-                  <FontAwesomeIcon icon={faPlus} className="mr-1 w-2.5 h-2.5" />
-                  Add Journal Bullet
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {/* Deadlines Section */}
-                {(dayEvents.goals.length > 0 || dayEvents.subgoals.length > 0) && (
-                  <div className="space-y-2.5">
-                    <span className="text-[10px] font-bold text-[#8B00D4] uppercase tracking-widest block">
-                      🏁 Goal Deadlines
-                    </span>
-                    <div className="space-y-2">
-                      {dayEvents.goals.map((g) => (
-                        <div key={g.id} className="flex items-center gap-2.5 bg-[#F8F5FF] dark:bg-[#8B00D4]/12 p-3 rounded-2xl border border-[#F2EDFF] dark:border-[#8B00D4]/25">
-                          <div className="h-6 w-6 rounded-full bg-[#8B00D4] text-white flex items-center justify-center text-xs shrink-0 shadow-sm shadow-[#8B00D4]/20">
-                            <FontAwesomeIcon icon={faCrosshairs} className="w-3.5 h-3.5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-[#2F3331] dark:text-[#FAFAFA] truncate">
-                              {g.content}
-                            </p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[8px] font-extrabold uppercase tracking-wider text-gray-500 bg-white dark:bg-zinc-800 px-1.5 py-0.2 rounded border border-gray-200 dark:border-zinc-700">
-                                {g.category || 'General'}
-                              </span>
-                              <span className="text-[9px] font-semibold text-[#8B00D4]">
-                                {g.progress}% completed
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      
-                      {dayEvents.subgoals.map((sub) => (
-                        <div key={sub.id} className="flex items-center gap-2.5 bg-[#F8F5FF] dark:bg-[#8B00D4]/12 p-3 rounded-2xl border border-[#F2EDFF] dark:border-[#8B00D4]/25">
-                          <div className="h-6 w-6 rounded-full bg-[#8B00D4]/15 dark:bg-[#8B00D4]/30 text-[#8B00D4] dark:text-[#E2D5FF] flex items-center justify-center text-xs shrink-0">
-                            <FontAwesomeIcon icon={faStar} className="w-3.5 h-3.5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-[#2F3331] dark:text-[#FAFAFA] truncate">
-                              {sub.content}
-                            </p>
-                            <p className="text-[9px] text-[#A3A7A8] truncate">
-                              Parent Goal: <span className="font-semibold text-gray-600 dark:text-gray-400">{sub.goalContent}</span>
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Tasks Section */}
-                {visibleDayTasks.length > 0 && (
-                  <div className="space-y-2.5">
-                    <span className="text-[10px] font-bold text-[#00A963] uppercase tracking-widest block">
-                      📋 Tasks on this Day
-                    </span>
-                    <div className="space-y-2">
-                      {visibleDayTasks.map((task) => (
-                        <div key={task.id} className="flex items-center justify-between gap-3 bg-[#FAFAFA] dark:bg-[#202324] p-3 rounded-2xl border border-[#EEF0EF] dark:border-[#2E3133]">
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <button
-                              onClick={() => {
-                                playClickSound();
-                                if (task.isFromNote) {
-                                  toggleNoteChecklist(task.noteId, task.text);
-                                } else {
-                                  toggleBulletComplete(task.id);
-                                }
-                              }}
-                              className={`flex h-5 w-5 items-center justify-center rounded-full border transition-all cursor-pointer ${
-                                task.isCompleted
-                                  ? 'bg-[#00DC7D] border-[#00DC7D] text-white shadow-sm shadow-[#00DC7D]/25 hover:scale-105 active:scale-90'
-                                  : 'border-[#CCD0CF] text-transparent hover:border-[#00DC7D] hover:text-[#00DC7D] hover:scale-105 active:scale-90'
-                              }`}
-                            >
-                              <FontAwesomeIcon icon={faCheck} className="w-2.5 h-2.5 text-white" />
-                            </button>
-                            <p className={`text-xs font-semibold leading-relaxed break-words truncate pr-2 ${
-                              task.isCompleted ? 'line-through text-[#A3A7A8] font-normal' : 'text-[#2F3331] dark:text-[#FAFAFA]'
-                            }`}>
-                              <HighlightedText text={task.text} />
-                            </p>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 shrink-0">
-                            {task.scheduledAt && (
-                              <span className="text-[8.5px] font-bold text-[#8C6B00] bg-[#FFF3C4] dark:bg-[#FFA952]/10 dark:text-[#FFA952] px-2 py-0.5 rounded-full select-none">
-                                {format(new Date(task.scheduledAt), 'h:mm a')}
-                              </span>
-                            )}
-                            <span className={`text-[8.5px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                              task.isFromNote
-                                ? 'bg-[#F2EFFE] border-[#EDD6FF] text-[#8B00D4] dark:bg-[#C494FF]/10 dark:text-[#C494FF] dark:border-transparent'
-                                : 'bg-[#E9FFF4] border-[#D6FADB] text-[#00A963] dark:bg-[#00DC7D]/10 dark:text-[#00DC7D] dark:border-transparent'
-                            }`}>
-                              {task.isFromNote ? 'Note' : 'Journal'}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {totalEventsCount === 0 && (
-                  <div className="text-center py-10">
-                    <p className="text-xs text-[#A3A7A8] dark:text-[#888D8F] italic">
-                      No deadlines or tasks scheduled for this day.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })()}
       </main>
     )}
   </div>
