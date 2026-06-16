@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { addDays, differenceInCalendarDays, format, parseISO, startOfYear, subMonths } from 'date-fns';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -11,6 +12,7 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { ActivityHeatmap } from '@/components/ui/ActivityHeatmap';
 import {
   faMoon,
+  faSun,
   faWandMagicSparkles,
   faBook,
   faLightbulb,
@@ -47,12 +49,91 @@ const moduleTabs: ModuleTab[] = ['dreams', 'highlights', 'tags', 'people', 'wisd
 const dreamColor = '#FF9933';
 const dreamSoftColor = '#FFF4E6';
 
-const SHARE_GRADIENTS = [
-  { name: 'Aurora Sunset', class: 'bg-gradient-to-tr from-[#9B51E0] via-[#E040FB] to-[#FF4081]', from: '#9B51E0', to: '#FF4081' },
-  { name: 'Cosmic Nebula', class: 'bg-gradient-to-tr from-[#00c6ff] to-[#0072ff]', from: '#00c6ff', to: '#0072ff' },
-  { name: 'Vibrant Sunshine', class: 'bg-gradient-to-tr from-[#F2994A] via-[#F2C94C] to-[#FF5E62]', from: '#F2994A', to: '#FF5E62' },
-  { name: 'Forest Emerald', class: 'bg-gradient-to-tr from-[#11998e] to-[#38ef7d]', from: '#11998e', to: '#38ef7d' },
-  { name: 'Midnight Mystique', class: 'bg-gradient-to-tr from-[#0F2027] via-[#203A43] to-[#2C5364]', from: '#0F2027', to: '#2C5364' },
+const SHARE_THEMES = [
+  {
+    id: 'journalistic',
+    name: 'Orbital Dawn',
+    indicator: 'bg-[#00DC7D]',
+    light: {
+      cardClass: 'bg-[#FAFAFA] border-[#EEF0EF] text-[#2F3331]',
+      accentText: 'text-[#00A963]',
+      accentBg: 'bg-[#E9FFF4]',
+      borderClass: 'border-[#EEF0EF]',
+      metaText: 'text-[#6F7476]',
+      quoteMark: 'text-[#00DC7D]/15',
+    },
+    dark: {
+      cardClass: 'bg-[#151719] border-[#2E3133] text-[#FAFAFA]',
+      accentText: 'text-[#00DC7D]',
+      accentBg: 'bg-[#00DC7D]/15',
+      borderClass: 'border-[#2E3133]',
+      metaText: 'text-[#A3A7A8]',
+      quoteMark: 'text-[#00DC7D]/15',
+    }
+  },
+  {
+    id: 'cosmic',
+    name: 'Deep Nebula',
+    indicator: 'bg-[#9CF6F6]',
+    light: {
+      cardClass: 'bg-[#F2F6FA] border-[#D0E0F5] text-[#132238]',
+      accentText: 'text-[#0072ff]',
+      accentBg: 'bg-[#0072ff]/10',
+      borderClass: 'border-[#D0E0F5]',
+      metaText: 'text-[#5A6E85]',
+      quoteMark: 'text-[#0072ff]/15',
+    },
+    dark: {
+      cardClass: 'bg-[#08090D] border-[#1F2433] text-[#FAFAFA]',
+      accentText: 'text-[#9CF6F6]',
+      accentBg: 'bg-[#9CF6F6]/15',
+      borderClass: 'border-[#1F2433]',
+      metaText: 'text-[#A3A7A8]',
+      quoteMark: 'text-[#9CF6F6]/15',
+    }
+  },
+  {
+    id: 'moss',
+    name: 'Emerald Station',
+    indicator: 'bg-[#00A963]',
+    light: {
+      cardClass: 'bg-[#F5F9F6] border-[#E1EDE6] text-[#112215]',
+      accentText: 'text-[#00875A]',
+      accentBg: 'bg-[#C8F7E4]',
+      borderClass: 'border-[#E1EDE6]',
+      metaText: 'text-[#536E5C]',
+      quoteMark: 'text-[#00875A]/15',
+    },
+    dark: {
+      cardClass: 'bg-[#111412] border-[#2E3832] text-[#FAFAFA]',
+      accentText: 'text-[#00DC7D]',
+      accentBg: 'bg-[#00DC7D]/15',
+      borderClass: 'border-[#2E3832]',
+      metaText: 'text-[#8C9890]',
+      quoteMark: 'text-[#00DC7D]/15',
+    }
+  },
+  {
+    id: 'nocturne',
+    name: 'Twilight Void',
+    indicator: 'bg-[#B79CFF]',
+    light: {
+      cardClass: 'bg-[#F8F6FC] border-[#EADFFF] text-[#20113B]',
+      accentText: 'text-[#8B00D4]',
+      accentBg: 'bg-[#F2EFFE]',
+      borderClass: 'border-[#EADFFF]',
+      metaText: 'text-[#6A5A85]',
+      quoteMark: 'text-[#8B00D4]/15',
+    },
+    dark: {
+      cardClass: 'bg-[#0C081A] border-[#202433] text-[#FAFAFA]',
+      accentText: 'text-[#B79CFF]',
+      accentBg: 'bg-[#B79CFF]/15',
+      borderClass: 'border-[#202433]',
+      metaText: 'text-[#948CA6]',
+      quoteMark: 'text-[#B79CFF]/15',
+    }
+  }
 ];
 
 const wisdomTypeMeta: Record<WisdomType, { label: string; icon: IconDefinition; color: string; bg: string }> = {
@@ -197,6 +278,7 @@ const buildHeatmapDays = (dateKeys: string[], scope: CollectionScope, selectedYe
 
 export default function OtherPage() {
   const router = useRouter();
+  const { userProfile } = useAuth();
   const {
     entries,
     highlights,
@@ -238,7 +320,20 @@ export default function OtherPage() {
     status?: 'cooking' | 'grinding' | 'slayed';
   } | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
-  const [selectedGradientIndex, setSelectedGradientIndex] = useState(0);
+  const [selectedShareThemeIndex, setSelectedShareThemeIndex] = useState(0);
+  const [isShareCardDark, setIsShareCardDark] = useState(true);
+
+  // Sync share card theme settings with user's settings when share card is opened
+  useEffect(() => {
+    if (shareItem && userProfile?.settings) {
+      const userTheme = userProfile.settings.theme || 'journalistic';
+      const userDarkMode = userProfile.settings.darkMode ?? true;
+      const themeIdx = SHARE_THEMES.findIndex(t => t.id === userTheme);
+      setSelectedShareThemeIndex(themeIdx >= 0 ? themeIdx : 0);
+      setIsShareCardDark(userDarkMode);
+    }
+  }, [shareItem, userProfile?.settings]);
+
   const [wisdomFilter, setWisdomFilter] = useState<WisdomType | 'all'>('all');
   const [dreamSearchOpen, setDreamSearchOpen] = useState(false);
   const [dreamSearch, setDreamSearch] = useState('');
@@ -1109,7 +1204,7 @@ export default function OtherPage() {
                             onClick={e => e.stopPropagation()}
                           >
                             <button
-                              onClick={() => { closeMenu(); setSelectedGradientIndex(0); setShareItem({ type: 'wisdom', content: w.content, date: w.createdAt, wisdomType: w.type }); }}
+                              onClick={() => { closeMenu(); setSelectedShareThemeIndex(0); setShareItem({ type: 'wisdom', content: w.content, date: w.createdAt, wisdomType: w.type }); }}
                               className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-[#2F3331] hover:bg-[#F7F8F7] transition-colors"
                             >
                               <FontAwesomeIcon icon={faShareNodes} className="w-3.5 h-3.5 text-[#6F7476]" />
@@ -1248,7 +1343,7 @@ export default function OtherPage() {
                       onClick={e => e.stopPropagation()}
                     >
                       <button
-                        onClick={() => { closeMenu(); setSelectedGradientIndex(2); setShareItem({ type: 'idea', content: idea.content, date: idea.createdAt, status: idea.status }); }}
+                        onClick={() => { closeMenu(); setSelectedShareThemeIndex(2); setShareItem({ type: 'idea', content: idea.content, date: idea.createdAt, status: idea.status }); }}
                         className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-[#2F3331] hover:bg-[#F7F8F7] transition-colors"
                       >
                         <FontAwesomeIcon icon={faShareNodes} className="w-3.5 h-3.5 text-[#6F7476]" />
@@ -1354,160 +1449,209 @@ export default function OtherPage() {
         message="Are you sure you want to delete this? This action cannot be undone."
       />
 
-      {shareItem && (
-        <div className="fixed inset-0 bg-black/85 sm:bg-black/75 backdrop-blur-md z-[100] flex flex-col items-center justify-center sm:p-4 animate-in fade-in duration-200">
-          {/* Vertical 9:16 Card */}
-          <div
-            className={`w-full h-full sm:h-auto sm:aspect-[9/16] sm:max-w-[420px] rounded-none sm:rounded-[32px] p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden text-white border-0 sm:border sm:border-white/15 select-none animate-gradient bg-[length:400%_400%] ${
-              SHARE_GRADIENTS[selectedGradientIndex].class
-            }`}
-          >
-            {/* Top controls: Left is Gradient selector, Right is Close button */}
-            <div className="absolute top-5 left-5 right-5 flex items-center justify-between z-20">
-              {/* Gradient Dots Picker */}
-              <div className="flex gap-1.5 bg-black/20 backdrop-blur-md px-2.5 py-1.5 rounded-full ring-1 ring-white/10">
-                {SHARE_GRADIENTS.map((grad, idx) => (
+      {shareItem && (() => {
+        const activeTheme = SHARE_THEMES[selectedShareThemeIndex] || SHARE_THEMES[0];
+        const themeStyles = isShareCardDark ? activeTheme.dark : activeTheme.light;
+        
+        return (
+          <div className="fixed inset-0 bg-black/85 sm:bg-black/75 backdrop-blur-md z-[100] flex flex-col items-center justify-center sm:p-4 animate-in fade-in duration-200">
+            {/* Vertical 9:16 Card */}
+            <div
+              className={`w-full h-full sm:h-auto sm:aspect-[9/16] sm:max-w-[420px] rounded-none sm:rounded-[32px] p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden border-0 sm:border transition-all duration-300 ${
+                themeStyles.cardClass
+              }`}
+            >
+              {/* Top controls: Left is Theme selector + Dark/Light toggle, Right is Close button */}
+              <div className="absolute top-5 left-5 right-5 flex items-center justify-between z-20">
+                <div className="flex items-center gap-2">
+                  {/* Theme Dots Picker */}
+                  <div className={`flex gap-1.5 backdrop-blur-md px-2.5 py-1.5 rounded-full ring-1 ${
+                    isShareCardDark 
+                      ? 'bg-black/20 ring-white/10' 
+                      : 'bg-white/40 ring-black/5'
+                  }`}>
+                    {SHARE_THEMES.map((themeOption, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setSelectedShareThemeIndex(idx)}
+                        className={`w-4 h-4 rounded-full border transition-all hover:scale-110 active:scale-95 cursor-pointer ${
+                          selectedShareThemeIndex === idx 
+                            ? isShareCardDark ? 'border-white scale-105 shadow' : 'border-[#2F3331] scale-105 shadow'
+                            : 'border-transparent opacity-60 hover:opacity-100'
+                        } ${themeOption.indicator}`}
+                        title={themeOption.name}
+                        aria-label={`Select ${themeOption.name} theme`}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Dark/Light mode toggle */}
                   <button
-                    key={idx}
-                    onClick={() => setSelectedGradientIndex(idx)}
-                    className={`w-4 h-4 rounded-full border transition-all hover:scale-110 active:scale-95 ${
-                      selectedGradientIndex === idx ? 'border-white scale-105 shadow' : 'border-transparent opacity-60 hover:opacity-100'
+                    onClick={() => setIsShareCardDark(prev => !prev)}
+                    className={`flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-md transition-colors border cursor-pointer active:scale-90 ${
+                      isShareCardDark 
+                        ? 'bg-white/10 border-white/10 text-white hover:bg-white/20' 
+                        : 'bg-black/5 border-black/5 text-[#2F3331] hover:bg-black/10'
                     }`}
-                    style={{
-                      background: `linear-gradient(135deg, ${grad.from}, ${grad.to})`
-                    }}
-                    title={grad.name}
-                    aria-label={`Select ${grad.name} gradient`}
-                  />
-                ))}
+                    title={isShareCardDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                  >
+                    <FontAwesomeIcon icon={isShareCardDark ? faSun : faMoon} className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Close Button */}
+                <button
+                  onClick={() => { setShareItem(null); setCopySuccess(false); }}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors cursor-pointer ${
+                    isShareCardDark 
+                      ? 'bg-white/10 hover:bg-white/20 text-white' 
+                      : 'bg-black/5 hover:bg-black/10 text-[#2F3331]'
+                  }`}
+                  title="Close"
+                  aria-label="Close"
+                >
+                  <FontAwesomeIcon icon={faXmark} className="h-4 w-4" />
+                </button>
               </div>
 
-              {/* Close Button */}
-              <button
-                onClick={() => { setShareItem(null); setCopySuccess(false); }}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 hover:bg-white/25 text-white transition-colors"
-                title="Close"
-                aria-label="Close"
-              >
-                <FontAwesomeIcon icon={faXmark} className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Top Header */}
-            <div className="flex items-center justify-between opacity-85 mt-10 sm:mt-12">
-              <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.2em] uppercase font-sans">
-                <FontAwesomeIcon icon={faPlay} className="h-2 w-2 text-white rotate-270" style={{ transform: 'rotate(-90deg)' }} />
-                ASA JOURNEY
-              </span>
-              <span className="text-[10px] font-bold tracking-wider font-sans">
-                {format(typeof shareItem.date === 'string' ? parseISO(shareItem.date) : shareItem.date, 'MMM d, yyyy')}
-              </span>
-            </div>
-
-            {/* Middle Content */}
-            <div className="flex-1 flex flex-col justify-center relative my-6">
-              {/* Quotation Mark */}
-              <span className="font-serif text-8xl opacity-20 absolute -top-10 -left-4 select-none leading-none">“</span>
-              
-              {/* Main Content Text */}
-              <div className="font-serif italic text-xl sm:text-2xl leading-relaxed font-semibold tracking-wide text-white/95 relative z-10 select-text overflow-y-auto max-h-[280px] sm:max-h-[300px] pr-2 scrollbar-thin scrollbar-thumb-white/25">
-                {shareItem.type === 'note' && shareItem.title && (
-                  <h4 className="font-sans not-italic text-sm uppercase tracking-wider font-bold mb-3 text-white/80">
-                    {shareItem.title}
-                  </h4>
-                )}
-                {shareItem.type === 'wisdom' ? (
-                  <>
-                    <p className="leading-relaxed whitespace-pre-wrap">{parseWisdom(shareItem.content).content}</p>
-                    {parseWisdom(shareItem.content).author && (
-                      <p className="mt-4 text-right text-xs font-sans tracking-wide not-italic text-white/70">
-                        — {parseWisdom(shareItem.content).author}
-                      </p>
-                    )}
-                    {parseWisdom(shareItem.content).source && (
-                      <p className="mt-1 text-right text-[10px] font-sans tracking-wide not-italic text-white/50">
-                        source: {parseWisdom(shareItem.content).source}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="leading-relaxed whitespace-pre-wrap">{shareItem.content}</p>
-                )}
-              </div>
-
-              {/* Status Badge for Ideas */}
-              {shareItem.type === 'idea' && shareItem.status && (
-                <div className="mt-4 z-10">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-0.5 text-[10px] font-bold tracking-wide uppercase backdrop-blur-sm">
-                    {shareItem.status === 'cooking' ? 'cooking 🍳' :
-                     shareItem.status === 'grinding' ? 'grinding ⚡️' :
-                     'slayed 💅'}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Bottom Footer & Action Panel */}
-            <div className="flex flex-col gap-4 border-t border-white/10 pt-4">
-              <div className="flex items-end justify-between opacity-80">
-                <div>
-                  <p className="text-[9px] font-bold uppercase tracking-widest font-sans text-white/60">type</p>
-                  <p className="text-xs font-semibold font-sans mt-0.5">
-                    {shareItem.type === 'wisdom' ? `wisdom (${shareItem.wisdomType || 'gem'})` : shareItem.type}
-                  </p>
-                </div>
-                <span className="text-[10px] font-medium font-serif italic text-white/60">
-                  — reflection
+              {/* Top Header */}
+              <div className="flex items-center justify-between opacity-85 mt-10 sm:mt-12">
+                <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.2em] uppercase font-sans">
+                  <FontAwesomeIcon icon={faPlay} className="h-2 w-2 rotate-270" style={{ transform: 'rotate(-90deg)' }} />
+                  ASA JOURNEY
+                </span>
+                <span className="text-[10px] font-bold tracking-wider font-sans">
+                  {format(typeof shareItem.date === 'string' ? parseISO(shareItem.date) : shareItem.date, 'MMM d, yyyy')}
                 </span>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex flex-col items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      let shareText = '';
-                      if (shareItem.type === 'note' && shareItem.title) {
-                        shareText += `**${shareItem.title}**\n`;
+              {/* Middle Content */}
+              <div className="flex-1 flex flex-col justify-center relative my-6">
+                {/* Quotation Mark */}
+                <span className={`font-serif text-8xl absolute -top-10 -left-4 select-none leading-none ${themeStyles.quoteMark}`}>“</span>
+                
+                {/* Main Content Text */}
+                <div className="font-serif italic text-xl sm:text-2xl leading-relaxed font-semibold tracking-wide relative z-10 select-text overflow-y-auto max-h-[280px] sm:max-h-[300px] pr-2 scrollbar-thin scrollbar-thumb-current">
+                  {shareItem.type === 'note' && shareItem.title && (
+                    <h4 className={`font-sans not-italic text-sm uppercase tracking-wider font-bold mb-3 ${
+                      isShareCardDark ? 'text-white/80' : 'text-[#2F3331]/80'
+                    }`}>
+                      {shareItem.title}
+                    </h4>
+                  )}
+                  {shareItem.type === 'wisdom' ? (
+                    <>
+                      <p className="leading-relaxed whitespace-pre-wrap">{parseWisdom(shareItem.content).content}</p>
+                      {parseWisdom(shareItem.content).author && (
+                        <p className={`mt-4 text-right text-xs font-sans tracking-wide not-italic ${
+                          isShareCardDark ? 'text-white/70' : 'text-[#2F3331]/70'
+                        }`}>
+                          — {parseWisdom(shareItem.content).author}
+                        </p>
+                      )}
+                      {parseWisdom(shareItem.content).source && (
+                        <p className={`mt-1 text-right text-[10px] font-sans tracking-wide not-italic ${
+                          isShareCardDark ? 'text-white/50' : 'text-[#2F3331]/50'
+                        }`}>
+                          source: {parseWisdom(shareItem.content).source}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="leading-relaxed whitespace-pre-wrap">{shareItem.content}</p>
+                  )}
+                </div>
+
+                {/* Status Badge for Ideas */}
+                {shareItem.type === 'idea' && shareItem.status && (
+                  <div className="mt-4 z-10">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-wide uppercase backdrop-blur-sm ${
+                      isShareCardDark ? 'bg-white/20' : 'bg-black/5'
+                    }`}>
+                      {shareItem.status === 'cooking' ? 'cooking 🍳' :
+                       shareItem.status === 'grinding' ? 'grinding ⚡️' :
+                       'slayed 💅'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Footer & Action Panel */}
+              <div className={`flex flex-col gap-4 border-t pt-4 ${themeStyles.borderClass}`}>
+                <div className="flex items-end justify-between opacity-80">
+                  <div>
+                    <p className={`text-[9px] font-bold uppercase tracking-widest font-sans ${
+                      isShareCardDark ? 'text-white/60' : 'text-[#2F3331]/60'
+                    }`}>type</p>
+                    <p className="text-xs font-semibold font-sans mt-0.5">
+                      <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full select-none ${
+                        themeStyles.accentBg
+                      } ${themeStyles.accentText}`}>
+                        {shareItem.type === 'wisdom' ? `wisdom (${shareItem.wisdomType || 'gem'})` : shareItem.type}
+                      </span>
+                    </p>
+                  </div>
+                  <span className={`text-[10px] font-medium font-serif italic ${
+                    isShareCardDark ? 'text-white/60' : 'text-[#2F3331]/60'
+                  }`}>
+                    — reflection
+                  </span>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-col items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        let shareText = '';
+                        if (shareItem.type === 'note' && shareItem.title) {
+                          shareText += `**${shareItem.title}**\n`;
+                        }
+                        
+                        if (shareItem.type === 'wisdom') {
+                          const parsed = parseWisdom(shareItem.content);
+                          shareText += `"${parsed.content}"`;
+                          if (parsed.author) {
+                            shareText += `\n-- ${parsed.author}`;
+                          }
+                          if (parsed.source) {
+                            shareText += `\nsource: ${parsed.source}`;
+                          }
+                          if (parsed.context) {
+                            shareText += `\ncontext: ${parsed.context}`;
+                          }
+                        } else {
+                          shareText += `"${shareItem.content}"`;
+                        }
+                        
+                        await navigator.clipboard.writeText(shareText);
+                        setCopySuccess(true);
+                        setTimeout(() => setCopySuccess(false), 2000);
+                      } catch (err) {
+                        console.error('Failed to copy', err);
                       }
-                      
-                      if (shareItem.type === 'wisdom') {
-                        const parsed = parseWisdom(shareItem.content);
-                        shareText += `"${parsed.content}"`;
-                        if (parsed.author) {
-                          shareText += `\n-- ${parsed.author}`;
-                        }
-                        if (parsed.source) {
-                          shareText += `\nsource: ${parsed.source}`;
-                        }
-                        if (parsed.context) {
-                          shareText += `\ncontext: ${parsed.context}`;
-                        }
-                      } else {
-                        shareText += `"${shareItem.content}"`;
-                      }
-                      
-                      await navigator.clipboard.writeText(shareText);
-                      setCopySuccess(true);
-                      setTimeout(() => setCopySuccess(false), 2000);
-                    } catch (err) {
-                      console.error('Failed to copy', err);
-                    }
-                  }}
-                  className="w-full inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-xs font-bold text-[#2F3331] shadow-md transition-transform active:scale-95 cursor-pointer hover:bg-[#FAFAFA]"
-                >
-                  <FontAwesomeIcon icon={faCopy} className="h-3.5 w-3.5" />
-                  <span>{copySuccess ? 'Copied! ✓' : 'Copy Text'}</span>
-                </button>
-                <p className="text-[10px] text-white/60 font-medium">
-                  📸 Screenshot this to share on social!
-                </p>
+                    }}
+                    className={`w-full inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-5 text-xs font-bold transition-all active:scale-[0.98] cursor-pointer ${
+                      isShareCardDark 
+                        ? 'bg-white hover:bg-[#FAFAFA] text-[#2F3331] shadow-md' 
+                        : 'bg-[#2F3331] hover:bg-[#1E201E] text-white shadow-md'
+                    }`}
+                  >
+                    <FontAwesomeIcon icon={faCopy} className="h-3.5 w-3.5" />
+                    <span>{copySuccess ? 'Copied! ✓' : 'Copy Text'}</span>
+                  </button>
+                  <p className={`text-[10px] font-medium ${
+                    isShareCardDark ? 'text-white/60' : 'text-[#2F3331]/60'
+                  }`}>
+                    📸 Screenshot this to share on social!
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

@@ -523,7 +523,7 @@ function WritePageContent() {
       setMoodInput('neutral');
     }
   }, [currentEntry, currentDate]);
-  const [widgetsCollapsed, setWidgetsCollapsed] = useState(false);
+  const [widgetsCollapsed, setWidgetsCollapsed] = useState(true);
   const [showTodoDrawer, setShowTodoDrawer] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 

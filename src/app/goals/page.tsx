@@ -991,7 +991,7 @@ export default function GoalsPage() {
                 ? 'add goal' 
                 : activeSubTab === 'inbox' 
                 ? 'add task' 
-                : 'tambah item'
+                : 'add item'
             }
           >
             <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />
@@ -2618,7 +2618,7 @@ export default function GoalsPage() {
         {showCalendarAddChoice && (
           <div className="bg-white dark:bg-[#1E2022] rounded-3xl p-6 border border-[#EEF0EF] dark:border-[#2E3133]/60 shadow-md transition-all duration-300 animate-in fade-in slide-in-from-top-5 duration-200">
             <h3 className="text-[10px] font-bold text-[#2F3331] dark:text-[#FAFAFA] mb-4 flex items-center gap-1.5 uppercase tracking-wider">
-              ✨ Tambah apa hari ini?
+              ✨ Add what today?
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <button
@@ -2631,7 +2631,7 @@ export default function GoalsPage() {
                 className="flex flex-col items-center gap-2 p-4 bg-[#F2FDF6] hover:bg-[#E2FBEB] dark:bg-[#0E2719] dark:hover:bg-[#153B26] border border-[#D6FADB] dark:border-[#1E4D34] rounded-2xl cursor-pointer text-[#00A963] dark:text-[#00FF8C] transition-all duration-300 active:scale-95 shadow-sm"
               >
                 <FontAwesomeIcon icon={faListCheck} className="w-6 h-6" />
-                <span className="text-xs font-bold uppercase tracking-wider">Task Baru</span>
+                <span className="text-xs font-bold uppercase tracking-wider">New Task</span>
               </button>
               <button
                 onClick={() => {
@@ -2648,7 +2648,7 @@ export default function GoalsPage() {
                 className="flex flex-col items-center gap-2 p-4 bg-[#F9F5FF] hover:bg-[#F2EAFF] dark:bg-[#160E2A] dark:hover:bg-[#251842] border border-[#F2EDFF] dark:border-[#3E2A5D] rounded-2xl cursor-pointer text-[#8B00D4] dark:text-[#E2D5FF] transition-all duration-300 active:scale-95 shadow-sm"
               >
                 <FontAwesomeIcon icon={faFlag} className="w-6 h-6" />
-                <span className="text-xs font-bold uppercase tracking-wider">Goal Baru</span>
+                <span className="text-xs font-bold uppercase tracking-wider">New Goal</span>
               </button>
             </div>
             <div className="flex justify-end mt-4">
@@ -2659,7 +2659,7 @@ export default function GoalsPage() {
                 }}
                 className="px-4 py-1.5 text-xs font-bold text-[#6F7476] hover:text-[#2F3331] dark:text-[#A3A7A8] dark:hover:text-[#FAFAFA] border border-[#CCD0CF] dark:border-[#2E3133] rounded-xl hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
               >
-                Batal
+                Cancel
               </button>
             </div>
           </div>
@@ -2670,7 +2670,7 @@ export default function GoalsPage() {
           <div className="rounded-3xl bg-white dark:bg-[#1E2022] p-6 border border-[#EEF0EF] dark:border-[#2E3133]/60 shadow-md transition-all duration-300 animate-in fade-in slide-in-from-top-5 duration-200">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-bold text-[#2F3331] dark:text-[#FAFAFA] flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
-                ✨ Task Baru {selectedCalendarDate ? `untuk ${format(selectedCalendarDate, 'MMM d, yyyy')}` : '(Hari Ini)'}
+                ✨ New Task {selectedCalendarDate ? `for ${format(selectedCalendarDate, 'MMM d, yyyy')}` : '(Today)'}
               </h3>
               <span className="text-[9px] font-extrabold uppercase bg-[#E9FFF4] text-[#00A963] dark:bg-[#00DC7D]/15 dark:text-[#00DC7D] px-2 py-0.5 rounded-full select-none">
                 Auto-Schedule
@@ -2682,8 +2682,8 @@ export default function GoalsPage() {
               onChange={setNewTaskContent}
               onEnter={handleAddTask}
               placeholder={selectedCalendarDate 
-                ? `Tulis task untuk tanggal ini... (misal: 'Beli susu jam 3 sore')` 
-                : "Tulis task... (misal: 'Beli susu besok sore')"
+                ? `Write a task for this day... (e.g., 'Buy milk at 3pm')` 
+                : "Write a task... (e.g., 'Buy milk tomorrow afternoon')"
               }
               className="mb-4 w-full bg-transparent border-b border-[#CCD0CF]/40 focus:border-[#00DC7D] rounded-none py-2 text-[#2F3331] dark:text-[#FAFAFA] placeholder-[#A3A7A8] font-sans text-base font-semibold focus:outline-none transition-all duration-300 resize-none overflow-hidden"
               autoFocus
@@ -2691,7 +2691,7 @@ export default function GoalsPage() {
             />
             
             <p className="text-[10px] text-[#A3A7A8] dark:text-[#888D8F] mb-4 leading-relaxed">
-              💡 <strong>Info:</strong> Task akan otomatis dijadwalkan pada hari yang kamu pilih di kalender. Kamu juga bisa mengetikkan waktu (misal: "jam 9 pagi").
+              💡 <strong>Info:</strong> Task will be automatically scheduled for the selected calendar day. You can also specify a time (e.g., "9am").
             </p>
 
             <div className="flex gap-2 justify-end">
@@ -2701,7 +2701,7 @@ export default function GoalsPage() {
                   setShowAddTaskForm(false);
                 }}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-[#CCD0CF] dark:border-zinc-700 bg-white dark:bg-[#1E2022] text-[#6F7476] hover:bg-[#F2F2F3] hover:text-[#2F3331] dark:hover:bg-zinc-800 dark:hover:text-white transition-all cursor-pointer active:scale-95"
-                title="Batal"
+                title="Cancel"
               >
                 <FontAwesomeIcon icon={faXmark} className="h-4 w-4" />
               </button>
@@ -2709,7 +2709,7 @@ export default function GoalsPage() {
                 onClick={handleAddTask}
                 disabled={!newTaskContent.trim()}
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00DC7D] text-white hover:bg-[#00B866] disabled:opacity-50 transition-all cursor-pointer active:scale-95 shadow-sm shadow-[#00DC7D]/10"
-                title="Simpan"
+                title="Save"
               >
                 <FontAwesomeIcon icon={faCheck} className="h-4 w-4" />
               </button>
@@ -2721,13 +2721,13 @@ export default function GoalsPage() {
         {showAddForm && (
           <div className="rounded-3xl bg-white dark:bg-[#1E2022] p-6 border border-[#EEF0EF] dark:border-[#2E3133]/60 shadow-md transition-all duration-300 animate-in fade-in slide-in-from-top-5 duration-200">
             <h3 className="text-sm font-bold text-[#2F3331] dark:text-[#FAFAFA] mb-4 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
-              ✨ Goal Baru
+              ✨ New Goal
             </h3>
             
             <textarea
               value={newGoalContent}
               onChange={(e) => setNewGoalContent(e.target.value)}
-              placeholder="Apa yang ingin kamu capai?"
+              placeholder="What do you want to achieve?"
               rows={2}
               className="mb-4 w-full resize-none bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-2 text-[#2F3331] dark:text-[#FAFAFA] placeholder-[#A3A7A8] font-sans text-base font-semibold focus:outline-none transition-all duration-300"
               autoFocus
@@ -2736,7 +2736,7 @@ export default function GoalsPage() {
             <div className="mb-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#6F7476] dark:text-[#A3A7A8]">Deadline (opsional)</label>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#6F7476] dark:text-[#A3A7A8]">Deadline (optional)</label>
                   <input
                     type="date"
                     value={newGoalDeadline}
@@ -2745,7 +2745,7 @@ export default function GoalsPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#6F7476] dark:text-[#A3A7A8]">Kategori</label>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#6F7476] dark:text-[#A3A7A8]">Category</label>
                   <select
                     value={categorySelectOption}
                     onChange={(e) => setCategorySelectOption(e.target.value)}
@@ -2754,14 +2754,14 @@ export default function GoalsPage() {
                     {categories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
-                    <option value="__custom__">➕ Buat baru...</option>
+                    <option value="__custom__">➕ Create new...</option>
                   </select>
                   {categorySelectOption === '__custom__' && (
                     <input
                       type="text"
                       value={customCategory}
                       onChange={(e) => setCustomCategory(e.target.value)}
-                      placeholder="Masukkan nama kategori"
+                      placeholder="Enter category name"
                       className="mt-2 w-full bg-transparent border-b border-[#CCD0CF]/40 focus:border-b-[#00DC7D] rounded-none py-1 text-xs text-[#2F3331] dark:text-[#FAFAFA] placeholder-[#CCD0CF]/80 focus:outline-none transition-all duration-300"
                     />
                   )}
@@ -2769,7 +2769,7 @@ export default function GoalsPage() {
               </div>
               
               <div className="flex items-center gap-3 select-none">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#6F7476] dark:text-[#A3A7A8]">Prioritas:</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#6F7476] dark:text-[#A3A7A8]">Priority:</span>
                 <div className="flex gap-1.5">
                   {(['high', 'medium', 'low'] as const).map(prio => (
                     <button
@@ -2803,7 +2803,7 @@ export default function GoalsPage() {
                   setShowAddForm(false);
                 }}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-[#CCD0CF] bg-white dark:bg-[#1E2022] text-[#6F7476] hover:bg-[#F2F2F3] hover:text-[#2F3331] transition-all cursor-pointer active:scale-95"
-                title="Batal"
+                title="Cancel"
               >
                 <FontAwesomeIcon icon={faXmark} className="h-4 w-4" />
               </button>
@@ -2811,7 +2811,7 @@ export default function GoalsPage() {
                 onClick={handleAddGoal}
                 disabled={!newGoalContent.trim()}
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00DC7D] text-white hover:bg-[#00B866] disabled:opacity-50 transition-all cursor-pointer active:scale-95 shadow-sm shadow-[#00DC7D]/10"
-                title="Simpan"
+                title="Save"
               >
                 <FontAwesomeIcon icon={faCheck} className="h-4 w-4" />
               </button>

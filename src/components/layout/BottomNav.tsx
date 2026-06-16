@@ -44,7 +44,7 @@ export default function BottomNav({ className = '' }: { className?: string }) {
   ];
 
   return (
-    <nav className={`pointer-events-none fixed bottom-3 left-0 right-0 z-40 px-4 safe-area-pb ${className}`}>
+    <nav className={`pointer-events-none fixed bottom-5 left-0 right-0 z-40 px-4 safe-area-pb ${className}`}>
       <div className={`pointer-events-auto mx-auto flex max-w-lg items-center justify-around rounded-full border border-[#E4E7E6] bg-white/95 px-3 py-2 shadow-lg backdrop-blur transition-all duration-500 ease-out ${
         isSpotlightOpen ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
       }`}>
