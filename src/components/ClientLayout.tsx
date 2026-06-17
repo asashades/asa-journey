@@ -325,6 +325,57 @@ function ThemeWrapper({ children }: { children: ReactNode }) {
     };
   }, [userProfile?.settings?.theme]);
 
+  // Handle print event to temporarily switch to light mode for printing
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let originalThemeClass: string | null = null;
+    let hadDarkClass = false;
+
+    const handleBeforePrint = () => {
+      const root = document.documentElement;
+      hadDarkClass = root.classList.contains('dark');
+      
+      // Find the current theme-*-dark class
+      const activeThemeClass = Array.from(root.classList).find(c => c.startsWith('theme-') && c.endsWith('-dark'));
+      if (activeThemeClass) {
+        originalThemeClass = activeThemeClass;
+        const lightThemeClass = activeThemeClass.replace('-dark', '-light');
+        root.classList.remove(activeThemeClass);
+        root.classList.add(lightThemeClass);
+      }
+      
+      if (hadDarkClass) {
+        root.classList.remove('dark');
+      }
+    };
+
+    const handleAfterPrint = () => {
+      const root = document.documentElement;
+      
+      if (originalThemeClass) {
+        const lightThemeClass = originalThemeClass.replace('-dark', '-light');
+        root.classList.remove(lightThemeClass);
+        root.classList.add(originalThemeClass);
+      }
+      
+      if (hadDarkClass) {
+        root.classList.add('dark');
+      }
+      
+      originalThemeClass = null;
+      hadDarkClass = false;
+    };
+
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] transition-colors duration-300">
       {children}
