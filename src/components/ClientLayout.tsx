@@ -22,11 +22,23 @@ function NotificationListener() {
   const notifiedIds = useRef<Set<string>>(new Set());
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Request notifications permission on mount
+  // Request notifications permission on mount & register service worker
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'default') {
-        Notification.requestPermission();
+    if (typeof window !== 'undefined') {
+      // 1. Register Service Worker for PWA / iOS notifications support
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+          .then((reg) => {
+            console.log('Service Worker registered successfully:', reg.scope);
+          })
+          .catch((err) => {
+            console.error('Service Worker registration failed:', err);
+          });
+      }
+
+      // 2. Fallback permission request for desktop/android on mount
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
       }
     }
   }, []);
@@ -110,11 +122,36 @@ function NotificationListener() {
           if (!notifiedIds.current.has(task.id)) {
             notifiedIds.current.add(task.id);
 
-            // 1. Trigger System Notification
+            // 1. Trigger System Notification (PWA Service Worker compliant, works on iOS)
             if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-              new Notification("Task Reminder 🔔", {
-                body: task.text,
-              });
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.ready.then(registration => {
+                  registration.showNotification("grind o'clock! ⚡️", {
+                    body: task.text,
+                    icon: '/icons/icon-192.png',
+                    badge: '/icons/icon-192.png',
+                    tag: task.id,
+                    data: '/goals',
+                  });
+                }).catch(err => {
+                  console.error('Failed to trigger SW notification, fallback to window.Notification:', err);
+                  try {
+                    new Notification("grind o'clock! ⚡️", {
+                      body: task.text,
+                    });
+                  } catch (e) {
+                    console.error('Fallback notification failed:', e);
+                  }
+                });
+              } else {
+                try {
+                  new Notification("grind o'clock! ⚡️", {
+                    body: task.text,
+                  });
+                } catch (e) {
+                  console.error('Fallback notification failed:', e);
+                }
+              }
             }
 
             // 2. Play Audio Chime
@@ -160,7 +197,7 @@ function NotificationListener() {
         </div>
         <div className="min-w-0 flex-1">
           <h4 className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] uppercase tracking-wider flex items-center gap-1">
-            <FontAwesomeIcon icon={faClock} className="w-2.5 h-2.5" /> Task Due Now
+            <FontAwesomeIcon icon={faClock} className="w-2.5 h-2.5" /> GRIND O'CLOCK ⚡️
           </h4>
           <p className="text-xs font-semibold text-[#2F3331] dark:text-[#FAFAFA] mt-0.5 truncate pr-2">
             {activeNotification.text}

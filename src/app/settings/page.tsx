@@ -27,6 +27,7 @@ import {
   faCheckCircle,
   faTrophy,
   faBatteryFull,
+  faBell,
 } from '@fortawesome/free-solid-svg-icons';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useState, useEffect } from 'react';
@@ -83,6 +84,50 @@ export default function SettingsPage() {
   const [importError, setImportError] = useState('');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [loadingTheme, setLoadingTheme] = useState<ThemeFontKey | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
+
+  const handleToggleNotifications = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      alert('Notifications are not supported on this device/browser.');
+      return;
+    }
+
+    if (Notification.permission === 'denied') {
+      alert('Notification permission is blocked. Please enable it in your device or browser settings.');
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === 'granted') {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.ready;
+          reg.showNotification("we are so back! 🔔", {
+            body: 'you will receive reminders for scheduled tasks now, bestie!',
+            icon: '/icons/icon-192.png',
+            badge: '/icons/icon-192.png',
+          });
+        } else {
+          try {
+            new Notification("we are so back! 🔔", {
+              body: 'you will receive reminders for scheduled tasks now, bestie!',
+            });
+          } catch (e) {
+            console.error('Test notification failed:', e);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error requesting notification permission:', err);
+    }
+  };
 
   const defaultSettings = {
     darkMode: true,
@@ -637,6 +682,33 @@ export default function SettingsPage() {
                 className={`flex h-8 w-12 items-center rounded-full px-1 transition-all ${settings.darkMode ? 'bg-[#00DC7D]' : 'bg-[#E4E7E6]'}`}
               >
                 <div className={`h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${settings.darkMode ? 'translate-x-4' : 'translate-x-0'}`} />
+              </button>
+            </div>
+
+            {/* Reminders / Notifications Switcher */}
+            <div className="flex items-center justify-between rounded-lg border border-[#EEF0EF] bg-white p-4">
+              <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
+                <FontAwesomeIcon icon={faBell} className={`h-5 w-5 shrink-0 ${notificationPermission === 'granted' ? 'text-[#00DC7D]' : 'text-[#A3A7A8]'}`} />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[#2F3331]">Task Reminders</p>
+                  <p className="text-xs text-[#A3A7A8] truncate">
+                    {notificationPermission === 'granted' 
+                      ? 'notifs are active bestie! 💅' 
+                      : notificationPermission === 'denied' 
+                      ? 'blocked (check settings)' 
+                      : 'enable notifications for scheduled tasks'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleToggleNotifications}
+                className={`flex h-8 w-12 items-center rounded-full px-1 transition-all shrink-0 ${
+                  notificationPermission === 'granted' ? 'bg-[#00DC7D]' : 'bg-[#E4E7E6]'
+                }`}
+              >
+                <div className={`h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${
+                  notificationPermission === 'granted' ? 'translate-x-4' : 'translate-x-0'
+                }`} />
               </button>
             </div>
           </div>
