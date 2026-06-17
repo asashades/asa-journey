@@ -237,6 +237,7 @@ export interface UserSettings {
   showStreakWidget?: boolean; // Option to show/hide streak widget
   showWordGoalWidget?: boolean; // Option to show/hide daily word goal battery widget
   theme?: 'journalistic' | 'cosmic' | 'moss' | 'nocturne';
+  reminderOffset?: number;
   aiConfig?: {
     mode: 'built_in' | 'bring_your_own_key';
     provider?: 'gemini' | 'openai' | 'anthropic' | 'deepseek';

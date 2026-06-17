@@ -1,0 +1,18 @@
+# Compiled JavaScript files
+lib/
+
+# Dependency directories
+node_modules/
+
+# Logs
+firebase-debug.log
+firestore-debug.log
+
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.local

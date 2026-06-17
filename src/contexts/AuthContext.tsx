@@ -47,6 +47,7 @@ const defaultSettings: UserSettings = {
   dailyWordGoal: 50,
   showStreakWidget: true,
   showWordGoalWidget: true,
+  reminderOffset: 0,
   createdAt: new Date(),
   updatedAt: new Date(),
 };

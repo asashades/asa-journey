@@ -6,9 +6,20 @@ import { Note, Notebook } from '@/types';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
-import MarkdownRenderer from './MarkdownRenderer';
-import SlashCommandMenu from './SlashCommandMenu';
-import AIPreviewModal from './AIPreviewModal';
+import dynamic from 'next/dynamic';
+
+const MarkdownRenderer = dynamic(() => import('./MarkdownRenderer'), {
+  ssr: false,
+  loading: () => <div className="animate-pulse h-20 bg-gray-100 dark:bg-[#161B19]/30 rounded-xl" />
+});
+
+const SlashCommandMenu = dynamic(() => import('./SlashCommandMenu'), {
+  ssr: false
+});
+
+const AIPreviewModal = dynamic(() => import('./AIPreviewModal'), {
+  ssr: false
+});
 import { refineNoteClientSide } from '@/lib/ai/aiClient';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -771,41 +782,48 @@ export default function NoteEditor({ noteId }: NoteEditorProps) {
               Journal Date
             </span>
             <div className="flex items-center gap-2">
-              {linkedJournalDate ? (
-                <>
-                  <span className="text-xs font-bold text-[#00A963] bg-[#E9FFF4] px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+              <div className="relative cursor-pointer">
+                {/* Invisible date input always in DOM to prevent iOS PWA unmounting picker dismiss bug */}
+                <input
+                  type="date"
+                  value={linkedJournalDate}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setLinkedJournalDate(e.target.value);
+                      setIsDirty(true);
+                    }
+                  }}
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                />
+                
+                {/* Visible custom styled element */}
+                {linkedJournalDate ? (
+                  <span className="text-xs font-bold text-[#00A963] bg-[#E9FFF4] px-2.5 py-1 rounded-lg flex items-center gap-1.5 select-none">
                     {(() => {
                       const [year, month, day] = linkedJournalDate.split('-').map(Number);
                       const d = new Date(year, month - 1, day);
                       return format(d, 'MMM d, yyyy');
                     })()}
                   </span>
-                  <button
-                    onClick={() => {
-                      setLinkedJournalDate('');
-                      setIsDirty(true);
-                    }}
-                    className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors bg-red-50 dark:bg-red-950/20 hover:bg-red-100 p-1.5 rounded-lg border border-red-200/20 cursor-pointer"
-                    title="Unlink date"
-                  >
-                    <FontAwesomeIcon icon={faXmark} className="w-3 h-3" />
-                  </button>
-                </>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Not Linked</span>
-                  <input
-                    type="date"
-                    value={linkedJournalDate}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        setLinkedJournalDate(e.target.value);
-                        setIsDirty(true);
-                      }
-                    }}
-                    className="rounded-lg border border-[#CCD0CF] dark:border-[#2E3832] bg-white dark:bg-[#111412] px-2.5 py-1 text-xs text-[#2F3331] dark:text-[#E4E7E6] font-bold focus:outline-none focus:border-[#00DC7D]"
-                  />
-                </div>
+                ) : (
+                  <span className="inline-flex items-center justify-center rounded-lg border border-[#CCD0CF] dark:border-[#2E3832] bg-white dark:bg-[#111412] px-2.5 py-1 text-xs text-[#A3A7A8] font-bold select-none hover:border-[#00DC7D] transition-colors">
+                    Link to Journal
+                  </span>
+                )}
+              </div>
+
+              {/* Unlink button positioned outside the input container */}
+              {linkedJournalDate && (
+                <button
+                  onClick={() => {
+                    setLinkedJournalDate('');
+                    setIsDirty(true);
+                  }}
+                  className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors bg-red-50 dark:bg-red-950/20 hover:bg-red-100 p-1.5 rounded-lg border border-red-200/20 cursor-pointer relative z-20"
+                  title="Unlink date"
+                >
+                  <FontAwesomeIcon icon={faXmark} className="w-3 h-3" />
+                </button>
               )}
             </div>
           </div>

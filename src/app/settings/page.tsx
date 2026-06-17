@@ -28,6 +28,7 @@ import {
   faTrophy,
   faBatteryFull,
   faBell,
+  faClock,
 } from '@fortawesome/free-solid-svg-icons';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useState, useEffect } from 'react';
@@ -148,6 +149,7 @@ export default function SettingsPage() {
     showStreakWidget: true,
     showWordGoalWidget: true,
     theme: 'journalistic' as const,
+    reminderOffset: 0,
     aiConfig: {
       mode: 'built_in' as const,
       provider: 'gemini' as const,
@@ -711,6 +713,30 @@ export default function SettingsPage() {
                 }`} />
               </button>
             </div>
+
+            {/* Reminder Offset Dropdown (only visible if reminders are enabled) */}
+            {notificationPermission === 'granted' && (
+              <div className="flex items-center justify-between rounded-lg border border-[#EEF0EF] bg-white p-4">
+                <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
+                  <FontAwesomeIcon icon={faClock} className="h-5 w-5 shrink-0 text-[#00DC7D]" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[#2F3331]">Reminder Time</p>
+                    <p className="text-xs text-[#A3A7A8] truncate">when to notify you before the task</p>
+                  </div>
+                </div>
+                <select
+                  value={settings.reminderOffset ?? 0}
+                  onChange={(e) => updateUserSettings({ reminderOffset: parseInt(e.target.value, 10) })}
+                  className="rounded-lg border border-[#CCD0CF] dark:border-[#2E3832] bg-white dark:bg-[#111412] px-2.5 py-1.5 text-xs text-[#2F3331] dark:text-[#E4E7E6] font-bold focus:outline-none focus:border-[#00DC7D] shrink-0"
+                >
+                  <option value={0}>At time of task</option>
+                  <option value={5}>5 minutes before</option>
+                  <option value={15}>15 minutes before</option>
+                  <option value={30}>30 minutes before</option>
+                  <option value={60}>1 hour before</option>
+                </select>
+              </div>
+            )}
           </div>
         </section>
 

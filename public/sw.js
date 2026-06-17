@@ -92,15 +92,25 @@ async function syncEntries() {
   localStorage.removeItem('pendingEntries');
 }
 
-// Push notification handling (for future use)
+// Push notification handling
 self.addEventListener('push', (event) => {
-  const data = event.data?.json() || {};
-  const title = data.title || 'ASA Journey';
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    try {
+      data = { body: event.data ? event.data.text() : 'Time to write your daily entry!' };
+    } catch (err) {
+      data = {};
+    }
+  }
+  const title = data.title || "grind o'clock! ⚡️";
   const options = {
     body: data.body || 'Time to write your daily entry!',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    data: data.url || '/write',
+    tag: data.tag || 'task-reminder',
+    data: data.url || '/goals',
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });

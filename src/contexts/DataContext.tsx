@@ -796,6 +796,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             updatedAt: new Date(),
             entryDate: entry.date,
             isFromNote: false,
+            reminderSent: false,
             ...(bullet.scheduledAt ? { scheduledAt: bullet.scheduledAt instanceof Date ? bullet.scheduledAt : new Date(bullet.scheduledAt) } : {})
           });
         } catch (err) {
@@ -891,6 +892,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
               updatedAt: item.bullet.updatedAt instanceof Date ? item.bullet.updatedAt : new Date(item.bullet.updatedAt),
               entryDate: item.entryDate,
               isFromNote: false,
+              reminderSent: false,
               ...(item.bullet.scheduledAt ? { scheduledAt: item.bullet.scheduledAt instanceof Date ? item.bullet.scheduledAt : new Date(item.bullet.scheduledAt) } : {})
             }, { merge: true });
           }

@@ -6,21 +6,88 @@ import { DataProvider, useData } from '@/contexts/DataContext';
 import BottomNav from '@/components/layout/BottomNav';
 import { usePathname, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCheck, faXmark, faBell, faClock } from '@fortawesome/free-solid-svg-icons';
 import { loadThemeFonts, type ThemeFontKey } from '@/lib/themeFonts';
+import { db } from '@/lib/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/\-/g, '+')
+    .replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
 
 function NotificationListener() {
-  const { tasks, notes, toggleBulletComplete, toggleNoteChecklist } = useData();
-  const [activeNotification, setActiveNotification] = useState<{
-    id: string;
-    text: string;
-    isFromNote?: boolean;
-    noteId?: string;
-  } | null>(null);
+  const { tasks } = useData();
+  const { userProfile } = useAuth();
 
   const notifiedIds = useRef<Set<string>>(new Set());
-  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const taskTimesRef = useRef<Record<string, number>>({});
+
+  // Manage Web Push subscription in Firestore
+  useEffect(() => {
+    if (typeof window === 'undefined' || !userProfile?.uid) return;
+
+    let active = true;
+
+    const manageSubscription = async () => {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.warn('Web Push not supported in this browser.');
+        return;
+      }
+
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        
+        if (Notification.permission === 'granted') {
+          const publicVapidKey = 'BPlaOdWv-YzUwWH3KU9BxfzZrHG1JKg29YixlRANTZT2q8ucppU6RtIDKMdQmmcUtGnlq8wxBJZ5frQlAt1nBnU';
+          
+          let subscription = await reg.pushManager.getSubscription();
+          
+          if (!subscription) {
+            try {
+              subscription = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+              });
+            } catch (subscribeErr) {
+              console.error('Failed to subscribe to push notifications:', subscribeErr);
+            }
+          }
+
+          if (subscription && active) {
+            const subscriptionId = btoa(subscription.endpoint).replace(/[^a-zA-Z0-9]/g, '');
+            const subRef = doc(db, 'users', userProfile.uid, 'pushSubscriptions', subscriptionId);
+            
+            const subJSON = subscription.toJSON();
+            await setDoc(subRef, {
+              endpoint: subscription.endpoint,
+              keys: {
+                p256dh: subJSON.keys?.p256dh || '',
+                auth: subJSON.keys?.auth || ''
+              },
+              updatedAt: serverTimestamp()
+            });
+            console.log('Web Push subscription registered successfully in Firestore.');
+          }
+        }
+      } catch (err) {
+        console.error('Error managing push subscription in Firestore:', err);
+      }
+    };
+
+    manageSubscription();
+
+    return () => {
+      active = false;
+    };
+  }, [userProfile?.uid]);
 
   // Request notifications permission on mount & register service worker
   useEffect(() => {
@@ -39,6 +106,19 @@ function NotificationListener() {
       // 2. Fallback permission request for desktop/android on mount
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission().catch(() => {});
+      }
+
+      // 3. Load notified IDs from localStorage
+      try {
+        const stored = localStorage.getItem('notified_task_reminders');
+        if (stored) {
+          const ids = JSON.parse(stored);
+          if (Array.isArray(ids)) {
+            notifiedIds.current = new Set(ids);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load notified_task_reminders from localStorage', e);
       }
     }
   }, []);
@@ -67,6 +147,33 @@ function NotificationListener() {
 
     return list;
   }, [tasks]);
+
+  // Detect rescheduling
+  useEffect(() => {
+    let changed = false;
+    pendingScheduledTasks.forEach(task => {
+      const currentScheduledTime = task.scheduledAt.getTime();
+      const previousScheduledTime = taskTimesRef.current[task.id];
+      
+      if (previousScheduledTime !== undefined && previousScheduledTime !== currentScheduledTime) {
+        // Task rescheduled! Remove from notified list
+        notifiedIds.current.delete(task.id);
+        changed = true;
+      }
+      taskTimesRef.current[task.id] = currentScheduledTime;
+    });
+
+    if (changed && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(
+          'notified_task_reminders',
+          JSON.stringify(Array.from(notifiedIds.current))
+        );
+      } catch (e) {
+        console.error('Failed to save notified_task_reminders to localStorage', e);
+      }
+    }
+  }, [pendingScheduledTasks]);
 
   const playCosmicChime = () => {
     try {
@@ -107,122 +214,105 @@ function NotificationListener() {
   };
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const reminderOffset = userProfile?.settings?.reminderOffset ?? 0;
+
+    const checkNotifications = () => {
       const now = new Date();
-      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const nowTime = now.getTime();
       const nowDayStr = format(now, 'yyyy-MM-dd');
+      let updatedNotified = false;
 
       pendingScheduledTasks.forEach(task => {
         const sDate = new Date(task.scheduledAt);
         const sDayStr = format(sDate, 'yyyy-MM-dd');
-        const sMinutes = sDate.getHours() * 60 + sDate.getMinutes();
 
-        // Match day and minute
-        if (sDayStr === nowDayStr && sMinutes === nowMinutes) {
-          if (!notifiedIds.current.has(task.id)) {
-            notifiedIds.current.add(task.id);
+        // Target reminder time = scheduledAt - offset (in milliseconds)
+        const reminderTime = new Date(sDate.getTime() - reminderOffset * 60 * 1000);
+        const reminderTimeMs = reminderTime.getTime();
 
-            // 1. Trigger System Notification (PWA Service Worker compliant, works on iOS)
-            if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-              if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.ready.then(registration => {
-                  registration.showNotification("grind o'clock! ⚡️", {
-                    body: task.text,
-                    icon: '/icons/icon-192.png',
-                    badge: '/icons/icon-192.png',
-                    tag: task.id,
-                    data: '/goals',
-                  });
-                }).catch(err => {
-                  console.error('Failed to trigger SW notification, fallback to window.Notification:', err);
-                  try {
-                    new Notification("grind o'clock! ⚡️", {
-                      body: task.text,
-                    });
-                  } catch (e) {
-                    console.error('Fallback notification failed:', e);
-                  }
+        // Match day and check if reminder time has arrived or passed (and hasn't been notified yet)
+        if (sDayStr === nowDayStr && reminderTimeMs <= nowTime && !notifiedIds.current.has(task.id)) {
+          notifiedIds.current.add(task.id);
+          updatedNotified = true;
+
+          // Prepare notification text (Gen-Z American style)
+          let notificationText = task.text;
+          if (reminderOffset > 0) {
+            notificationText = `in ${reminderOffset} mins: ${task.text} 💅`;
+          }
+
+          // 1. Trigger System Notification (PWA Service Worker compliant, works on iOS)
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.ready.then(registration => {
+                registration.showNotification("grind o'clock! ⚡️", {
+                  body: notificationText,
+                  icon: '/icons/icon-192.png',
+                  badge: '/icons/icon-192.png',
+                  tag: task.id,
+                  data: '/goals',
                 });
-              } else {
+              }).catch(err => {
+                console.error('Failed to trigger SW notification, fallback to window.Notification:', err);
                 try {
                   new Notification("grind o'clock! ⚡️", {
-                    body: task.text,
+                    body: notificationText,
                   });
                 } catch (e) {
                   console.error('Fallback notification failed:', e);
                 }
+              });
+            } else {
+              try {
+                new Notification("grind o'clock! ⚡️", {
+                  body: notificationText,
+                });
+              } catch (e) {
+                console.error('Fallback notification failed:', e);
               }
             }
-
-            // 2. Play Audio Chime
-            playCosmicChime();
-
-            // 3. Trigger In-app banner
-            setActiveNotification(task);
-
-            // Auto dismiss after 15 seconds
-            if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
-            dismissTimerRef.current = setTimeout(() => {
-              setActiveNotification(null);
-            }, 15000);
           }
+
+          // 2. Play Audio Chime
+          playCosmicChime();
         }
       });
-    }, 10000); // scan every 10 seconds
+
+      if (updatedNotified && typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(
+            'notified_task_reminders',
+            JSON.stringify(Array.from(notifiedIds.current))
+          );
+        } catch (e) {
+          console.error('Failed to save notified_task_reminders to localStorage', e);
+        }
+      }
+    };
+
+    // Run check immediately on mount/update (crucial for catch-up!)
+    checkNotifications();
+
+    const interval = setInterval(checkNotifications, 10000); // scan every 10 seconds
+
+    // Listen to focus and visibilitychange to catch up immediately when app is opened/resumed
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', checkNotifications);
+      document.addEventListener('visibilitychange', checkNotifications);
+    }
 
     return () => {
       clearInterval(interval);
-      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', checkNotifications);
+        document.removeEventListener('visibilitychange', checkNotifications);
+      }
     };
-  }, [pendingScheduledTasks]);
+  }, [pendingScheduledTasks, userProfile?.settings?.reminderOffset]);
 
-  const handleMarkDone = async () => {
-    if (!activeNotification) return;
-
-    if (activeNotification.isFromNote && activeNotification.noteId) {
-      await toggleNoteChecklist(activeNotification.noteId, activeNotification.text);
-    } else {
-      await toggleBulletComplete(activeNotification.id);
-    }
-    setActiveNotification(null);
-  };
-
-  if (!activeNotification) return null;
-
-  return (
-    <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] w-[90%] max-w-[400px] bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-emerald-500/20 dark:border-emerald-500/30 rounded-2xl p-4 shadow-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-6 duration-300">
-      <div className="flex items-start gap-2.5 min-w-0 flex-1">
-        <div className="h-8 w-8 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-500 dark:text-[#55FFB4] flex items-center justify-center shrink-0">
-          <FontAwesomeIcon icon={faBell} className="w-3.5 h-3.5 animate-bounce" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h4 className="text-[10px] font-bold text-[#6F7476] dark:text-[#A3A7A8] uppercase tracking-wider flex items-center gap-1">
-            <FontAwesomeIcon icon={faClock} className="w-2.5 h-2.5" /> GRIND O'CLOCK ⚡️
-          </h4>
-          <p className="text-xs font-semibold text-[#2F3331] dark:text-[#FAFAFA] mt-0.5 truncate pr-2">
-            {activeNotification.text}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 shrink-0">
-        <button
-          onClick={handleMarkDone}
-          className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[#00DC7D] text-white rounded-xl hover:bg-[#00B866] transition-all cursor-pointer active:scale-95 shadow-sm shadow-[#00DC7D]/10"
-        >
-          <FontAwesomeIcon icon={faCheck} className="mr-1 w-2.5 h-2.5" /> Done
-        </button>
-        <button
-          onClick={() => setActiveNotification(null)}
-          className="text-gray-400 hover:text-black dark:hover:text-white p-1 transition-colors cursor-pointer"
-          title="Dismiss"
-        >
-          <FontAwesomeIcon icon={faXmark} className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    </div>
-  );
+  return null;
 }
+
 
 function AuthGuard({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -297,32 +387,9 @@ function ThemeWrapper({ children }: { children: ReactNode }) {
     const savedTheme = userProfile?.settings?.theme;
     if (!savedTheme || typeof window === 'undefined') return;
 
-    let cancelled = false;
-    let idleId: number | null = null;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-    const loadSavedThemeFonts = () => {
-      if (cancelled) return;
-      loadThemeFonts(savedTheme as ThemeFontKey).catch((error) => {
-        console.warn('[ThemeWrapper] Failed to load saved theme fonts:', error);
-      });
-    };
-
-    if ('requestIdleCallback' in window) {
-      idleId = window.requestIdleCallback(loadSavedThemeFonts, { timeout: 2500 });
-    } else {
-      timeoutId = setTimeout(loadSavedThemeFonts, 800);
-    }
-
-    return () => {
-      cancelled = true;
-      if (idleId !== null && 'cancelIdleCallback' in window) {
-        window.cancelIdleCallback(idleId);
-      }
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
+    loadThemeFonts(savedTheme as ThemeFontKey).catch((error) => {
+      console.warn('[ThemeWrapper] Failed to load saved theme fonts:', error);
+    });
   }, [userProfile?.settings?.theme]);
 
   // Handle print event to temporarily switch to light mode for printing

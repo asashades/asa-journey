@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Note } from '@/types';
 import { format } from 'date-fns';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -11,16 +12,17 @@ interface NoteCardProps {
 }
 
 export default function NoteCard({ note, onClick }: NoteCardProps) {
-  // Create an excerpt
-  const rawText = note.contentMarkdown || note.content || '';
-  // Strip markdown headings or simple markdown syntax to make it cleaner
-  const cleanExcerpt = rawText
-    .replace(/[#*`>_\-]/g, '') // remove markdown characters
-    .replace(/\[!.*?\]/g, '')  // remove callout tags
-    .trim();
-  const excerpt = cleanExcerpt.length > 120 
-    ? cleanExcerpt.slice(0, 120) + '...' 
-    : cleanExcerpt || 'No content';
+  // Create an excerpt using useMemo to prevent regex execution on every render frame
+  const excerpt = useMemo(() => {
+    const rawText = note.contentMarkdown || note.content || '';
+    const cleanExcerpt = rawText
+      .replace(/[#*`>_\-]/g, '') // remove markdown characters
+      .replace(/\[!.*?\]/g, '')  // remove callout tags
+      .trim();
+    return cleanExcerpt.length > 120 
+      ? cleanExcerpt.slice(0, 120) + '...' 
+      : cleanExcerpt || 'No content';
+  }, [note.contentMarkdown, note.content]);
 
   return (
     <button
