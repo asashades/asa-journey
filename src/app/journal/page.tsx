@@ -237,8 +237,9 @@ export default function JournalPage() {
           </span>
         )}
         {hasLocation && (
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FFE2E2] text-[#FF453A]" title={`Location: ${entry.location?.district}`}>
-            <FontAwesomeIcon icon={faLocationDot} className="h-2.5 w-2.5" />
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#FFE2E2] px-2.5 py-1 text-xs font-semibold text-[#FF453A]" title={`Location: ${entry.location?.district}`}>
+            <FontAwesomeIcon icon={faLocationDot} className="h-3 w-3 shrink-0" />
+            <span className="truncate max-w-[120px]">{entry.location?.district}</span>
           </span>
         )}
       </div>
@@ -504,7 +505,7 @@ export default function JournalPage() {
             const isEntryToday = entry.date === today;
             const entryNumber = entryNumberByDate.get(entry.date) || 1;
             const heading = format(entryDate, format(entryDate, 'yyyy') === format(todayDate, 'yyyy') ? 'EEE, MMM d' : 'EEE, MMM d, yyyy');
-            const visibleBullets = sortBullets(entry.bullets).slice(0, 5);
+            const visibleBullets = sortBullets(entry.bullets.filter(b => b.source !== 'note')).slice(0, 5);
 
             return (
               <Fragment key={entry.id}>
@@ -542,13 +543,13 @@ export default function JournalPage() {
                       </div>
                     )}
 
-                    {entry.bullets.length > 0 ? (
+                    {entry.bullets.filter(b => b.source !== 'note').length > 0 ? (
                       <div className="space-y-1.5">
                         {visibleBullets.map((bullet) => {
                           const isSourceValid = !bullet.source || (
-                            bullet.source === 'wisdom' ? wisdoms.some(w => w.id === bullet.sourceId || (w.linkedEntryId === entry.date && w.content === bullet.text)) :
-                            bullet.source === 'note' ? notes.some(n => n.id === bullet.sourceId || ((n.linkedEntryId === entry.date || n.linkedDate === entry.date) && (n.content === bullet.text || (n.title && `${n.title}: ${n.content}` === bullet.text)))) :
-                            bullet.source === 'idea' ? ideas.some(i => i.id === bullet.sourceId || (i.linkedEntries?.includes(entry.date) && i.content === bullet.text)) :
+                            bullet.source === 'wisdom' ? wisdoms.some(w => w.id === bullet.sourceId) :
+                            bullet.source === 'note' ? notes.some(n => n.id === bullet.sourceId) :
+                            bullet.source === 'idea' ? ideas.some(i => i.id === bullet.sourceId) :
                             false
                           );
                           const hasValidSource = bullet.source && isSourceValid;
@@ -595,9 +596,9 @@ export default function JournalPage() {
                             </div>
                           );
                         })}
-                        {entry.bullets.length > visibleBullets.length && (
+                        {entry.bullets.filter(b => b.source !== 'note').length > visibleBullets.length && (
                           <p className="pl-6 text-xs font-semibold text-[#A3A7A8]">
-                            + {entry.bullets.length - visibleBullets.length} more
+                            + {entry.bullets.filter(b => b.source !== 'note').length - visibleBullets.length} more
                           </p>
                         )}
                       </div>

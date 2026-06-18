@@ -304,17 +304,19 @@ export default function ReflectPage() {
 
     // 1. Bullets from entry
     const bulletItems = entry
-      ? entry.bullets.map((b) => ({
-          id: b.id,
-          type: 'bullet' as const,
-          text: b.text,
-          style: b.style,
-          isHighlight: !!b.isHighlight,
-          isCompleted: !!b.isCompleted,
-          source: b.source,
-          sourceType: b.sourceType,
-          sourceId: b.sourceId,
-        }))
+      ? entry.bullets
+          .filter((b) => b.source !== 'note')
+          .map((b) => ({
+            id: b.id,
+            type: 'bullet' as const,
+            text: b.text,
+            style: b.style,
+            isHighlight: !!b.isHighlight,
+            isCompleted: !!b.isCompleted,
+            source: b.source,
+            sourceType: b.sourceType,
+            sourceId: b.sourceId,
+          }))
       : [];
 
     // 2. Dream from entry
@@ -497,8 +499,8 @@ export default function ReflectPage() {
         entries: weekEntriesList.length,
         total: totalCapturedCount
       },
-      previewItems: allPreviewItems.slice(0, 3),
-      totalRemaining: Math.max(0, totalCapturedCount - 3)
+      previewItems: allPreviewItems.slice(0, 6),
+      totalRemaining: Math.max(0, totalCapturedCount - 6)
     };
   }, [notes, wisdoms, ideas, highlights, entries, weekStartKey, todayKey, router]);
 
@@ -766,7 +768,7 @@ export default function ReflectPage() {
                     >
                       <FontAwesomeIcon icon={thoughtIcon} className="h-3.5 w-3.5" />
                     </span>
-                    <div className="text-sm font-light leading-relaxed text-[#2F3331] dark:text-[#FAFAFA] line-clamp-3 flex-1">
+                    <div className="text-sm font-light leading-relaxed text-[#2F3331] dark:text-[#FAFAFA] flex-1">
                       {renderParsedWisdom(wisdomOfTheDay.content, wisdomOfTheDay.type === 'quote')}
                     </div>
                   </div>
@@ -794,7 +796,7 @@ export default function ReflectPage() {
                     <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#FFE4B5] dark:bg-[#FFA952]/10 text-[#B45309] dark:text-[#FFA952]">
                       <FontAwesomeIcon icon={faLightbulb} className="h-3.5 w-3.5" />
                     </span>
-                    <p className="text-sm font-light leading-relaxed text-[#2F3331] dark:text-[#FAFAFA] line-clamp-3">
+                    <p className="text-sm font-light leading-relaxed text-[#2F3331] dark:text-[#FAFAFA]">
                       {ideaOfTheDay.content}
                     </p>
                   </div>
@@ -1221,16 +1223,16 @@ export default function ReflectPage() {
                         <button
                           key={item.key}
                           onClick={item.onClick}
-                          className="w-full flex items-center gap-3 py-3 transition-colors hover:bg-gray-50/50 dark:hover:bg-neutral-800/20 text-left cursor-pointer"
+                          className="w-full flex items-center gap-2.5 py-2 transition-colors hover:bg-gray-50/50 dark:hover:bg-neutral-800/20 text-left cursor-pointer"
                         >
-                          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${bgStyle} ${textStyle}`}>
-                            <FontAwesomeIcon icon={icon} className="h-3 w-3" />
+                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${bgStyle} ${textStyle}`}>
+                            <FontAwesomeIcon icon={icon} className="h-2.5 w-2.5" />
                           </span>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-light text-[#2F3331] dark:text-[#FAFAFA] line-clamp-2 leading-relaxed">
+                            <p className="text-xs font-light text-[#2F3331] dark:text-[#FAFAFA] leading-snug">
                               {item.title}
                             </p>
-                            <span className="text-[10px] text-[#A3A7A8] dark:text-[#6F7476] font-sans font-light">
+                            <span className="text-[9px] text-[#A3A7A8] dark:text-[#6F7476] font-sans font-light">
                               {format(parseISO(item.date), 'EEEE, MMM d')}
                             </span>
                           </div>
@@ -1317,7 +1319,7 @@ export default function ReflectPage() {
                                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FFF6D9] dark:bg-[#FFCC33]/10 text-[#FFCC33]">
                                     <FontAwesomeIcon icon={faMoon} className="h-2 w-2" />
                                   </span>
-                                  <p className="line-clamp-2 text-xs font-light leading-relaxed text-[#74797B] dark:text-[#A3A7A8] italic">
+                                  <p className="text-xs font-light leading-relaxed text-[#74797B] dark:text-[#A3A7A8] italic">
                                     {timeTravelItems.dream}
                                   </p>
                                 </div>
@@ -1328,9 +1330,9 @@ export default function ReflectPage() {
                                 <div className="space-y-2">
                                   {visibleBullets.map((bullet) => {
                                     const isSourceValid = !bullet.source || (
-                                      bullet.source === 'wisdom' ? wisdoms.some(w => w.id === bullet.sourceId || (w.linkedEntryId === (timeTravelItems.date || '') && w.content === bullet.text)) :
-                                      bullet.source === 'note' ? notes.some(n => n.id === bullet.sourceId || (((n.linkedEntryId === (timeTravelItems.date || '') || n.linkedDate === (timeTravelItems.date || ''))) && (n.content === bullet.text || (n.title && `${n.title}: ${n.content}` === bullet.text)))) :
-                                      bullet.source === 'idea' ? ideas.some(i => i.id === bullet.sourceId || (i.linkedEntries?.includes(timeTravelItems.date || '') && i.content === bullet.text)) :
+                                      bullet.source === 'wisdom' ? wisdoms.some(w => w.id === bullet.sourceId) :
+                                      bullet.source === 'note' ? notes.some(n => n.id === bullet.sourceId) :
+                                      bullet.source === 'idea' ? ideas.some(i => i.id === bullet.sourceId) :
                                       false
                                     );
                                     const hasValidSource = bullet.source && isSourceValid;
@@ -1359,7 +1361,7 @@ export default function ReflectPage() {
                                           <span className={`mt-1.5 h-1.2 w-1.2 shrink-0 rounded-full ${bullet.isHighlight ? 'bg-[#FF9933]' : 'bg-[#9AA0A1]'}`} />
                                         )}
                                         <div className="min-w-0 flex-1">
-                                          <p className={`line-clamp-2 text-xs font-light leading-relaxed ${hasValidSource ? sourceColors?.text || 'text-[#5D5AEF]' : 'text-[#2F3331] dark:text-[#FAFAFA]'} ${bullet.isHighlight ? 'font-semibold' : ''} ${bullet.isCompleted ? 'text-[#A3A7A8] line-through' : ''}`}>
+                                          <p className={`text-xs font-light leading-relaxed ${hasValidSource ? sourceColors?.text || 'text-[#5D5AEF]' : 'text-[#2F3331] dark:text-[#FAFAFA]'} ${bullet.isHighlight ? 'font-semibold' : ''} ${bullet.isCompleted ? 'text-[#A3A7A8] line-through' : ''}`}>
                                             <HighlightedText text={bullet.text} interactive />
                                           </p>
                                           {sourceColors && (

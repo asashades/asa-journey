@@ -175,9 +175,9 @@ const BulletItem = ({
   const isCompleted = bullet.isCompleted;
 
   const isSourceValid = !bullet.source || (
-    bullet.source === 'wisdom' ? wisdoms.some(w => w.id === bullet.sourceId || (w.linkedEntryId === currentDate && w.content === bullet.text)) :
-    bullet.source === 'note' ? notes.some(n => n.id === bullet.sourceId || ((n.linkedEntryId === currentDate || n.linkedDate === currentDate) && (n.content === bullet.text || (n.title && `${n.title}: ${n.content}` === bullet.text)))) :
-    bullet.source === 'idea' ? ideas.some(i => i.id === bullet.sourceId || (i.linkedEntries?.includes(currentDate) && i.content === bullet.text)) :
+    bullet.source === 'wisdom' ? wisdoms.some(w => w.id === bullet.sourceId) :
+    bullet.source === 'note' ? notes.some(n => n.id === bullet.sourceId) :
+    bullet.source === 'idea' ? ideas.some(i => i.id === bullet.sourceId) :
     false
   );
   const hasValidSource = bullet.source && isSourceValid;
@@ -2213,7 +2213,7 @@ function WritePageContent() {
         </div>
 
         <div>
-          {sortBullets(currentEntry?.bullets || []).map((bullet) => (
+          {sortBullets((currentEntry?.bullets || []).filter(b => b.source !== 'note')).map((bullet) => (
             <BulletItem
               key={bullet.id}
               bullet={bullet}
@@ -2229,7 +2229,7 @@ function WritePageContent() {
             <div className="flex flex-wrap gap-2 mt-2 mb-4">
               {notes
                 .filter(n => (n.linkedJournalDate === currentDate || n.linkedDate === currentDate) && n.status !== 'archived' && n.status !== 'deleted')
-                .map((note) => (
+                .map((note, idx) => (
                   <button
                     key={note.id}
                     onClick={() => router.push(`/notes/new?id=${note.id}`)}
@@ -2237,7 +2237,7 @@ function WritePageContent() {
                     title={note.title || 'Untitled note'}
                   >
                     <FontAwesomeIcon icon={faBook} className="w-3.5 h-3.5 text-[#00875A]" />
-                    <span>{note.title || 'Untitled Note'}</span>
+                    <span>Note {idx + 1}</span>
                   </button>
                 ))}
             </div>

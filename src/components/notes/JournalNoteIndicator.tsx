@@ -79,7 +79,7 @@ export default function JournalNoteIndicator({ notes, dateStr }: JournalNoteIndi
             Linked Notes
           </div>
           <div className="max-h-48 overflow-y-auto space-y-0.5 scrollbar-thin">
-            {notes.map((note) => (
+            {notes.map((note, index) => (
               <button
                 key={note.id}
                 onClick={() => {
@@ -89,7 +89,7 @@ export default function JournalNoteIndicator({ notes, dateStr }: JournalNoteIndi
                 className="w-full flex items-center justify-between text-left px-2.5 py-2 rounded-lg text-xs font-bold text-[#2F3331] dark:text-[#E4E7E6] hover:bg-gray-50 dark:hover:bg-[#161B19]/50 transition-colors group"
               >
                 <span className="truncate max-w-[85%]">
-                  {note.title || 'Untitled Note'}
+                  Note {index + 1}
                 </span>
                 <FontAwesomeIcon 
                   icon={faChevronRight} 

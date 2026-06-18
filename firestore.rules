@@ -96,6 +96,11 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow write: if isOwner(userId);
       }
+
+      // User's push subscriptions
+      match /pushSubscriptions/{subscriptionId} {
+        allow read, write: if isOwner(userId);
+      }
     }
   }
 }

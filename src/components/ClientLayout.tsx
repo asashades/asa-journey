@@ -241,39 +241,10 @@ function NotificationListener() {
             notificationText = `in ${reminderOffset} mins: ${task.text} 💅`;
           }
 
-          // 1. Trigger System Notification (PWA Service Worker compliant, works on iOS)
-          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-            if ('serviceWorker' in navigator) {
-              navigator.serviceWorker.ready.then(registration => {
-                registration.showNotification("grind o'clock! ⚡️", {
-                  body: notificationText,
-                  icon: '/icons/icon-192.png',
-                  badge: '/icons/icon-192.png',
-                  tag: task.id,
-                  data: '/goals',
-                });
-              }).catch(err => {
-                console.error('Failed to trigger SW notification, fallback to window.Notification:', err);
-                try {
-                  new Notification("grind o'clock! ⚡️", {
-                    body: notificationText,
-                  });
-                } catch (e) {
-                  console.error('Fallback notification failed:', e);
-                }
-              });
-            } else {
-              try {
-                new Notification("grind o'clock! ⚡️", {
-                  body: notificationText,
-                });
-              } catch (e) {
-                console.error('Fallback notification failed:', e);
-              }
-            }
-          }
+          // System notification is now handled by Cloud Function push.
+          // Frontend only plays chime + marks notifiedIds to avoid re-trigger.
 
-          // 2. Play Audio Chime
+          // Play Audio Chime
           playCosmicChime();
         }
       });
