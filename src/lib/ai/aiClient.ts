@@ -6,7 +6,7 @@ export interface GenerateStructuredAIInput {
   userId: string;
   systemPrompt: string;
   userPayload: unknown;
-  feature: 'weekly-insight' | 'suggest-tags' | 'daily-insight' | 'refine-note';
+  feature: 'weekly-insight' | 'suggest-tags' | 'daily-insight' | 'refine-note' | 'search';
   // Fallbacks for mock mode
   fallbackParams?: {
     weekStart?: string;
@@ -24,6 +24,21 @@ function parseResult(input: GenerateStructuredAIInput, rawText: string) {
     return parseAndValidateDailyInsight(rawText, getMockDailyInsight(input.userId));
   } else if (input.feature === 'refine-note') {
     return parseAIResponse(rawText);
+  } else if (input.feature === 'search') {
+    const jsonString = rawText.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    try {
+      const parsed = JSON.parse(jsonString);
+      return {
+        answer: parsed.answer || '',
+        referencedIds: Array.isArray(parsed.referencedIds) ? parsed.referencedIds : []
+      };
+    } catch (err) {
+      console.warn('[AI Client] JSON parsing failed for search, returning raw text:', err);
+      return {
+        answer: rawText,
+        referencedIds: []
+      };
+    }
   } else {
     return parseAndValidateTagSuggestions(rawText, getMockSuggestedTags(input.fallbackParams?.content || ''));
   }
@@ -47,6 +62,11 @@ function getMockResult(input: GenerateStructuredAIInput) {
     } else {
       return { refinedText: `${noteContent}\n\n---\n\n### ✨ Extracted Wisdom\n\n> [!LESSON]\n> Menyederhanakan alur kerja akan meningkatkan retensi pengguna.\n> context : Workflow optimization\n\n> [!IDEA]\n> Buat widget mini checklist di dashboard untuk mempermudah akses inbox tasks.\n\n> [!FACT]\n> Rata-rata pengguna menghabiskan 3 menit per sesi journaling.\n> source : UX Research Report\n\n> [!QUOTE]\n> "The unexamined life is not worth living."\n> -- Socrates\n\n> [!THOUGHT]\n> Mungkin integrasi AI harus lebih pasif, tidak terlalu agresif mengoreksi.\n\n> [!EXCERPT]\n> Bagian tentang workflow automation sangat relevan dengan proyek saat ini.\n> -- Self-reflection\n> source : Personal Journal` };
     }
+  } else if (input.feature === 'search') {
+    return {
+      answer: `This is a client-side simulated response for "${(input.userPayload as any)?.query || ''}".`,
+      referencedIds: []
+    };
   } else {
     return getMockSuggestedTags(input.fallbackParams?.content || '');
   }
@@ -481,5 +501,42 @@ Guidelines:
   return {
     success: true,
     refinedText: typeof result === 'string' ? result : (result?.refinedText || '')
+  };
+}
+
+export async function searchClientSide(
+  query: string,
+  relevantDocs: any[],
+  userId: string,
+  aiConfig?: ClientAIConfig
+): Promise<{ success: boolean; answer: string; referencedIds: string[] }> {
+  const systemPrompt = `You are the AI Search Assistant (Second Brain) for "ASA Journey", an observatory-themed daily micro-journaling and reflection application.
+Your goal is to answer the user's search query thoughtfully, clearly, and concisely, drawing ONLY from the provided journal entries, notes, wisdoms, ideas, goals, or tasks in the payload context.
+
+Guidelines:
+1. Synthesize an answer to the query based strictly on the provided context (documents). Do not hallucinate or invent details that are not in the provided documents.
+2. If the answer cannot be found in the provided documents, politely state that you couldn't find any information about that in their journal or notes.
+3. Organize your answer clearly. Use appropriate Markdown formatting: bullet points, bold text, horizontal dividers, and standard callouts if necessary (e.g., > [!NOTE] Key Takeaway).
+4. Be supportive, calm, and slightly reflective in tone, maintaining the peaceful "observatory" vibe of the app.
+5. Provide the IDs of the documents that were helpful or referenced in your response in a structured manner, so they can be matched back.
+Return the result strictly as a JSON object with two keys:
+- "answer": the markdown-formatted synthesized response.
+- "referencedIds": an array of document IDs (from the provided list) that were actually used or relevant to answer the query.`;
+
+  const result = await generateStructuredAI({
+    userId,
+    systemPrompt,
+    userPayload: { query, contextDocuments: relevantDocs },
+    feature: 'search',
+    fallbackParams: {
+      content: query
+    },
+    aiConfig
+  });
+
+  return {
+    success: true,
+    answer: result.answer || '',
+    referencedIds: result.referencedIds || []
   };
 }

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { searchClientSide } from '@/lib/ai/aiClient';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faMagnifyingGlass,
@@ -326,34 +327,50 @@ export default function SearchSpotlight() {
         return;
       }
 
-      // 2. Call backend NextJS API route with docs
-      const response = await fetch('/api/ai/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          query: searchQuery,
-          userId: userProfile?.uid || 'anonymous',
-          relevantDocs,
-          aiConfig: userProfile?.settings?.aiConfig
-        })
-      });
+      let data: any = null;
+      let success = false;
 
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.message || 'Failed to retrieve AI search results.');
+      // 2. Try calling backend API first (works in dev environment/SSR)
+      try {
+        const response = await fetch('/api/ai/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            query: searchQuery,
+            userId: userProfile?.uid || 'anonymous',
+            relevantDocs,
+            aiConfig: userProfile?.settings?.aiConfig
+          })
+        });
+
+        const text = await response.text();
+        if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html') || response.status === 404) {
+          throw new Error('API route returned HTML or 404. Running client-side fallback.');
+        }
+
+        data = JSON.parse(text);
+        success = response.ok && data.success;
+      } catch (fetchErr) {
+        console.warn('[SearchSpotlight] API route failed or returned HTML. Running search client-side...', fetchErr);
+        data = await searchClientSide(
+          searchQuery,
+          relevantDocs,
+          userProfile?.uid || 'anonymous',
+          userProfile?.settings?.aiConfig
+        );
+        success = data.success;
       }
 
-      const resData = await response.json();
-      if (resData.success) {
-        setAnswer(resData.answer);
+      if (success && data) {
+        setAnswer(data.answer);
         
         // Match referenced document IDs to show preview cards
-        const refs = relevantDocs.filter((doc) => resData.referencedIds?.includes(doc.id));
+        const refs = relevantDocs.filter((doc) => data.referencedIds?.includes(doc.id));
         setReferencedDocs(refs.length > 0 ? refs : relevantDocs.slice(0, 3));
       } else {
-        throw new Error(resData.message || 'Failed to process search.');
+        throw new Error(data?.message || 'Failed to process search.');
       }
     } catch (err: any) {
       console.error('[SearchSpotlight] Error:', err);
