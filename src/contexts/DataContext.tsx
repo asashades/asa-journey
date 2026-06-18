@@ -96,7 +96,7 @@ interface DataContextType {
   isOnline: boolean;
   isSpotlightOpen: boolean;
   setIsSpotlightOpen: (open: boolean) => void;
-  addQuickJournalBullet: (text: string, style?: Bullet['style'], isHighlight?: boolean) => Promise<Bullet | null>;
+  addQuickJournalBullet: (text: string, style?: Bullet['style'], isHighlight?: boolean, additionalData?: BulletDraftOptions) => Promise<Bullet | null>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -1011,7 +1011,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addQuickJournalBullet = async (
     text: string,
     style: Bullet['style'] = 'bullet',
-    isHighlight = false
+    isHighlight = false,
+    additionalData: BulletDraftOptions = {}
   ): Promise<Bullet | null> => {
     if (!user) return null;
     const todayKey = format(new Date(), 'yyyy-MM-dd');
@@ -1051,6 +1052,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       tags: extractTagNames(cleanText),
       mentions: extractMentionNames(cleanText),
       isCompleted: false,
+      ...(additionalData.source ? { source: additionalData.source } : {}),
+      ...(additionalData.sourceType ? { sourceType: additionalData.sourceType } : {}),
+      ...(additionalData.sourceId ? { sourceId: additionalData.sourceId } : {}),
       createdAt: bulletCreatedAt,
       updatedAt: new Date(),
       ...(bulletScheduledAt ? { scheduledAt: bulletScheduledAt } : {})
@@ -1372,6 +1376,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     setWisdoms(prev => prev.filter(w => w.id !== wisdomId));
     await deleteDoc(doc(db, 'users', user.uid, 'wisdoms', wisdomId));
+
+    // Delete corresponding bullets from entries
+    const updatedEntries = entries.map(entry => {
+      const hasBulletToDelete = entry.bullets.some(b => b.sourceId === wisdomId && b.source === 'wisdom');
+      if (!hasBulletToDelete) return entry;
+      return {
+        ...entry,
+        bullets: entry.bullets.filter(b => !(b.sourceId === wisdomId && b.source === 'wisdom')),
+        updatedAt: new Date(),
+      };
+    });
+    const changedEntries = updatedEntries.filter((entry, i) => entry !== entries[i]);
+    for (const entry of changedEntries) {
+      await saveEntry(entry);
+    }
   };
 
   const getWisdomOfTheDay = (): Wisdom | null => {
@@ -1494,6 +1513,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     setNotes(prev => prev.filter(n => n.id !== noteId));
     await deleteDoc(doc(db, 'users', user.uid, 'notes', noteId));
+
+    // Delete corresponding bullets from entries
+    const updatedEntries = entries.map(entry => {
+      const hasBulletToDelete = entry.bullets.some(b => b.sourceId === noteId && b.source === 'note');
+      if (!hasBulletToDelete) return entry;
+      return {
+        ...entry,
+        bullets: entry.bullets.filter(b => !(b.sourceId === noteId && b.source === 'note')),
+        updatedAt: new Date(),
+      };
+    });
+    const changedEntries = updatedEntries.filter((entry, i) => entry !== entries[i]);
+    for (const entry of changedEntries) {
+      await saveEntry(entry);
+    }
   };
 
   const toggleNoteChecklist = async (noteId: string, taskText: string) => {
@@ -1629,6 +1663,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     setIdeas(prev => prev.filter(i => i.id !== ideaId));
     await deleteDoc(doc(db, 'users', user.uid, 'ideas', ideaId));
+
+    // Delete corresponding bullets from entries
+    const updatedEntries = entries.map(entry => {
+      const hasBulletToDelete = entry.bullets.some(b => b.sourceId === ideaId && b.source === 'idea');
+      if (!hasBulletToDelete) return entry;
+      return {
+        ...entry,
+        bullets: entry.bullets.filter(b => !(b.sourceId === ideaId && b.source === 'idea')),
+        updatedAt: new Date(),
+      };
+    });
+    const changedEntries = updatedEntries.filter((entry, i) => entry !== entries[i]);
+    for (const entry of changedEntries) {
+      await saveEntry(entry);
+    }
   };
 
   const getIdeaOfTheDay = (): Idea | null => {

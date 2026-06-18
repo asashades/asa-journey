@@ -136,6 +136,9 @@ export default function QuickEntrySpotlight() {
     if (!inputText.trim()) return;
 
     try {
+      const d = new Date();
+      const todayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
       if (target === 'journal') {
         const style = format === 'checklist' ? 'checklist' : 'bullet';
         const isHighlight = format === 'star';
@@ -160,15 +163,28 @@ export default function QuickEntrySpotlight() {
           const context = contextText.trim();
           finalContent = finalContent + (context ? `\n\ncontext : ${context}` : '');
         }
-        await addWisdom(wisdomType, finalContent);
+        const wisdom = await addWisdom(wisdomType, finalContent, todayKey);
+        if (wisdom) {
+          await addQuickJournalBullet(finalContent, 'star', true, {
+            source: 'wisdom',
+            sourceType: wisdomType,
+            sourceId: wisdom.id,
+          });
+        }
         showToast('Saved to Wisdoms! 🧠');
       } else if (target === 'idea') {
-        await addIdea(inputText.trim());
+        const idea = await addIdea(inputText.trim(), todayKey);
+        if (idea) {
+          await addQuickJournalBullet(inputText.trim(), 'star', true, {
+            source: 'idea',
+            sourceId: idea.id,
+          });
+        }
         showToast('Saved to Ideas! 💡');
       } else if (target === 'note') {
         const titleText = inputText.trim().split('\n')[0];
         const title = titleText.substring(0, 40) + (titleText.length > 40 ? '...' : '');
-        await addNote(title, inputText.trim());
+        await addNote(title, inputText.trim(), [], todayKey);
         showToast('Saved to Notes! 📝');
       }
       setInputText('');
