@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     });
 
     const dailyInsight = {
-      text: aiResult.insightText || 'Analisis harian selesai.',
+      text: aiResult.insightText || 'Daily analysis complete.',
       moodScore: typeof aiResult.moodScore === 'number' ? aiResult.moodScore : 7,
       sentiment: aiResult.sentiment || 'neutral',
       generatedAt: new Date().toISOString()
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error('[Daily Insight API] Error generating daily insight:', err);
     return NextResponse.json(
-      { success: false, message: err.message || 'Gagal memproses analisis harian AI.' },
+      { success: false, message: err.message || 'Failed to process AI daily analysis.' },
       { status: 500 }
     );
   }

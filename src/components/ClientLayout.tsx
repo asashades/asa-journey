@@ -5,6 +5,11 @@ import { useAuth, AuthProvider } from '@/contexts/AuthContext';
 import { DataProvider, useData } from '@/contexts/DataContext';
 import BottomNav from '@/components/layout/BottomNav';
 import { usePathname, useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+const SearchSpotlight = dynamic(() => import('@/components/search/SearchSpotlight'), {
+  ssr: false,
+});
 import { format } from 'date-fns';
 import { loadThemeFonts, type ThemeFontKey } from '@/lib/themeFonts';
 import { db } from '@/lib/firebase';
@@ -429,6 +434,7 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
           <ThemeWrapper>
             <NotificationListener />
             {children}
+            <SearchSpotlight />
           </ThemeWrapper>
         </AuthGuard>
         <BottomNavWrapper />
@@ -439,7 +445,7 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
 
 function BottomNavWrapper() {
   const { user, loading } = useAuth();
-  const { isSpotlightOpen, setIsSpotlightOpen } = useData();
+  const { isSpotlightOpen, setIsSpotlightOpen, isSearchOpen, setIsSearchOpen } = useData();
   const pathname = usePathname();
   const isAuthPage = pathname.startsWith('/auth');
 
@@ -448,21 +454,31 @@ function BottomNavWrapper() {
     if (!user || loading || isAuthPage) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Toggle on Cmd+K or Ctrl+K
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      // Toggle search on Cmd+K or Ctrl+K
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(!isSearchOpen);
+      }
+      // Toggle capture on Cmd+Shift+I or Ctrl+Shift+I
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'i') {
         e.preventDefault();
         setIsSpotlightOpen(!isSpotlightOpen);
       }
       // Close on Escape
-      if (e.key === 'Escape' && isSpotlightOpen) {
-        e.preventDefault();
-        setIsSpotlightOpen(false);
+      if (e.key === 'Escape') {
+        if (isSearchOpen) {
+          e.preventDefault();
+          setIsSearchOpen(false);
+        } else if (isSpotlightOpen) {
+          e.preventDefault();
+          setIsSpotlightOpen(false);
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [user, loading, isAuthPage, isSpotlightOpen, setIsSpotlightOpen]);
+  }, [user, loading, isAuthPage, isSpotlightOpen, setIsSpotlightOpen, isSearchOpen, setIsSearchOpen]);
 
   if (isAuthPage) return null;
   if (!user || loading) return null;

@@ -1240,11 +1240,11 @@ function WritePageContent() {
           updatedAt: new Date()
         });
       } else {
-        throw new Error('Gagal menganalisis hari ini.');
+        throw new Error('Failed to analyze today.');
       }
     } catch (err: any) {
       console.error(err);
-      setDailyInsightError(err.message || 'Terjadi kesalahan saat memproses analisis harian Anda.');
+      setDailyInsightError(err.message || 'An error occurred while processing your daily analysis.');
     } finally {
       setIsGeneratingDailyInsight(false);
     }

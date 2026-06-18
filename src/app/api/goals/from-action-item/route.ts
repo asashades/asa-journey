@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error('[Create Goal API] Error creating goal from AI action item:', err);
     return NextResponse.json(
-      { success: false, message: err.message || 'Gagal mengubah rencana aksi menjadi tujuan.' },
+      { success: false, message: err.message || 'Failed to convert action item into goal.' },
       { status: 500 }
     );
   }

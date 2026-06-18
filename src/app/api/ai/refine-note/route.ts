@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json(
               { 
                 success: false, 
-                message: `Anda telah mencapai batas kuota pemrosesan catatan AI untuk bulan ini (${monthlyLimit}x per bulan).` 
+                message: `You have reached your AI note processing limit for this month (${monthlyLimit}x per month).` 
               },
               { status: 429 }
             );
@@ -61,11 +61,11 @@ export async function POST(req: NextRequest) {
       console.log(`[Refine Note API] Running in Simulation Mode (Mock) for action: ${action}`);
       let refinedText = '';
       if (action === 'beautify') {
-        refinedText = `# ${noteContent.split('\n')[0]?.replace(/[#*_\-]/g, '').trim() || 'Catatan Refined'}\n\n> [!NOTE] Core Highlight\n> Catatan ini telah dirapikan struktur Markdown-nya dan diperbaiki tata bahasanya agar lebih mudah dibaca dan dipahami.\n\n${noteContent}`;
+        refinedText = `# ${noteContent.split('\n')[0]?.replace(/[#*_\-]/g, '').trim() || 'Refined Note'}\n\n> [!NOTE] Core Highlight\n> This note's Markdown structure has been cleaned up and its grammar improved to make it easier to read and understand.\n\n${noteContent}`;
       } else if (action === 'summarize') {
-        refinedText = `> [!NOTE]+ AI Summary\n> Catatan ini membahas refleksi ide pengembangan fitur AI notes dan integrasinya dengan halaman sasaran (goals).\n\n${noteContent}\n\n### Action Items\n- [ ] Menambahkan tombol AI Refine di Note Editor\n- [ ] Menghubungkan tugas checklist note dengan Goals Inbox`;
+        refinedText = `> [!NOTE]+ AI Summary\n> This note discusses reflections on developing AI notes features and their integration with the goals page.\n\n${noteContent}\n\n### Action Items\n- [ ] Add AI Refine button in Note Editor\n- [ ] Connect note checklist tasks with Goals Inbox`;
       } else {
-        refinedText = `${noteContent}\n\n---\n\n### ✨ Extracted Wisdom\n\n> [!LESSON]\n> Menyederhanakan alur kerja akan meningkatkan retensi pengguna.\n> context : Workflow optimization\n\n> [!IDEA]\n> Buat widget mini checklist di dashboard untuk mempermudah akses inbox tasks.\n\n> [!FACT]\n> Rata-rata pengguna menghabiskan 3 menit per sesi journaling.\n> source : UX Research Report\n\n> [!QUOTE]\n> "The unexamined life is not worth living."\n> -- Socrates\n\n> [!THOUGHT]\n> Mungkin integrasi AI harus lebih pasif, tidak terlalu agresif mengoreksi.\n\n> [!EXCERPT]\n> Bagian tentang workflow automation sangat relevan dengan proyek saat ini.\n> -- Self-reflection\n> source : Personal Journal`;
+        refinedText = `${noteContent}\n\n---\n\n### ✨ Extracted Wisdom\n\n> [!LESSON]\n> Simplifying the workflow will increase user retention.\n> context : Workflow optimization\n\n> [!IDEA]\n> Create a mini checklist widget on the dashboard to simplify tasks inbox access.\n\n> [!FACT]\n> On average, users spend 3 minutes per journaling session.\n> source : UX Research Report\n\n> [!QUOTE]\n> "The unexamined life is not worth living."\n> -- Socrates\n\n> [!THOUGHT]\n> Maybe AI integration should be more passive, not too aggressive in correcting.\n\n> [!EXCERPT]\n> The part about workflow automation is very relevant to the current project.\n> -- Self-reflection\n> source : Personal Journal`;
       }
 
       return NextResponse.json({
@@ -334,7 +334,7 @@ Guidelines:
   } catch (err: any) {
     console.error('[Refine Note API] Error refining note:', err);
     return NextResponse.json(
-      { success: false, message: err.message || 'Gagal menyempurnakan catatan.' },
+      { success: false, message: err.message || 'Failed to refine note.' },
       { status: 500 }
     );
   }

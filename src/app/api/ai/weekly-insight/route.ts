@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json(
               { 
                 success: false, 
-                message: `Anda telah mencapai batas kuota refleksi mingguan AI untuk bulan ini (${monthlyLimit}x per bulan). Silakan coba lagi bulan depan atau konfigurasi API Key sendiri.` 
+                message: `You have reached your weekly AI reflection limit for this month (${monthlyLimit}x per month). Please try again next month or configure your own API Key.` 
               },
               { status: 429 }
             );
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: false,
         emptyState: true,
-        message: 'Belum ada catatan jurnal yang Anda tulis dalam 7 hari terakhir. Tulis beberapa jurnal terlebih dahulu agar AI dapat merangkum pola perjalanan mingguan Anda!'
+        message: 'You have not written any journal entries in the past 7 days. Write some journal entries first so that the AI can summarize your weekly journey!'
       });
     }
 
@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
         start: weekStart,
         end: weekEnd
       },
-      summary: aiResult.summary || 'Refleksi mingguan selesai.',
+      summary: aiResult.summary || 'Weekly reflection complete.',
       keyEvents: aiResult.keyEvents || [],
       themes: aiResult.themes || aiResult.recurringThemes || [],
       recurringThemes: aiResult.recurringThemes || aiResult.themes || [],
@@ -272,7 +272,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error('[Weekly Insight API] Critical error generating weekly reflection:', err);
     return NextResponse.json(
-      { success: false, message: err.message || 'Gagal memproses refleksi mingguan AI.' },
+      { success: false, message: err.message || 'Failed to process AI weekly reflection.' },
       { status: 500 }
     );
   }

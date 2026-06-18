@@ -32,7 +32,7 @@ const navItems = [
 
 export default function BottomNav({ className = '' }: { className?: string }) {
   const pathname = usePathname();
-  const { isSpotlightOpen } = useData();
+  const { isSpotlightOpen, isSearchOpen } = useData();
   const [isSpeedDialOpen, setIsSpeedDialOpen] = useState(false);
   const isMoreActive = pathname.startsWith('/collections') || pathname.startsWith('/settings') || pathname.startsWith('/other') || pathname.startsWith('/insights') || pathname.startsWith('/gallery') || pathname.startsWith('/notes');
   const speedDialItems = [
@@ -46,7 +46,7 @@ export default function BottomNav({ className = '' }: { className?: string }) {
   return (
     <nav className={`pointer-events-none fixed bottom-5 left-0 right-0 z-40 px-4 safe-area-pb ${className}`}>
       <div className={`pointer-events-auto mx-auto flex max-w-lg items-center justify-around rounded-full border border-[#E4E7E6] bg-white/95 px-3 py-2 shadow-lg backdrop-blur transition-all duration-500 ease-out ${
-        isSpotlightOpen ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
+        (isSpotlightOpen || isSearchOpen) ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
       }`}>
         {navItems.map(({ href, label, icon }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/');
@@ -97,7 +97,7 @@ export default function BottomNav({ className = '' }: { className?: string }) {
           </button>
         </div>
       </div>
-      <QuickEntrySpotlight />
+      <QuickEntrySpotlight isHidden={isSpeedDialOpen} />
     </nav>
   );
 }

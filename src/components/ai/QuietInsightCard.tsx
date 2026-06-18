@@ -96,7 +96,7 @@ export default function QuietInsightCard({ onToggleOpen }: QuietInsightCardProps
       return {
         success: false,
         emptyState: true,
-        message: 'Belum ada catatan jurnal yang Anda tulis dalam 7 hari terakhir. Tulis beberapa jurnal terlebih dahulu agar AI dapat merangkum pola perjalanan mingguan Anda!'
+        message: 'You have not written any journal entries in the past 7 days. Write some journal entries first so that the AI can summarize your weekly journey!'
       };
     }
 
@@ -265,7 +265,7 @@ export default function QuietInsightCard({ onToggleOpen }: QuietInsightCardProps
 
       if (validEntries.length === 0) {
         setIsEmptyState(true);
-        setEmptyMessage('Belum ada catatan jurnal yang Anda tulis dalam 7 hari terakhir. Tulis beberapa jurnal terlebih dahulu agar AI dapat merangkum pola perjalanan mingguan Anda!');
+        setEmptyMessage('You have not written any journal entries in the past 7 days. Write some journal entries first so that the AI can summarize your weekly journey!');
         setIsLoading(false);
         return;
       }
@@ -310,7 +310,7 @@ export default function QuietInsightCard({ onToggleOpen }: QuietInsightCardProps
       }
 
       if (!responseOk) {
-        throw new Error(data.message || 'Gagal menghasilkan refleksi mingguan.');
+        throw new Error(data.message || 'Failed to generate weekly reflection.');
       }
 
       if (data.emptyState) {
@@ -335,7 +335,7 @@ export default function QuietInsightCard({ onToggleOpen }: QuietInsightCardProps
     } catch (err: any) {
       console.error(err);
       setIsEmptyState(true);
-      setEmptyMessage(err.message || 'Terjadi kesalahan saat memproses refleksi mingguan Anda.');
+      setEmptyMessage(err.message || 'An error occurred while processing your weekly reflection.');
       setShowMockOption(true);
     } finally {
       setIsLoading(false);
@@ -483,10 +483,10 @@ export default function QuietInsightCard({ onToggleOpen }: QuietInsightCardProps
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={handleDelete}
-        title="Hapus Rangkuman Cosmic Recap"
-        message="Apakah Anda yakin ingin menghapus rangkuman Cosmic Recap mingguan ini? Tindakan ini tidak dapat dibatalkan."
-        confirmText="Hapus"
-        cancelText="Batal"
+        title="Delete Cosmic Recap Summary"
+        message="Are you sure you want to delete this weekly Cosmic Recap summary? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
         isDestructive={true}
       />
     </div>

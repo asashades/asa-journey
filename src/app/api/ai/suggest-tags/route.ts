@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json(
               { 
                 success: false, 
-                message: `Anda telah mencapai batas kuota rekomendasi tag AI untuk bulan ini (${monthlyLimit}x per bulan).` 
+                message: `You have reached your AI tag recommendation limit for this month (${monthlyLimit}x per month).` 
               },
               { status: 429 }
             );
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error('[Suggest Tags API] Error extracting tags:', err);
     return NextResponse.json(
-      { success: false, message: err.message || 'Gagal menghasilkan saran tag.' },
+      { success: false, message: err.message || 'Failed to generate suggested tags.' },
       { status: 500 }
     );
   }

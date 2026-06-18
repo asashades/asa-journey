@@ -13,7 +13,7 @@ export default function AIEmptyState({ message }: AIEmptyStateProps) {
       </div>
       <h3 className="font-serif text-lg font-bold text-[#2F3331] dark:text-[#FAFAFA]">Not Enough Entries</h3>
       <p className="mt-2 text-sm leading-relaxed text-[#6F7476] dark:text-[#A3A7A8] max-w-[360px]">
-        {message || 'Jurnal Anda dalam 7 hari terakhir masih kosong. Tulis beberapa catatan harian terlebih dahulu agar Cosmic Recap dapat membaca pola dan merangkum pertumbuhan diri Anda!'}
+        {message || 'Your journal in the last 7 days is still empty. Write some daily entries first so that Cosmic Recap can read your patterns and summarize your self-growth!'}
       </p>
     </div>
   );

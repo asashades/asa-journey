@@ -96,6 +96,8 @@ interface DataContextType {
   isOnline: boolean;
   isSpotlightOpen: boolean;
   setIsSpotlightOpen: (open: boolean) => void;
+  isSearchOpen: boolean;
+  setIsSearchOpen: (open: boolean) => void;
   addQuickJournalBullet: (text: string, style?: Bullet['style'], isHighlight?: boolean, additionalData?: BulletDraftOptions) => Promise<Bullet | null>;
 }
 
@@ -224,6 +226,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [goals, setGoals] = useState<FocusGoal[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const lastTokenSyncSignatureRef = useRef('');
   const isSyncingSourceRef = useRef(false);
   const [isOnline, setIsOnline] = useState(() =>
@@ -2070,7 +2073,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       getWeeklyData,
       totalEntries, totalBullets, totalHighlights, totalTags, totalMentions, currentStreak, longestStreak,
       loading, isOnline,
-      isSpotlightOpen, setIsSpotlightOpen, addQuickJournalBullet,
+      isSpotlightOpen, setIsSpotlightOpen,
+      isSearchOpen, setIsSearchOpen,
+      addQuickJournalBullet,
     }}>
       {children}
     </DataContext.Provider>

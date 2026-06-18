@@ -14,17 +14,20 @@ import {
   faNoteSticky,
   faChevronUp,
   faBolt,
+  faMagnifyingGlass,
 } from '@fortawesome/free-solid-svg-icons';
 import { WisdomType } from '@/types';
 import { HighlightedText } from '@/components/ui/HighlightedText';
 
-type TargetType = 'journal' | 'wisdom' | 'idea' | 'note';
+type TargetType = 'journal' | 'wisdom' | 'idea' | 'note' | 'search';
 type FormatType = 'bullet' | 'checklist' | 'star';
 
-export default function QuickEntrySpotlight() {
+export default function QuickEntrySpotlight({ isHidden = false }: { isHidden?: boolean }) {
   const {
     isSpotlightOpen,
     setIsSpotlightOpen,
+    isSearchOpen,
+    setIsSearchOpen,
     addQuickJournalBullet,
     addWisdom,
     addIdea,
@@ -35,6 +38,7 @@ export default function QuickEntrySpotlight() {
   const [authorText, setAuthorText] = useState('');
   const [sourceText, setSourceText] = useState('');
   const [contextText, setContextText] = useState('');
+  const [noteTitleText, setNoteTitleText] = useState('');
   const [target, setTarget] = useState<TargetType>('journal');
   const [format, setFormat] = useState<FormatType>('bullet');
   const [wisdomType, setWisdomType] = useState<WisdomType>('thought');
@@ -105,6 +109,7 @@ export default function QuickEntrySpotlight() {
       setAuthorText('');
       setSourceText('');
       setContextText('');
+      setNoteTitleText('');
       setIsTargetMenuOpen(false);
     }
   }, [isSpotlightOpen]);
@@ -171,7 +176,7 @@ export default function QuickEntrySpotlight() {
             sourceId: wisdom.id,
           });
         }
-        showToast('Saved to Wisdoms! 🧠');
+        showToast("Saved to Today's Journal & Wisdoms! 🧠");
       } else if (target === 'idea') {
         const idea = await addIdea(inputText.trim(), todayKey);
         if (idea) {
@@ -180,17 +185,17 @@ export default function QuickEntrySpotlight() {
             sourceId: idea.id,
           });
         }
-        showToast('Saved to Ideas! 💡');
+        showToast("Saved to Today's Journal & Ideas! 💡");
       } else if (target === 'note') {
-        const titleText = inputText.trim().split('\n')[0];
-        const title = titleText.substring(0, 40) + (titleText.length > 40 ? '...' : '');
+        const title = noteTitleText.trim() || 'Untitled Note';
         await addNote(title, inputText.trim(), [], todayKey);
-        showToast('Saved to Notes! 📝');
+        showToast("Saved to Today's Journal & Notes! 📝");
       }
       setInputText('');
       setAuthorText('');
       setSourceText('');
       setContextText('');
+      setNoteTitleText('');
     } catch (err) {
       console.error(err);
       showToast('Failed to save entry ❌');
@@ -208,7 +213,7 @@ export default function QuickEntrySpotlight() {
       return 'Capture a nugget of wisdom...';
     }
     if (target === 'idea') return 'Log a quick idea...';
-    if (target === 'note') return 'Write a quick note...';
+    if (target === 'note') return 'Write note content...';
     
     // Journal placeholders
     if (format === 'checklist') return 'Add task to today\'s journal...';
@@ -293,6 +298,8 @@ export default function QuickEntrySpotlight() {
       } else {
         baseHeight = 162;
       }
+    } else if (target === 'note') {
+      baseHeight = 96;
     }
     
     const extraHeight = Math.max(0, textareaHeight - 36);
@@ -301,19 +308,17 @@ export default function QuickEntrySpotlight() {
 
   let morphClasses = '';
   if (!isSpotlightOpen) {
-    morphClasses = 'absolute bottom-20 left-[calc(100%-72px)] md:bottom-0 md:left-[calc(50%-320px)] w-14 h-14 rounded-full shadow-md bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out pointer-events-auto cursor-pointer hover:scale-105 active:scale-95 group z-50 flex items-center justify-center overflow-hidden';
+    morphClasses = `absolute bottom-20 left-[calc(100%-72px)] md:bottom-0 md:left-[calc(50%-320px)] w-14 h-14 rounded-full shadow-md bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out z-50 flex items-center justify-center overflow-hidden ${
+      isHidden
+        ? 'opacity-0 scale-0 pointer-events-none'
+        : 'opacity-100 scale-100 pointer-events-auto cursor-pointer hover:scale-105 active:scale-95 group'
+    }`;
   } else {
     let paddingAndGapClass = 'gap-2';
     let borderClass = 'rounded-full';
-    if (target === 'wisdom') {
+    if (target === 'wisdom' || target === 'note') {
       borderClass = 'rounded-3xl';
-      if (wisdomType === 'thought') {
-        paddingAndGapClass = 'py-3 gap-3';
-      } else if (wisdomType === 'excerpt') {
-        paddingAndGapClass = 'py-3.5 gap-3';
-      } else {
-        paddingAndGapClass = 'py-3.5 gap-3';
-      }
+      paddingAndGapClass = 'py-3 gap-3';
     }
     morphClasses = `absolute bottom-0 left-4 md:left-[calc(50%-275px)] w-[calc(100%-2rem)] md:w-[550px] ${borderClass} ${paddingAndGapClass} shadow-2xl bg-white/95 dark:bg-neutral-900/95 border border-[#E4E7E6] dark:border-neutral-800 transition-all duration-500 ease-out pointer-events-auto z-50 flex flex-col px-4 justify-center focus-within:border-emerald-500/50 dark:focus-within:border-emerald-500/30 focus-within:shadow-[0_20px_50px_rgba(16,185,129,0.1)] overflow-visible`;
   }
@@ -478,6 +483,35 @@ export default function QuickEntrySpotlight() {
                     <FontAwesomeIcon icon={faLightbulb} className="text-amber-500 w-3.5 h-3.5" />
                     <span>Ideas</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTarget('note');
+                      setIsTargetMenuOpen(false);
+                    }}
+                    disabled={!isSpotlightOpen}
+                    tabIndex={isSpotlightOpen ? 0 : -1}
+                    className={`flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-left ${
+                      target === 'note' ? 'text-blue-500 bg-blue-50/50 dark:bg-blue-950/20' : 'text-neutral-600 dark:text-neutral-400'
+                    }`}
+                  >
+                    <FontAwesomeIcon icon={faNoteSticky} className="text-blue-500 w-3.5 h-3.5" />
+                    <span>Note</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSpotlightOpen(false);
+                      setIsSearchOpen(true);
+                      setIsTargetMenuOpen(false);
+                    }}
+                    disabled={!isSpotlightOpen}
+                    tabIndex={isSpotlightOpen ? 0 : -1}
+                    className="flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-left text-neutral-600 dark:text-neutral-400"
+                  >
+                    <FontAwesomeIcon icon={faMagnifyingGlass} className="text-emerald-500 w-3.5 h-3.5" />
+                    <span>Ask AI / Search</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -519,6 +553,21 @@ export default function QuickEntrySpotlight() {
                   className="w-full bg-neutral-50/50 dark:bg-neutral-800/20 border border-[#E4E7E6] rounded-xl px-3.5 py-1.5 text-xs text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-600 outline-none focus:border-purple-500/50 dark:focus:border-purple-500/30"
                 />
               )}
+            </div>
+          )}
+
+          {/* Subtype fields for note */}
+          {target === 'note' && (
+            <div className="flex flex-col gap-2 pb-2 w-full animate-fade-in flex-shrink-0">
+              <input
+                type="text"
+                value={noteTitleText}
+                onChange={(e) => setNoteTitleText(e.target.value)}
+                placeholder="Note Title (optional)..."
+                disabled={!isSpotlightOpen}
+                tabIndex={isSpotlightOpen ? 0 : -1}
+                className="w-full bg-neutral-50/50 dark:bg-neutral-800/20 border border-[#E4E7E6] dark:border-[#2F3331] rounded-xl px-3.5 py-1.5 text-xs text-neutral-800 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-600 outline-none focus:border-blue-500/50 dark:focus:border-blue-500/30"
+              />
             </div>
           )}
 
